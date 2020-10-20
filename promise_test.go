@@ -32,20 +32,6 @@ func TestGoPromise_Await_WithPanic(t *testing.T) {
 	}
 }
 
-func TestGoPromise_WaitChan(t *testing.T) {
-
-}
-
-func TestGoPromise_WaitUntil(t *testing.T) {
-	promise.Go(func() {
-
-	})
-}
-
-func TestGoPromise_GetResUntil(t *testing.T) {
-
-}
-
 func TestImmutability(t *testing.T) {
 	expectedVal := "initial value"
 	newVal := "new value"
