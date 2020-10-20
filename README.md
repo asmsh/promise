@@ -1,4 +1,4 @@
-# Promise [![Go Report Card](https://goreportcard.com/badge/github.com/asmsh/promise)](https://goreportcard.com/report/github.com/asmsh/promise)
+# Promise [![PkgGoDev](https://pkg.go.dev/badge/github.com/asmsh/promise)](https://pkg.go.dev/github.com/asmsh/promise) [![Go Report Card](https://goreportcard.com/badge/github.com/asmsh/promise)](https://goreportcard.com/report/github.com/asmsh/promise)
 
 *Fast, lightweight, and lock-free promises for Go... the Go way*
 
@@ -11,7 +11,7 @@ difference from errors.
 
 ### What's a Promise ?
 
-A Promise represents some asynchronous work. It offer ways to get the eventual result of that asynchronous work.  
+A Promise represents some asynchronous work. It offers ways to get the eventual result of that asynchronous work.  
 Read more on [its Wiki page](https://en.wikipedia.org/wiki/Futures_and_promises).
 
 ### Why in Go ?
