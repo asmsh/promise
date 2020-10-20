@@ -1,4 +1,4 @@
-# Promise
+# Promise [![Go Report Card](https://goreportcard.com/badge/github.com/asmsh/promise)](https://goreportcard.com/report/github.com/asmsh/promise)
 
 *Fast, lightweight, and lock-free promises for Go... the Go way*
 
@@ -166,3 +166,8 @@ func main() {
     /* do some other work */
 }
 ```
+
+* It can be embedded or extended, to provide typed promises, like the [asyncHttp](https://github.com/asmsh/promise/tree/main/examples/asyncHttp),
+  or the [ctxprom](https://github.com/asmsh/promise/tree/main/examples/ctxprom) examples.
+  
+* It provides JavaScript-like Resolver constructor, which can be used like in [this example.](https://github.com/asmsh/promise/tree/main/examples/resolver)
