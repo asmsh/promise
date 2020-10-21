@@ -249,6 +249,14 @@ func (p *GoPromise) wait(d time.Duration, resolveOnTimeout bool) (timeout bool) 
 	// if the fate is Resolved or Handled don't wait, as they are guaranteed
 	// to happen after the result is saved, and after the resChan is closed.
 	if status.IsFateResolved(s) || status.IsFateHandled(s) {
+		// panic if the resChan has any elements, as the promise is Resolved,
+		// and the result of the promise is already received.
+		// this will be true, only if the resChan is created externally, and
+		// more than one value is sent on it, which is considered a bad usage.
+		if len(p.resChan) != 0 {
+			panic(multipleSendsPanicMsg)
+		}
+
 		return false
 	}
 
