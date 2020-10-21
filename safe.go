@@ -106,10 +106,10 @@ func New(resChan chan Res) *GoPromise {
 // the promise's result will be a Res value that contains the passed values, vals,
 // and a nil, after them at the end.
 //
-// The returned promise will be rejected when the reject function is called,
-// for the first time, and before the fulfill function, then the promise's result
-// will be a Res value that contains, both, the passed values, vals(if present),
-// and the provided err(after vals, always at the end).
+// The returned promise will be rejected when the reject function is called
+// with a non nil error, for the first time, and before the fulfill function,
+// then the promise's result will be a Res value that contains, both, the passed
+// values, vals(if present), and the provided err(after vals, always at the end).
 //
 // The returned promise will be panicked when the resolverCb causes a panic,
 // before any calls to fulfill or reject is made.
