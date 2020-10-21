@@ -19,6 +19,9 @@
 // the last return parameter, and the existence of panics and their difference
 // from errors.
 //
+// A Promise provides an easy way for returning results from a goroutine, and/or
+// waiting for it to finish, plus other features.
+//
 // A Promise has four states, and it can be in only one of them, at any time:
 // Pending: the computation that corresponds to this Promise has not finished.
 // Fulfilled: the computation that corresponds to this Promise has finished and
@@ -33,14 +36,21 @@
 // Resolved: the state of the Promise is now known, and final.
 // Handled: the result of the Promise has been passed to some call of its methods.
 //
-// Once the Promise's fate is Resolved, its result value will not change.
-// A Promise whose fate is Unresolved, its state must be Pending.
-// A Promise whose fate is Resolved, and its state is Pending, its fate will
+//
+// General Notes:-
+//
+// * Once the Promise's fate is Resolved, its result value will not change.
+//
+// * A Promise whose fate is Unresolved, its state must be Pending.
+//
+// * A Promise whose fate is Resolved, and its state is Pending, its fate will
 // never be Handled.
-// For a Promise's fate to be Handled, its fate must first be Resolved.
+//
+// * For a Promise's fate to be Handled, its fate must first be Resolved.
 //
 //
-// # Implementations:
+// Implementations:-
+//
 // * The module provides one Promise implementation, GoPromise(the default).
 //
 // * The GoPromise's 'ok' callback parameter will always be true(except in
@@ -50,7 +60,8 @@
 // always be true(except on a panicked promise)
 //
 //
-// # Callback Notes:
+// Callback Notes:-
+//
 // * The Res value returned from the callback must not be modified after return.
 //
 // * If the callback called runtime.Goexit, the returned promise will be
@@ -78,7 +89,8 @@
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 //
-// # Modes:
+// Modes:-
+//
 // * The module provides two modes for promise creation, 'Safe', and 'NonSafe'.
 //
 // * In the 'NonSafe' version, a rejected promise(resolved to the 'rejected'
