@@ -523,7 +523,11 @@ func (p *GoPromise) handleReturns(resP *Res) {
 		// no panic, resolve to the Res value pointed to, as the callback is
 		// either returned normally, or through a call to runtime.Goexit call,
 		// and in either case the Res value pointed to will not change here.
-		p.resolveToRes(*resP)
+		var res Res
+		if resP != nil {
+			res = *resP
+		}
+		p.resolveToRes(res)
 	} else {
 		// a panic happened, resolve to panicked, with the panic value(inside
 		// a Res value).
