@@ -117,6 +117,9 @@ func New(resChan chan Res) *GoPromise {
 // If the callback called runtime.Goexit, before any calls to fulfill or reject
 // is made, the returned promise will be fulfilled to 'nil'.
 //
+// If the resolverCb causes a panic after calling fulfill or reject, the panic
+// will not be recovered by the promise.
+//
 // The fulfill and reject functions should not be called asynchronously, or more
 // specifically, they should be called and returned before the resolverCb return.
 //
@@ -138,8 +141,7 @@ func Resolver(resolverCb func(fulfill func(vals ...interface{}), reject func(err
 
 func resolverCall(p *GoPromise, cb func(fulfill func(...interface{}), reject func(error, ...interface{}))) {
 	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Res)
-	defer p.handleReturns(resP)
+	defer p.handleReturns(nil)
 
 	// create the resolver functions, and pass them to the callback
 	fulfill := func(vals ...interface{}) {
@@ -149,7 +151,7 @@ func resolverCall(p *GoPromise, cb func(fulfill func(...interface{}), reject fun
 		}
 
 		// only one call(from fulfill or reject) will reach this point
-		*resP = vals
+		p.resolveToRes(vals)
 	}
 	reject := func(err error, vals ...interface{}) {
 		set, _ := p.status.SetResolving()
@@ -158,7 +160,7 @@ func resolverCall(p *GoPromise, cb func(fulfill func(...interface{}), reject fun
 		}
 
 		// only one call(from fulfill or reject) will reach this point
-		*resP = append(vals, err)
+		p.resolveToRes(append(vals, err))
 	}
 	cb(fulfill, reject)
 }

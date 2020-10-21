@@ -563,6 +563,8 @@ func (p *GoPromise) handleReturns(resP *Res) {
 // promise, as it's protected by the Resolving fate setter.
 // if called from finallyCall(before handleReturns), then it will be called
 // once once on the same promise, by design.
+// if called from the resolverCb, then it will be called once on the same
+// promise, as it's protected by the Resolving fate setter.
 func (p *GoPromise) resolveToRes(res Res) {
 	if res.IsErrRes() {
 		p.reject(res)
