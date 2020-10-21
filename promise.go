@@ -58,8 +58,8 @@ type GoPromise struct {
 	// about the promise.
 	// refer to the docs of the promStatus type for more info.
 	//
-	// don't read the res field based on the status value, except on 'handled'
-	// fate, as it's guaranteed to be set only after the resChan is closed.
+	// the res field is guaranteed to be immutable, after the fate value is
+	// Resolved or Handled, so don't read it before then.
 	status status.PromStatus
 }
 
@@ -246,10 +246,9 @@ func (p *GoPromise) waitCall(resCall, once bool, d time.Duration) (ok bool) {
 func (p *GoPromise) wait(d time.Duration, resolveOnTimeout bool) (timeout bool) {
 	s := p.status.Read()
 
-	// if the fate is 'handled' don't wait, as 'handled' is guaranteed to
-	// happen after the resChan is closed(and without a timeout), and after
-	// the result is saved.
-	if status.IsFateHandled(s) {
+	// if the fate is Resolved or Handled don't wait, as they are guaranteed
+	// to happen after the result is saved, and after the resChan is closed.
+	if status.IsFateResolved(s) || status.IsFateHandled(s) {
 		return false
 	}
 
@@ -497,7 +496,9 @@ func (p *GoPromise) thenCall(prev *GoPromise, cb thenCb, once bool, d time.Durat
 	}
 }
 
-// this handles invalid follow from then, catch, and recover calls
+// this handles invalid follow from then, catch, and recover calls.
+// for any promise, this is guaranteed to be called only once, as it's called
+// with the newly created promise as a receiver.
 func (p *GoPromise) handleInvalidFollow(prevRes Res, prevStatus uint32) {
 	if status.IsStatePending(prevStatus) {
 		// the previous promise is pending, resolve to timeout
@@ -518,6 +519,14 @@ func (p *GoPromise) handleInvalidFollow(prevRes Res, prevStatus uint32) {
 // the callback function is called after a deferred call to this method.
 // no internal call that may cause a panic should be called after this method.
 func (p *GoPromise) handleReturns(resP *Res) {
+	// make sure that only one call will resolve the promise, or return if
+	// the promise is already resolved, so that we don't recover panics when
+	// we don't need to.
+	set, _ := p.status.SetResolving()
+	if !set {
+		return
+	}
+
 	v := recover()
 	if v == nil {
 		// no panic, resolve to the Res value pointed to, as the callback is
@@ -539,6 +548,13 @@ func (p *GoPromise) handleReturns(resP *Res) {
 // without panic nor timeout.
 // the promise is either rejected or fulfilled, depending on whether the last
 // element of res is a non-nil error value or not, respectively.
+//
+// if called from exterWaitProc, then it will be called once on the same
+// promise, as it's protected by the Resolving fate setter.
+// if called from handleReturns, then it will be called once on the same
+// promise, as it's protected by the Resolving fate setter.
+// if called from finallyCall(before handleReturns), then it will be called
+// once once on the same promise, by design.
 func (p *GoPromise) resolveToRes(res Res) {
 	if res.IsErrRes() {
 		p.reject(res)
@@ -547,20 +563,15 @@ func (p *GoPromise) resolveToRes(res Res) {
 	}
 }
 
+// if called from handleInvalidFollow, then it will be called once on the
+// same promise, by design.
+// if called from handleReturns, then it will be called once on the same
+// promise, as it's called on return, and that can happen once.
 func (p *GoPromise) resolveToPanic(res Res) {
-	set, s := p.status.SetPanickedResolved()
-
-	// return if the promise is already resolved, to keep the following code
-	// executed once.
-	// it maybe called after the promise is resolved, from the return handler
-	// in the resolverCb, when causing a panic after calling fulfill or reject.
-	if !set {
-		return
-	}
-
-	// save the provided result in the promise, and close the resChan to
-	// unblock all waiting calls.
+	// save the result, update the status, and close the resChan to unblock
+	// all waiting calls.
 	p.res = res
+	_, s := p.status.SetPanickedResolved()
 	close(p.resChan)
 
 	// re-broadcast the panic if the promise is not followed
@@ -570,23 +581,15 @@ func (p *GoPromise) resolveToPanic(res Res) {
 }
 
 func (p *GoPromise) panicSync(res Res) {
-	p.status.SetPanickedResolvedSync()
 	p.res = res
+	p.status.SetPanickedResolvedSync()
 }
 
 func (p *GoPromise) reject(res Res) {
-	set, s := p.status.SetRejectedResolved()
-
-	// return if the promise is already resolved, to keep the following code
-	// executed once.
-	// it will not be called after the promise is resolved, but just to be safe.
-	if !set {
-		return
-	}
-
-	// save the provided result in the promise, and close the resChan to
-	// unblock all waiting calls(as the promise is now resolved).
+	// save the result, update the status, and close the resChan to unblock
+	// all waiting calls.
 	p.res = res
+	_, s := p.status.SetRejectedResolved()
 	close(p.resChan)
 
 	// panic if the safe mode is enabled(the default), and the promise
@@ -598,30 +601,21 @@ func (p *GoPromise) reject(res Res) {
 }
 
 func (p *GoPromise) rejectSync(res Res) {
-	p.status.SetRejectedResolvedSync()
 	p.res = res
+	p.status.SetRejectedResolvedSync()
 }
 
 func (p *GoPromise) fulfill(res Res) {
-	set, _ := p.status.SetFulfilledResolved()
-
-	// return if the promise is already resolved, to keep the following code
-	// executed once.
-	// it maybe called after the promise is resolved, from the return handler
-	// in Finally after resolving to the previous promise's result.
-	if !set {
-		return
-	}
-
-	// save the provided result in the promise, and close the resChan to
-	// unblock all waiting calls.
+	// save the result, update the status, and close the resChan to unblock
+	// all waiting calls.
 	p.res = res
+	p.status.SetFulfilledResolved()
 	close(p.resChan)
 }
 
 func (p *GoPromise) fulfillSync(res Res) {
-	p.status.SetFulfilledResolvedSync()
 	p.res = res
+	p.status.SetFulfilledResolvedSync()
 }
 
 // resolveToPending sets the state to Pending, and the fate to Resolved, then
