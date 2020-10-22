@@ -1,0 +1,42 @@
+name: Tests
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the main branch
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  test:
+    name: Test with Go ${{ matrix.go }} on OS ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    
+    # Test with all supported Go versions on all OSes
+    strategy:
+      matrix:
+        go: [ '1.15', '1.14', '1.13' ]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - name: Setup Go ${{ matrix.go }}
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+      
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Check-out 
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: |
+          go get -v -t -d ./...
+
+      - name: Build
+        run: go build -v .
+
+      - name: Test
+        run: go test -v .
