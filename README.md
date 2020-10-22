@@ -1,10 +1,18 @@
-# Promise [![PkgGoDev](https://pkg.go.dev/badge/github.com/asmsh/promise)](https://pkg.go.dev/github.com/asmsh/promise) [![Go Report Card](https://goreportcard.com/badge/github.com/asmsh/promise)](https://goreportcard.com/report/github.com/asmsh/promise)
+# Promise [![PkgGoDev](https://pkg.go.dev/badge/github.com/asmsh/promise)](https://pkg.go.dev/github.com/asmsh/promise) [![Go Report Card](https://goreportcard.com/badge/github.com/asmsh/promise)](https://goreportcard.com/report/github.com/asmsh/promise) [![GoCoverIO](https://gocover.io/_badge/github.com/asmsh/promise)](https://gocover.io/github.com/asmsh/promise)
 
 *Fast, lightweight, and lock-free promises for Go... the Go way*
 
-Besides **speed** and **low memory overhead**, it focuses on **being extensible** and on Go's idioms, like **multi return parameters**, **error being a
-value**, the convention of **returning errors as the last return parameter**, and **the existence of panics** and their
-difference from errors.
+## Features
+
+* Fast and low memory overhead implementation
+* Lock-free implementation
+* Extensible implementation that can be used to provide typed promises
+* Automatic panic recovering
+* An API that focuses on Go's idioms, like:
+    * Multi return parameters
+    * Error being a value
+    * The convention of returning errors as the last return parameter
+    * The existence of panics and their difference from errors.
 
 
 ## Overview
@@ -20,7 +28,9 @@ Waiting for a *goroutine*, or returning result from a *goroutine*, specially wit
 tedious, as it usually requires using more than one variable(a channel with a *struct* type whose fields correspond to
 the return parameters, or a `sync.WaitGroup` with some variables).
 
-But from a promise, it's possible to wait for the corresponding *goroutine* to finish and/or access the returned result from it, along with other features, like knowing the status of that *goroutine*, building computation pipelines, and recovering from panics.
+But using a promise, it's now possible to wait for the corresponding *goroutine* to finish and/or access the returned
+result from it, along with other features, like knowing the status of that *goroutine*, building computation pipelines,
+and recovering from panics.
 
 
 ### Promise States
