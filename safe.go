@@ -34,8 +34,7 @@ func Go(fun func()) *GoPromise {
 
 func goCall(p *GoPromise, fun func()) {
 	// defer the return handler to handle panics and runtime.Goexit calls.
-	resP := new(Res)
-	defer p.handleReturns(resP)
+	defer p.handleReturns(nil)
 	// call the go func, then fulfill and return
 	fun()
 }
