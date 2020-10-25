@@ -44,11 +44,11 @@ type Promise interface {
 	// waiting.
 	WaitChan() chan bool
 
-	// WaitUntil waits the promise to be resolved, with max wait time, d.
+	// WaitUntil waits the promise to be resolved for at least the duration d.
 	// It returns false, if the promise has panicked, or the wait timed-out,
 	// otherwise it follows the rules of the underlying Promise implementation.
 	//
-	// If the wait duration, d, is 0 or less, it will be like in an Wait call.
+	// If the wait duration, d, is 0 or less, it will be like an Wait call.
 	//
 	// If the underlying Promise implementation is the GoPromise, and it's not
 	// panicked, then ok will = false, only if the wait timed-out.
@@ -64,7 +64,7 @@ type Promise interface {
 	// panicked, then the res value will always be valid(ok = true).
 	GetRes() (res Res, ok bool)
 
-	// GetResUntil waits the promise to be resolved, with max wait time, d,
+	// GetResUntil waits the promise to be resolved for at least the duration d,
 	// and returns its result, res, and a boolean, ok, which will be true only
 	// if res is valid.
 	//

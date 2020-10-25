@@ -156,7 +156,7 @@ func (p *GoPromise) WaitChan() chan bool {
 	return c
 }
 
-// WaitUntil waits the promise to be resolved, with max wait time, d.
+// WaitUntil waits the promise to be resolved for at least the duration d.
 // It returns false, if the promise has panicked, or the wait timed-out,
 // otherwise it returns true.
 //
@@ -177,7 +177,7 @@ func (p *GoPromise) GetRes() (res Res, ok bool) {
 	return p.GetResUntil(0) // wait infinitely
 }
 
-// GetResUntil waits the promise to be resolved, with max wait time, d,
+// GetResUntil waits the promise to be resolved for at least the duration d,
 // and returns its result, res, and ok = true, if the promise hasn't
 // panicked, nor the wait timed-put, otherwise it returns res = nil,
 // and ok = false.
