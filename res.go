@@ -58,3 +58,16 @@ func (res Res) GetErr() error {
 func (res Res) IsErrRes() bool {
 	return res.GetErr() != nil
 }
+
+// Copy returns a new copy of this Res value if it's not empty, otherwise
+// returns this Res value.
+func (res Res) Copy() (newRes Res) {
+	n := len(res)
+	if n == 0 {
+		return res
+	}
+
+	newRes = make(Res, n)
+	copy(newRes, res)
+	return newRes
+}
