@@ -16,11 +16,12 @@ package promise_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/asmsh/promise"
 )
 
-func TestGoPromise_Await_WithPanic(t *testing.T) {
+func TestGoPromise_Wait_WithPanic(t *testing.T) {
 	p := promise.Go(func() {
 		panic("my panic msg")
 	})
@@ -30,6 +31,236 @@ func TestGoPromise_Await_WithPanic(t *testing.T) {
 	if got := p.Wait(); got != false {
 		t.Errorf("Wait() = %v, want: false", got)
 	}
+}
+
+func TestGoPromise_WaitChan(t *testing.T) {
+	t.Run("uniqueness", func(t *testing.T) {
+		p := promise.Fulfill()
+
+		ch1 := p.WaitChan()
+		ch2 := p.WaitChan()
+
+		if ch1 == ch2 {
+			t.Errorf("WaitChan returned the same channel twice")
+		}
+	})
+
+	t.Run("resolved", func(t *testing.T) {
+		p := promise.Fulfill()
+
+		ch := p.WaitChan()
+
+		select {
+		case ok := <-ch:
+			if !ok {
+				t.Errorf("The wait chan's sent value should be: %v, but found: %v", true, ok)
+			}
+		case <-time.After(1):
+			t.Errorf("The promise is resolved, but its wait chan is not chosen")
+		}
+	})
+
+	t.Run("normal return", func(t *testing.T) {
+		p := promise.Go(func() {
+
+		})
+
+		ch := p.WaitChan()
+
+		select {
+		case ok := <-ch:
+			if !ok {
+				t.Errorf("The wait chan's sent value should be: %v, but found: %v", true, ok)
+			}
+		case <-time.After(1):
+			t.Errorf("The promise is resolved, but its wait chan is not chosen")
+		}
+	})
+
+	t.Run("normal return with sleep", func(t *testing.T) {
+		p := promise.Go(func() {
+			time.Sleep(100)
+		})
+
+		ch := p.WaitChan()
+
+		select {
+		case ok := <-ch:
+			if !ok {
+				t.Errorf("The wait chan's sent value should be: %v, but found: %v", true, ok)
+			}
+		case <-time.After(1000):
+			t.Errorf("The promise is resolved, but its wait chan is not chosen")
+		}
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		p := promise.Go(func() {
+			time.Sleep(1000)
+		})
+
+		ch := p.WaitChan()
+
+		select {
+		case <-ch:
+			t.Errorf("The promise should not be resolved before the specified duration")
+		case <-time.After(100):
+
+		}
+	})
+}
+
+func TestGoPromise_WaitUntil(t *testing.T) {
+	t.Run("resolved", func(t *testing.T) {
+		p := promise.Fulfill()
+
+		st := time.Now()
+		ok := p.WaitUntil(1)
+		elap := time.Since(st)
+
+		// as the promise is resolved when created, the wait should never
+		// time-out, and the elapsed time should be zero.
+		if !ok {
+			t.Errorf("WaitUntil = %v, want: %v", ok, true)
+		}
+		if elap != 0 {
+			t.Errorf("WaitUntil waited for unexpected duration: %v, expected: %v", elap, 0)
+		}
+	})
+
+	t.Run("normal return", func(t *testing.T) {
+		p := promise.Go(func() {
+
+		})
+
+		ok := p.WaitUntil(100)
+
+		// as the promise is resolved almost immediately, the wait should
+		// not time-out.
+		if !ok {
+			t.Errorf("WaitUntil = %v, want: %v", ok, true)
+		}
+	})
+
+	t.Run("normal return with sleep", func(t *testing.T) {
+		p := promise.Go(func() {
+			time.Sleep(100)
+		})
+
+		ok := p.WaitUntil(1000)
+
+		// as the promise is resolved before the wanted wait time, the wait
+		// should not time-out.
+		if !ok {
+			t.Errorf("WaitUntil = %v, want: %v", ok, true)
+		}
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		sleepT := time.Nanosecond * 1000
+		timeoutT := time.Nanosecond * 100
+
+		p := promise.Go(func() {
+			time.Sleep(sleepT)
+		})
+
+		st := time.Now()
+		ok := p.WaitUntil(timeoutT)
+		elap := time.Since(st)
+
+		// as the promise is resolved after the wanted wait time, the wait
+		// should time-out.
+		if ok {
+			t.Errorf("WaitUntil = %v, want: %v", ok, false)
+		}
+		if elap < timeoutT {
+			t.Errorf("WaitUntil waited for unexpected short duration: %v, want(at least): %v", elap, timeoutT)
+		}
+	})
+}
+
+func TestGoPromise_GetResUntil(t *testing.T) {
+	t.Run("resolved", func(t *testing.T) {
+		wantRes := promise.Res{"go", "golang"}
+		p := promise.Fulfill(wantRes...)
+
+		st := time.Now()
+		res, ok := p.GetResUntil(1)
+		elap := time.Since(st)
+
+		// as the promise is resolved when created, the wait should never
+		// time-out, and the elapsed time should be zero.
+		if !ok {
+			t.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
+		}
+		if elap != 0 {
+			t.Errorf("GetResUntil waited for unexpected duration: %v, expected: %v", elap, 0)
+		}
+		if !equalRess(res, wantRes) {
+			t.Errorf("GetResUntil.res = %v, want: %v", res, wantRes)
+		}
+	})
+
+	t.Run("res return", func(t *testing.T) {
+		wantRes := promise.Res{"go", "golang"}
+		p := promise.GoRes(func() promise.Res {
+			return wantRes
+		})
+
+		res, ok := p.GetResUntil(100)
+
+		// as the promise is resolved almost immediately, the wait should
+		// not time-out.
+		if !ok {
+			t.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
+		}
+		if !equalRess(res, wantRes) {
+			t.Errorf("GetResUntil.res = %v, want: %v", res, wantRes)
+		}
+	})
+
+	t.Run("res return with sleep", func(t *testing.T) {
+		wantRes := promise.Res{"go", "golang"}
+		p := promise.GoRes(func() promise.Res {
+			time.Sleep(100)
+			return wantRes
+		})
+
+		res, ok := p.GetResUntil(1000)
+
+		// as the promise is resolved before the wanted wait time, the wait
+		// should not time-out.
+		if !ok {
+			t.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
+		}
+		if !equalRess(res, wantRes) {
+			t.Errorf("GetResUntil.res = %v, want: %v", res, wantRes)
+		}
+	})
+
+	t.Run("timeout", func(t *testing.T) {
+		sleepT := time.Nanosecond * 1000
+		timeoutT := time.Nanosecond * 100
+
+		wantRes := promise.Res{"go", "golang"}
+		p := promise.GoRes(func() promise.Res {
+			time.Sleep(sleepT)
+			return wantRes
+		})
+
+		st := time.Now()
+		ok := p.WaitUntil(timeoutT)
+		elap := time.Since(st)
+
+		// as the promise is resolved after the wanted wait time, the wait
+		// should always time-out.
+		if ok {
+			t.Errorf("WaitUntil = %v, want: %v", ok, false)
+		}
+		if elap < timeoutT {
+			t.Errorf("WaitUntil waited for unexpected short duration: %v, want(at least): %v", elap, timeoutT)
+		}
+	})
 }
 
 func TestImmutability(t *testing.T) {
