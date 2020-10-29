@@ -193,7 +193,7 @@ func (p *GoPromise) GetResUntil(d time.Duration) (res Res, ok bool) {
 	}
 
 	// return a copy of the result, to keep the saved one immutable
-	res = copyRes(p.res)
+	res = p.res.Copy()
 	return
 }
 
@@ -499,7 +499,7 @@ func (p *GoPromise) thenCall(prev *GoPromise, cb thenCb, once bool, d time.Durat
 		*resP = cb(nil, false)
 	} else {
 		// pass a copy of the previous result, to keep it immutable
-		prevRes := copyRes(prev.res)
+		prevRes := prev.res.Copy()
 		*resP = cb(prevRes, true)
 	}
 }
@@ -711,7 +711,7 @@ func (p *GoPromise) catchCall(prev *GoPromise, cb catchCb, once bool, d time.Dur
 		err := prev.res.GetErr()
 
 		// pass a copy of the previous result, to keep it immutable
-		prevRes := copyRes(prev.res)
+		prevRes := prev.res.Copy()
 		*resP = cb(err, prevRes, true)
 	}
 }
@@ -863,14 +863,3 @@ func (p *GoPromise) finallyCall(prev *GoPromise, cb finallyCb, once bool, d time
 }
 
 func (*GoPromise) privateImplementation() {}
-
-func copyRes(in Res) Res {
-	n := len(in)
-	if n == 0 {
-		return in
-	}
-
-	out := make(Res, n)
-	copy(out, in)
-	return out
-}
