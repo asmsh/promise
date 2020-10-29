@@ -16,6 +16,7 @@ package promise_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/asmsh/promise"
 )
@@ -49,6 +50,172 @@ func BenchmarkGoRes(b *testing.B) {
 			return promise.Res{"go", "golang"}
 		})
 	}
+}
+
+func BenchmarkGoPromise_WaitUntil(b *testing.B) {
+	b.Run("resolved", func(b *testing.B) {
+		p := promise.Fulfill()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			ok := p.WaitUntil(1)
+			if !ok {
+				b.Errorf("WaitUntil = %v, want: %v", ok, true)
+			}
+		}
+	})
+
+	b.Run("not resolved", func(b *testing.B) {
+		p := promise.Go(func() {
+			time.Sleep(100)
+		})
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			ok := p.WaitUntil(1000)
+			if !ok {
+				//b.Errorf("WaitUntil = %v, want: %v", ok, true)
+				b.Logf("WaitUntil = %v, want: %v", ok, true)
+				ok := p.WaitUntil(1)
+				if !ok {
+					b.Fatalf("WaitUntil = %v, want: %v", ok, true)
+				}
+			}
+		}
+	})
+}
+
+func BenchmarkGoPromise_WaitUntil_Parallel(b *testing.B) {
+	b.Run("resolved", func(b *testing.B) {
+		p := promise.Fulfill()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				ok := p.WaitUntil(1)
+				if !ok {
+					b.Errorf("WaitUntil = %v, want: %v", ok, true)
+				}
+			}
+		})
+	})
+
+	b.Run("not resolved", func(b *testing.B) {
+		p := promise.Go(func() {
+			time.Sleep(100)
+		})
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				ok := p.WaitUntil(1000)
+				if !ok {
+					//b.Errorf("WaitUntil = %v, want: %v", ok, true)
+					b.Logf("WaitUntil = %v, want: %v", ok, true)
+					ok := p.WaitUntil(1)
+					if !ok {
+						b.Fatalf("WaitUntil = %v, want: %v", ok, true)
+					}
+				}
+			}
+		})
+	})
+}
+
+func BenchmarkGoPromise_GetResUntil(b *testing.B) {
+	b.Run("resolved - no res", func(b *testing.B) {
+		p := promise.Fulfill()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, ok := p.GetResUntil(1)
+			if !ok {
+				b.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
+			}
+		}
+	})
+
+	b.Run("resolved - with res", func(b *testing.B) {
+		p := promise.Fulfill("go", "golang")
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, ok := p.GetResUntil(1)
+			if !ok {
+				b.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
+			}
+		}
+	})
+
+	b.Run("not resolved - no res", func(b *testing.B) {
+		p := promise.Go(func() {})
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, ok := p.GetResUntil(1000)
+			if !ok {
+				b.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
+			}
+		}
+	})
+
+	b.Run("not resolved - with res", func(b *testing.B) {
+		p := promise.GoRes(func() promise.Res {
+			return promise.Res{"go", "golang"}
+		})
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, ok := p.GetResUntil(1000)
+			if !ok {
+				b.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
+			}
+		}
+	})
+}
+
+func BenchmarkGoPromise_GetResUntil_Parallel(b *testing.B) {
+	b.Run("no res", func(b *testing.B) {
+		p := promise.Go(func() {
+			time.Sleep(0)
+		})
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_, ok := p.GetResUntil(100)
+				if !ok {
+					b.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
+				}
+			}
+		})
+	})
+
+	b.Run("with res", func(b *testing.B) {
+		p := promise.GoRes(func() promise.Res {
+			return promise.Res{"go", "golang"}
+		})
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				_, ok := p.GetResUntil(1000)
+				if !ok {
+					b.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
+				}
+			}
+		})
+	})
 }
 
 type promiseBench struct {
@@ -86,7 +253,6 @@ func BenchmarkGoPromise_Then(b *testing.B) {
 
 				b.ReportAllocs()
 				b.ResetTimer()
-
 				for i := 0; i < b.N; i++ {
 					p := prom.Then(func(res promise.Res, ok bool) promise.Res {
 						return nil
@@ -116,7 +282,6 @@ func BenchmarkGoPromise_Then(b *testing.B) {
 
 				b.ReportAllocs()
 				b.ResetTimer()
-
 				for i := 0; i < b.N; i++ {
 					p := prom.Then(func(res promise.Res, ok bool) promise.Res {
 						return promise.Res{"go", "golang"}
