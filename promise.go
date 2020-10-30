@@ -27,8 +27,7 @@ type GoPromise struct {
 	// holds the result of the promise.
 	// written once, before the resChan channel is closed.
 	//
-	// don't read it unless the resChan is known to be closed, which can't be
-	// known if the promise is resolved to 'pending', so don't read it then.
+	// don't read it unless the resChan is known to be closed.
 	res Res
 
 	// closed or received from when this promise is resolved.
