@@ -28,6 +28,15 @@ package promise
 // Values of this type must not be modified after returned from any callback.
 type Res []interface{}
 
+// First returns the first element of this Res value and true, if its length
+// is not 0, otherwise it returns nil and false.
+func (res Res) First() (first interface{}, ok bool) {
+	if len(res) == 0 {
+		return nil, false
+	}
+	return res[0], true
+}
+
 // Last returns the last element of this Res value and true, if its length
 // is not 0, otherwise it returns nil and false.
 func (res Res) Last() (last interface{}, ok bool) {
