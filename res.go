@@ -80,3 +80,16 @@ func (res Res) Copy() (newRes Res) {
 	copy(newRes, res)
 	return newRes
 }
+
+// Clear sets all elements of this Res value to nil, and returns its length.
+func (res Res) Clear() (n int) {
+	n = len(res)
+	if n == 0 {
+		return 0
+	}
+
+	for i := 0; i < n; i++ {
+		res[i] = nil
+	}
+	return n
+}
