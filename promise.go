@@ -166,7 +166,7 @@ func (p *GoPromise) WaitUntil(d time.Duration) (ok bool) {
 	if d < 0 {
 		d = 0
 	}
-	return p.waitCall(false, false, d) // wait up to duration d
+	return p.waitCall(false, false, d) // wait for at least duration d
 }
 
 // GetRes waits the promise to be resolved, and returns its result, res,
@@ -186,7 +186,7 @@ func (p *GoPromise) GetResUntil(d time.Duration) (res Res, ok bool) {
 	if d < 0 {
 		d = 0
 	}
-	ok = p.waitCall(true, false, d) // wait up to duration d
+	ok = p.waitCall(true, false, d) // wait for at least duration d
 	if !ok {
 		return
 	}
