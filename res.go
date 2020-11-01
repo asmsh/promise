@@ -68,6 +68,22 @@ func (res Res) IsErrRes() bool {
 	return res.GetErr() != nil
 }
 
+// IsZero returns true if this Res value has no elements, or if all of its
+// elements are nil, otherwise it returns false.
+func (res Res) IsZero() bool {
+	n := len(res)
+	if n == 0 {
+		return true
+	}
+
+	for i := 0; i < n; i++ {
+		if res[i] != nil {
+			return false
+		}
+	}
+	return true
+}
+
 // Copy returns a new copy of this Res value if it's not empty, otherwise
 // returns this Res value.
 func (res Res) Copy() (newRes Res) {
