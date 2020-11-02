@@ -64,6 +64,60 @@ func ImmutRes(vals ...interface{}) (res Res) {
 	return
 }
 
+// ReuseRes takes a Res value, base, and repopulate it with the provided
+// values, vals, only if it can hold them, and returns it.
+// Otherwise, a new Res value will be allocated, populated with vals, and
+// returned.
+//
+// The provided base will be populated with the provided values, if its
+// capacity is less than or equal to the length of the provided values.
+// Otherwise, it will not be touched.
+//
+// If no values are provided, it will return nil, without touching the base.
+//
+// It should be used only inside callbacks, and when the provided Res value,
+// base, is not needed any more(before this call), and the number of the
+// to-be-returned values is less than the base's capacity.
+//
+// It only serves as a way to minimize memory allocations when the number of
+// values returned from a callback is the same as the length of the Res value
+// passed to the callback, by reusing that Res value(under the above conditions).
+// However, it will always return a Res value that contain the passed values,
+// vals, so it can be used as a general return function which can, when
+// appropriate, optimize memory allocations.
+//
+// Example:
+//
+//  // inside any callback..
+//  // ('res' is the Res value passed to the callback)
+//
+//	/* after done needing 'res' */
+//
+//  // ('val1, val2, ..., valN' are any values)
+//  // when returning the following values, val1, val2, ..., valN,
+//  // and N is less than or equal cap(res), don't return them like:
+//  return promise.Res{val1, val2, ..., valN}
+//  // instead, return them through ReuseRes, as follows:
+//	return promise.ReuseRes(res, val1, val2, ..., valN)
+//
+func ReuseRes(base Res, vals ...interface{}) (res Res) {
+	n := len(vals)
+	if n == 0 {
+		// return nil if no values are passed
+		return nil
+	}
+
+	// if the capacity of base can hold the passed values, vals,
+	// reuse base for storing vals, otherwise a new Res value will
+	// be allocated(in append, below), and without touching base.
+	if n <= cap(base) {
+		base.Clear()
+		res = base[:0]
+	}
+
+	return append(res, vals...)
+}
+
 // WaitAll waits all the provided promises to resolve then return true, or
 // returns false if no promises are provided.
 func WaitAll(proms ...Promise) (waited bool) {
