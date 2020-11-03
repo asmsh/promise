@@ -55,8 +55,15 @@ func TestGoPromise_WaitChan(t *testing.T) {
 			if !ok {
 				t.Errorf("The wait chan's sent value should be: %v, but found: %v", true, ok)
 			}
-		case <-time.After(1):
-			t.Errorf("The promise is resolved, but its wait chan is not chosen")
+		case <-time.After(5000):
+			select {
+			case ok := <-ch:
+				if !ok {
+					t.Errorf("The wait chan's sent value should be: %v, but found: %v", true, ok)
+				}
+			default:
+				t.Errorf("The promise is resolved, but its wait chan is not chosen")
+			}
 		}
 	})
 
@@ -72,25 +79,15 @@ func TestGoPromise_WaitChan(t *testing.T) {
 			if !ok {
 				t.Errorf("The wait chan's sent value should be: %v, but found: %v", true, ok)
 			}
-		case <-time.After(1):
-			t.Errorf("The promise is resolved, but its wait chan is not chosen")
-		}
-	})
-
-	t.Run("normal return with sleep", func(t *testing.T) {
-		p := promise.Go(func() {
-			time.Sleep(100)
-		})
-
-		ch := p.WaitChan()
-
-		select {
-		case ok := <-ch:
-			if !ok {
-				t.Errorf("The wait chan's sent value should be: %v, but found: %v", true, ok)
+		case <-time.After(5000):
+			select {
+			case ok := <-ch:
+				if !ok {
+					t.Errorf("The wait chan's sent value should be: %v, but found: %v", true, ok)
+				}
+			default:
+				t.Errorf("The promise is resolved, but its wait chan is not chosen")
 			}
-		case <-time.After(1000):
-			t.Errorf("The promise is resolved, but its wait chan is not chosen")
 		}
 	})
 
@@ -114,17 +111,12 @@ func TestGoPromise_WaitUntil(t *testing.T) {
 	t.Run("resolved", func(t *testing.T) {
 		p := promise.Fulfill()
 
-		st := time.Now()
 		ok := p.WaitUntil(1)
-		elap := time.Since(st)
 
 		// as the promise is resolved when created, the wait should never
 		// time-out, and the elapsed time should be zero.
 		if !ok {
 			t.Errorf("WaitUntil = %v, want: %v", ok, true)
-		}
-		if elap != 0 {
-			t.Errorf("WaitUntil waited for unexpected duration: %v, expected: %v", elap, 0)
 		}
 	})
 
@@ -133,24 +125,10 @@ func TestGoPromise_WaitUntil(t *testing.T) {
 
 		})
 
-		ok := p.WaitUntil(100)
+		ok := p.WaitUntil(5000)
 
 		// as the promise is resolved almost immediately, the wait should
 		// not time-out.
-		if !ok {
-			t.Errorf("WaitUntil = %v, want: %v", ok, true)
-		}
-	})
-
-	t.Run("normal return with sleep", func(t *testing.T) {
-		p := promise.Go(func() {
-			time.Sleep(100)
-		})
-
-		ok := p.WaitUntil(1000)
-
-		// as the promise is resolved before the wanted wait time, the wait
-		// should not time-out.
 		if !ok {
 			t.Errorf("WaitUntil = %v, want: %v", ok, true)
 		}
@@ -184,17 +162,12 @@ func TestGoPromise_GetResUntil(t *testing.T) {
 		wantRes := promise.Res{"go", "golang"}
 		p := promise.Fulfill(wantRes...)
 
-		st := time.Now()
 		res, ok := p.GetResUntil(1)
-		elap := time.Since(st)
 
 		// as the promise is resolved when created, the wait should never
 		// time-out, and the elapsed time should be zero.
 		if !ok {
 			t.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
-		}
-		if elap != 0 {
-			t.Errorf("GetResUntil waited for unexpected duration: %v, expected: %v", elap, 0)
 		}
 		if !equalRess(res, wantRes) {
 			t.Errorf("GetResUntil.res = %v, want: %v", res, wantRes)
@@ -207,29 +180,10 @@ func TestGoPromise_GetResUntil(t *testing.T) {
 			return wantRes
 		})
 
-		res, ok := p.GetResUntil(100)
+		res, ok := p.GetResUntil(5000)
 
 		// as the promise is resolved almost immediately, the wait should
 		// not time-out.
-		if !ok {
-			t.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
-		}
-		if !equalRess(res, wantRes) {
-			t.Errorf("GetResUntil.res = %v, want: %v", res, wantRes)
-		}
-	})
-
-	t.Run("res return with sleep", func(t *testing.T) {
-		wantRes := promise.Res{"go", "golang"}
-		p := promise.GoRes(func() promise.Res {
-			time.Sleep(100)
-			return wantRes
-		})
-
-		res, ok := p.GetResUntil(1000)
-
-		// as the promise is resolved before the wanted wait time, the wait
-		// should not time-out.
 		if !ok {
 			t.Errorf("GetResUntil.ok = %v, want: %v", ok, true)
 		}
