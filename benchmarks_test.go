@@ -52,6 +52,66 @@ func BenchmarkGoRes(b *testing.B) {
 	}
 }
 
+func BenchmarkGoPromise_Wait(b *testing.B) {
+	b.Run("resolved", func(b *testing.B) {
+		p := promise.Fulfill()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			ok := p.Wait()
+			if !ok {
+				b.Errorf("Wait = %v, want: true", ok)
+			}
+		}
+	})
+
+	b.Run("not resolved", func(b *testing.B) {
+		p := promise.Go(func() {
+
+		})
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			ok := p.Wait()
+			if !ok {
+				b.Errorf("Wait = %v, want: true", ok)
+			}
+		}
+	})
+}
+
+func BenchmarkGoPromise_WaitChan(b *testing.B) {
+	b.Run("resolved", func(b *testing.B) {
+		p := promise.Fulfill()
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			c := p.WaitChan()
+			if c == nil {
+				b.Errorf("WaitChan = %v, want: non-nil", c)
+			}
+		}
+	})
+
+	b.Run("not resolved", func(b *testing.B) {
+		p := promise.Go(func() {
+
+		})
+
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			c := p.WaitChan()
+			if c == nil {
+				b.Errorf("WaitChan = %v, want: non-nil", c)
+			}
+		}
+	})
+}
+
 func BenchmarkGoPromise_WaitUntil(b *testing.B) {
 	b.Run("resolved", func(b *testing.B) {
 		p := promise.Fulfill()
