@@ -29,7 +29,7 @@ func MustGetRes(p Promise) (res Res) {
 	return res
 }
 
-// ImmutRes takes the to-be-returned values, add them to a new Res value,
+// ImmutRes takes the to-be-returned values, vals, add them to a new Res value,
 // and returns the newly allocated Res value.
 //
 // It effectively copies the provided slice of values, vals, into a new Res
@@ -49,11 +49,11 @@ func MustGetRes(p Promise) (res Res) {
 //  // may modify the value after it's returned from this callback.)
 //  myRes := getMyRes()
 //
-//	/* update myRes (or do other work) */
+//	/* update 'myRes' (or do other work) */
 //
 //  // when returning, don't return 'myRes' directly, like:
-//  // "return myRes"
-//  // instead, return it through ImmutRes, as follows..
+//  return myRes
+//  // instead, return it through ImmutRes, as follows:
 //	return promise.ImmutRes(myRes...)
 //
 func ImmutRes(vals ...interface{}) (res Res) {
