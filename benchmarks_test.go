@@ -490,6 +490,21 @@ func BenchmarkGoPromise_Chain_Medium(b *testing.B) {
 			p.Wait()
 		}
 	})
+
+	b.Run("with res(reuse res)", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			p := promise.Fulfill().Then(func(res promise.Res, ok bool) promise.Res {
+				return promise.ReuseRes(res, "go", "golang")
+			}).Then(func(res promise.Res, ok bool) promise.Res {
+				return promise.ReuseRes(res, "go", "golang")
+			}).Then(func(res promise.Res, ok bool) promise.Res {
+				return promise.ReuseRes(res, "go", "golang")
+			})
+			p.Wait()
+		}
+	})
 }
 
 // create a fulfilled promise, chain 5 callbacks, and wait on the final promise
@@ -527,6 +542,25 @@ func BenchmarkGoPromise_Chain_Long(b *testing.B) {
 				return promise.Res{"go", "golang"}
 			}).Then(func(res promise.Res, ok bool) promise.Res {
 				return promise.Res{"go", "golang"}
+			})
+			p.Wait()
+		}
+	})
+
+	b.Run("with res(reuse res)", func(b *testing.B) {
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			p := promise.Fulfill().Then(func(res promise.Res, ok bool) promise.Res {
+				return promise.ReuseRes(res, "go", "golang")
+			}).Then(func(res promise.Res, ok bool) promise.Res {
+				return promise.ReuseRes(res, "go", "golang")
+			}).Then(func(res promise.Res, ok bool) promise.Res {
+				return promise.ReuseRes(res, "go", "golang")
+			}).Then(func(res promise.Res, ok bool) promise.Res {
+				return promise.ReuseRes(res, "go", "golang")
+			}).Then(func(res promise.Res, ok bool) promise.Res {
+				return promise.ReuseRes(res, "go", "golang")
 			})
 			p.Wait()
 		}
