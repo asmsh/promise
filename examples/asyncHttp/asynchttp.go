@@ -62,7 +62,7 @@ func (hp *HttpPromise) ThenT(cb func(resp *http.Response) (resResp *http.Respons
 	p := hp.Then(func(res promise.Res, ok bool) promise.Res {
 		resp := res[0].(*http.Response)
 		resResp, resErr := cb(resp)
-		return promise.Res{resResp, resErr}
+		return promise.ReuseRes(res, resResp, resErr) // will not create new Res value
 	})
 	newHP := newHttpPromiseInter(p)
 	return newHP
@@ -72,7 +72,7 @@ func (hp *HttpPromise) CatchT(cb func(err error, resp *http.Response) (resResp *
 	p := hp.Catch(func(err error, res promise.Res, ok bool) promise.Res {
 		resp := res[0].(*http.Response)
 		resResp, resErr := cb(err, resp)
-		return promise.Res{resResp, resErr}
+		return promise.ReuseRes(res, resResp, resErr) // will not create new Res value
 	})
 	newHP := newHttpPromiseInter(p)
 	return newHP
