@@ -121,8 +121,7 @@ func ReuseRes(base Res, vals ...interface{}) (res Res) {
 // WaitAll waits all the provided promises to resolve then return true, or
 // returns false if no promises are provided.
 func WaitAll(proms ...Promise) (waited bool) {
-	n := len(proms)
-	if n == 0 {
+	if len(proms) == 0 {
 		return false
 	}
 
