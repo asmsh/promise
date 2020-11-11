@@ -55,7 +55,7 @@ func TestGoPromise_WaitChan(t *testing.T) {
 		select {
 		case <-ch:
 			t.Errorf("The promise should not be resolved before the specified duration")
-		case <-time.After(100):
+		case <-time.After(10):
 
 		}
 	})
@@ -76,7 +76,7 @@ func TestGoPromise_WaitUntil(t *testing.T) {
 
 	t.Run("timeout", func(t *testing.T) {
 		sleepT := time.Nanosecond * 1000
-		timeoutT := time.Nanosecond * 100
+		timeoutT := time.Nanosecond * 10
 
 		p := promise.Go(func() {
 			time.Sleep(sleepT)
@@ -116,7 +116,7 @@ func TestGoPromise_GetResUntil(t *testing.T) {
 
 	t.Run("timeout", func(t *testing.T) {
 		sleepT := time.Nanosecond * 1000
-		timeoutT := time.Nanosecond * 100
+		timeoutT := time.Nanosecond * 10
 
 		wantRes := promise.Res{"go", "golang"}
 		p := promise.GoRes(func() promise.Res {
