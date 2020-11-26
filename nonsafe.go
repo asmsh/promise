@@ -14,6 +14,8 @@
 
 package promise
 
+import "time"
+
 // NonSafeAPI exposes the 'NonSafe' version of the API of this module, as
 // the 'Safe' version is the default and already accessible directly from
 // this module.
@@ -75,6 +77,12 @@ func (nonSafeCalls) Resolver(resolverCb func(fulfill func(vals ...interface{}), 
 func (nonSafeCalls) Wrap(res Res) *GoPromise {
 	prom := newGoPromSync(true)
 	wrapCall(prom, res)
+	return prom
+}
+
+func (nonSafeCalls) Delay(res Res, d time.Duration, onSucceed, onFail bool) *GoPromise {
+	prom := newGoPromInter(true)
+	go delayCall(prom, res, d, onSucceed, onFail)
 	return prom
 }
 

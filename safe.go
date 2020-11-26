@@ -14,6 +14,8 @@
 
 package promise
 
+import "time"
+
 // Go runs the provided function, fun, in a separate goroutine, and returns
 // a GoPromise whose result is a nil Res value.
 //
@@ -177,6 +179,46 @@ func resolverCall(p *GoPromise, cb func(fulfill func(...interface{}), reject fun
 		p.resolveToRes(append(vals, err))
 	}
 	cb(fulfill, reject)
+}
+
+// Delay returns a GoPromise that's resolved to the passed Res value, res,
+// after waiting for, at least, the passed duration, d, accordingly.
+//
+// The returned promise is resolved to rejected, or fulfilled, depending on
+// whether the last element in res is, respectively, a non-nil error value,
+// or any other value.
+//
+// If the promise is about to be fulfilled, resolving the promise will only
+// be delayed, if onSucceed = true.
+// If the promise is about to be rejected, resolving the promise will only
+// be delayed, if onFail = true.
+//
+// The provided res value shouldn't be modified after this call.
+//
+// If the returned promise is rejected, and the error isn't caught by the end
+// of the promise's chain(by a Catch call), a panic will happen with an error
+// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+func Delay(res Res, d time.Duration, onSucceed, onFail bool) *GoPromise {
+	prom := newGoPromInter(false)
+	go delayCall(prom, res, d, onSucceed, onFail)
+	return prom
+}
+
+// handles rejection and fulfillment only
+func delayCall(p *GoPromise, res Res, d time.Duration, onSucceed, onFail bool) {
+	if res.IsErrRes() {
+		// a rejected state is considered a failure
+		if onFail {
+			time.Sleep(d)
+		}
+		p.reject(res)
+	} else {
+		// a fulfilled state is considered a success
+		if onSucceed {
+			time.Sleep(d)
+		}
+		p.fulfill(res)
+	}
 }
 
 // Wrap returns a GoPromise that's resolved, synchronously, to the provided
