@@ -203,18 +203,23 @@ func Fulfill(vals ...interface{}) *GoPromise {
 
 // Reject returns a GoPromise that's rejected, synchronously, and whose result
 // is a Res value that contains, both, the passed values, vals(if present), and
-// the provided err(after vals, always at the end).
+// the provided error, err(after vals, at the end), only if err is a non-nil
+// error value.
+//
+// If err is a nil error value, it returns a GoPromise that's fulfilled,
+// synchronously, and whose result is a Res value that contains vals.
 //
 // The provided vals, if passed from a slice/array, the slice/array shouldn't
 // be modified after this call.
 //
-// The returned promise will not panic with an *UnCaughtErr error, but all
-// subsequent promises in any promise chain derived from it will, until the
-// error is caught on each of these chains(by a Catch call).
+// The returned promise, if rejected, will not panic with an *UnCaughtErr error,
+// but all subsequent promises in any promise chain derived from it will, until
+// the error is caught on each of these chains(by a Catch call).
 func Reject(err error, vals ...interface{}) *GoPromise {
 	prom := newGoPromSync(false)
-	if len(vals) == 0 {
-		prom.rejectSync(Res{err})
+	// fulfill if err is nil, so that Catch is never called with a nil error
+	if err == nil {
+		prom.fulfillSync(append(vals, err))
 		return prom
 	}
 	prom.rejectSync(append(vals, err))

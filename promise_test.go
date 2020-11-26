@@ -391,11 +391,11 @@ func TestReject(t *testing.T) {
 		wantRes := promise.Res{"go", "golang", nil}
 		t.Run("parallel chain", func(t *testing.T) {
 			p := promise.Reject(nil, "go", "golang")
-			parallelChainTestRunner(t, p, wantRes, nil, nil, false, true, false)
+			parallelChainTestRunner(t, p, wantRes, nil, nil, true, false, false)
 		})
 		t.Run("sequential chain", func(t *testing.T) {
 			p := promise.Reject(nil, "go", "golang")
-			sequentialChainTestRunner(t, p, wantRes, nil, nil, false, true, false)
+			sequentialChainTestRunner(t, p, wantRes, nil, nil, true, false, false)
 		})
 	})
 	t.Run("non-nil error with res", func(t *testing.T) {
