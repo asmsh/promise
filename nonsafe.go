@@ -41,12 +41,18 @@ var NonSafeAPI nonSafeCalls
 type nonSafeCalls struct{ i int }
 
 func (nonSafeCalls) Go(fun func()) *GoPromise {
+	if fun == nil {
+		panic(nilCallbackPanicMsg)
+	}
 	prom := newGoPromInter(true)
 	go goCall(prom, fun)
 	return prom
 }
 
 func (nonSafeCalls) GoRes(fun func() Res) *GoPromise {
+	if fun == nil {
+		panic(nilCallbackPanicMsg)
+	}
 	prom := newGoPromInter(true)
 	go goResCall(prom, fun)
 	return prom
@@ -58,6 +64,9 @@ func (nonSafeCalls) New(resChan chan Res) *GoPromise {
 }
 
 func (nonSafeCalls) Resolver(resolverCb func(fulfill func(vals ...interface{}), reject func(err error, vals ...interface{}))) *GoPromise {
+	if resolverCb == nil {
+		panic(nilCallbackPanicMsg)
+	}
 	prom := newGoPromInter(true)
 	go resolverCall(prom, resolverCb)
 	return prom

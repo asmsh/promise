@@ -26,7 +26,12 @@ package promise
 // If the returned promise is a panicked promise, and it's not recovered(by a
 // Recover call) before the end of the promise's chain, or before calling Finally,
 // it will re-panic(with the same value passed to the original 'panic' call).
+//
+// It will panic if a nil function is passed.
 func Go(fun func()) *GoPromise {
+	if fun == nil {
+		panic(nilCallbackPanicMsg)
+	}
 	prom := newGoPromInter(false)
 	go goCall(prom, fun)
 	return prom
@@ -57,7 +62,12 @@ func goCall(p *GoPromise, fun func()) {
 // If the returned promise is a panicked promise, and it's not recovered(by a
 // Recover call) before the end of the promise's chain, or before calling Finally,
 // it will re-panic(with the same value passed to the original 'panic' call).
+//
+// It will panic if a nil function is passed.
 func GoRes(fun func() Res) *GoPromise {
+	if fun == nil {
+		panic(nilCallbackPanicMsg)
+	}
 	prom := newGoPromInter(false)
 	go goResCall(prom, fun)
 	return prom
@@ -132,7 +142,12 @@ func New(resChan chan Res) *GoPromise {
 // If the returned promise is a panicked promise, and it's not recovered(by a
 // Recover call) before the end of the promise's chain, or before calling Finally,
 // it will re-panic(with the same value passed to the original 'panic' call).
+//
+// It will panic if a nil function is passed.
 func Resolver(resolverCb func(fulfill func(vals ...interface{}), reject func(err error, vals ...interface{}))) *GoPromise {
+	if resolverCb == nil {
+		panic(nilCallbackPanicMsg)
+	}
 	prom := newGoPromInter(false)
 	go resolverCall(prom, resolverCb)
 	return prom
