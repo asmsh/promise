@@ -211,13 +211,13 @@ func delayCall(p *GoPromise, res Res, d time.Duration, onSucceed, onFail bool) {
 		if onFail {
 			time.Sleep(d)
 		}
-		p.reject(res)
+		p.resolveToReject(res)
 	} else {
 		// a fulfilled state is considered a success
 		if onSucceed {
 			time.Sleep(d)
 		}
-		p.fulfill(res)
+		p.resolveToFulfill(res)
 	}
 }
 

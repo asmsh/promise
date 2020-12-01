@@ -512,10 +512,10 @@ func (p *GoPromise) handleInvalidFollow(prevRes Res, prevStatus uint32) {
 		p.resolveToPending()
 	} else if status.IsStateFulfilled(prevStatus) {
 		// the previous promise is fulfilled, fulfill with its result
-		p.fulfill(prevRes)
+		p.resolveToFulfill(prevRes)
 	} else if status.IsStateRejected(prevStatus) {
 		// the previous promise is rejected, reject with its result
-		p.reject(prevRes)
+		p.resolveToReject(prevRes)
 	} else if status.IsStatePanicked(prevStatus) {
 		// the previous promise is panicked, panic with its result
 		p.resolveToPanic(prevRes)
@@ -566,9 +566,9 @@ func (p *GoPromise) handleReturns(resP *Res) {
 // promise, as it's protected by the Resolving fate setter.
 func (p *GoPromise) resolveToRes(res Res) {
 	if res.IsErrRes() {
-		p.reject(res)
+		p.resolveToReject(res)
 	} else {
-		p.fulfill(res)
+		p.resolveToFulfill(res)
 	}
 }
 
@@ -594,7 +594,7 @@ func (p *GoPromise) panicSync(res Res) {
 	p.status.SetPanickedResolvedSync()
 }
 
-func (p *GoPromise) reject(res Res) {
+func (p *GoPromise) resolveToReject(res Res) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
 	p.res = res
@@ -614,7 +614,7 @@ func (p *GoPromise) rejectSync(res Res) {
 	p.status.SetRejectedResolvedSync()
 }
 
-func (p *GoPromise) fulfill(res Res) {
+func (p *GoPromise) resolveToFulfill(res Res) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
 	p.res = res
@@ -826,7 +826,7 @@ func (p *GoPromise) finallyCall(prev *GoPromise, cb finallyCb, once bool, d time
 			// and resolve fulfill, with nil Res, as the panic must have been
 			// already handled(otherwise the program would have crashed and we
 			// would never reach this).
-			p.fulfill(nil)
+			p.resolveToFulfill(nil)
 		} else {
 			// save the new result
 			*resP = res
