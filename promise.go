@@ -198,7 +198,7 @@ func (p *GoPromise) GetResUntil(d time.Duration) (res Res, ok bool) {
 
 // ok priority: panics > timeout > onetime
 func (p *GoPromise) waitCall(resCall, once bool, d time.Duration) (ok bool) {
-	// wait the promise to be resolved, with wait time set to d
+	// wait the promise to be resolved, for at least time d
 	timedout := p.wait(d, false)
 
 	// if the promise has panicked, or the wait timed-out, return false
@@ -389,7 +389,7 @@ func (p *GoPromise) asyncRead(cb func(res Res, ok bool, args []interface{}), arg
 // chain without finding a Recover call, the promise will re-broadcast the
 // panic, so there's no need to care about panics here.
 func (p *GoPromise) asyncReadCall(cb readCb, args []interface{}, once bool, d time.Duration) {
-	// wait the promise to be resolved
+	// wait the promise to be resolved, for at least time d
 	p.wait(d, false)
 
 	// run the callback, regardless the previous promise is pending, fulfilled,
@@ -462,7 +462,7 @@ func (p *GoPromise) Then(thenCb func(res Res, ok bool) Res) Promise {
 }
 
 func (p *GoPromise) thenCall(prev *GoPromise, cb thenCb, once bool, d time.Duration) {
-	// wait the previous promise to be resolved, with max time d
+	// wait the previous promise to be resolved, for at least time d
 	prev.wait(d, true)
 
 	// ok is initially true and will be updated if the state is pending,
@@ -679,7 +679,7 @@ func (p *GoPromise) Catch(catchCb func(err error, res Res, ok bool) Res) Promise
 }
 
 func (p *GoPromise) catchCall(prev *GoPromise, cb catchCb, once bool, d time.Duration) {
-	// wait the previous promise to be resolved, with max time d
+	// wait the previous promise to be resolved, for at least time d
 	prev.wait(d, true)
 
 	// catch can handle only 'rejected' state, so if the previous promise
@@ -742,7 +742,7 @@ func (p *GoPromise) Recover(recoverCb func(v interface{}, ok bool) Res) Promise 
 }
 
 func (p *GoPromise) recoverCall(prev *GoPromise, cb recoverCb, once bool, d time.Duration) {
-	// wait the previous promise to be resolved, with max time d
+	// wait the previous promise to be resolved, for at least time d
 	prev.wait(d, true)
 
 	// recover can handle only 'panicked' state, so if the previous promise
@@ -810,7 +810,7 @@ func (p *GoPromise) Finally(finallyCb func(ok bool) Res) Promise {
 // possible to call it on a panicked promise and return a fulfilled promise,
 // and the panic will be dismissed implicitly, which is something we don't want.
 func (p *GoPromise) finallyCall(prev *GoPromise, cb finallyCb, once bool, d time.Duration) {
-	// wait the previous promise to be resolved, with max time d
+	// wait the previous promise to be resolved, for at least time d
 	prev.wait(d, true)
 
 	// defer the return handler to handle panics and runtime.Goexit calls
