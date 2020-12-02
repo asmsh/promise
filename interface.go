@@ -106,7 +106,8 @@ type Promise interface {
 	Delay(d time.Duration, onSucceed, onFail bool) Promise
 
 	// Then waits the promise to be resolved, and calls the thenCb function, if
-	// the promise is resolved to fulfilled or pending.
+	// the promise is resolved to fulfilled or pending(the promise didn't return
+	// an error nor caused a panic).
 	//
 	// It returns a Promise value, which will be resolved to the Res value
 	// returned from the thenCb.
@@ -129,7 +130,7 @@ type Promise interface {
 	Then(thenCb func(res Res, ok bool) Res) Promise
 
 	// Catch waits the promise to be resolved, and calls the catchCb function,
-	// if the promise is resolved to rejected.
+	// if the promise is resolved to rejected(the promise returned an error).
 	//
 	// It returns a Promise value, which will be resolved to the Res value
 	// returned from the catchCb.
@@ -161,7 +162,7 @@ type Promise interface {
 	Catch(catchCb func(err error, res Res, ok bool) Res) Promise
 
 	// Recover waits the promise to be resolved, and calls the recoverCb function,
-	// if the promise is resolved to panicked.
+	// if the promise is resolved to panicked(the promise caused a panic).
 	//
 	// It returns a Promise value, which will be resolved to the Res value
 	// returned from the recoverCb.

@@ -98,8 +98,8 @@ func goResCall(p *GoPromise, fun func() Res) {
 // If the resChan is not usd as described above, a panic will happen when it's
 // used, either on the caller side, or here, internally.
 //
-// If the returned promise is rejected, and the error isn't caught by the end
-// of the promise's chain(by a Catch call), a panic will happen with an error
+// If the returned promise is rejected, and the error isn't caught(by a Catch
+// call) before the end of the promise's chain, a panic will happen with an error
 // value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
 func New(resChan chan Res) *GoPromise {
 	prom := newGoPromExter(resChan, false)
@@ -182,21 +182,22 @@ func resolverCall(p *GoPromise, cb func(fulfill func(...interface{}), reject fun
 }
 
 // Delay returns a GoPromise that's resolved to the passed Res value, res,
-// after waiting for, at least, the passed duration, d, accordingly.
+// after waiting for at least duration d, accordingly.
 //
 // The returned promise is resolved to rejected, or fulfilled, depending on
 // whether the last element in res is, respectively, a non-nil error value,
 // or any other value.
 //
-// If the promise is about to be fulfilled, resolving the promise will only
-// be delayed, if onSucceed = true.
-// If the promise is about to be rejected, resolving the promise will only
-// be delayed, if onFail = true.
+// If the promise is about to be fulfilled, resolving the promise will be
+// delayed, only if onSucceed = true.
+//
+// If the promise is about to be rejected, resolving the promise will be
+// delayed, only if onFail = true.
 //
 // The provided res value shouldn't be modified after this call.
 //
-// If the returned promise is rejected, and the error isn't caught by the end
-// of the promise's chain(by a Catch call), a panic will happen with an error
+// If the returned promise is rejected, and the error isn't caught(by a Catch
+// call) before the end of the promise's chain, a panic will happen with an error
 // value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
 func Delay(res Res, d time.Duration, onSucceed, onFail bool) *GoPromise {
 	prom := newGoPromInter(false)
