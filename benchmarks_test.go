@@ -190,6 +190,35 @@ func BenchmarkGoPromise_Then(b *testing.B) {
 			})
 		}
 	})
+
+	b.Run("reuse res", func(b *testing.B) {
+		for _, bc := range promiseBenchs {
+			if bc.stressed {
+				continue
+			}
+
+			b.Run(bc.name, func(b *testing.B) {
+				prom := promise.GoRes(func() promise.Res {
+					return promise.Res{"go", "golang"}
+				})
+
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					p := prom.Then(func(res promise.Res, ok bool) promise.Res {
+						return promise.ReuseRes(res, "go", "golang")
+					})
+
+					if bc.wait {
+						p.Wait()
+					}
+					if bc.getRes {
+						p.GetRes()
+					}
+				}
+			})
+		}
+	})
 }
 
 func BenchmarkGoPromise_Then_Parallel(b *testing.B) {
