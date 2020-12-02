@@ -512,13 +512,13 @@ func (p *GoPromise) handleInvalidFollow(prevRes Res, prevStatus uint32) {
 		p.resolveToPending()
 	} else if status.IsStateFulfilled(prevStatus) {
 		// the previous promise is fulfilled, fulfill with its result
-		p.resolveToFulfill(prevRes)
+		p.resolveToFulfill(prevRes, false)
 	} else if status.IsStateRejected(prevStatus) {
 		// the previous promise is rejected, reject with its result
-		p.resolveToReject(prevRes)
+		p.resolveToReject(prevRes, false)
 	} else if status.IsStatePanicked(prevStatus) {
 		// the previous promise is panicked, panic with its result
-		p.resolveToPanic(prevRes)
+		p.resolveToPanic(prevRes, false)
 	}
 }
 
@@ -547,7 +547,7 @@ func (p *GoPromise) handleReturns(resP *Res) {
 	} else {
 		// a panic happened, resolve to panicked, with the panic value(inside
 		// a Res value).
-		p.resolveToPanic(Res{v})
+		p.resolveToPanic(Res{v}, false)
 	}
 }
 
@@ -566,9 +566,9 @@ func (p *GoPromise) handleReturns(resP *Res) {
 // promise, as it's protected by the Resolving fate setter.
 func (p *GoPromise) resolveToRes(res Res) {
 	if res.IsErrRes() {
-		p.resolveToReject(res)
+		p.resolveToReject(res, false)
 	} else {
-		p.resolveToFulfill(res)
+		p.resolveToFulfill(res, false)
 	}
 }
 
@@ -576,11 +576,14 @@ func (p *GoPromise) resolveToRes(res Res) {
 // same promise, by design.
 // if called from handleReturns, then it will be called once on the same
 // promise, as it's called on return, and that can happen once.
-func (p *GoPromise) resolveToPanic(res Res) {
+func (p *GoPromise) resolveToPanic(res Res, andHandle bool) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
 	p.res = res
 	_, s := p.status.SetPanickedResolved()
+	if andHandle {
+		p.status.SetHandled() // set to Handled, if requested
+	}
 	close(p.resChan)
 
 	// re-broadcast the panic if the promise is not followed
@@ -589,11 +592,14 @@ func (p *GoPromise) resolveToPanic(res Res) {
 	}
 }
 
-func (p *GoPromise) resolveToReject(res Res) {
+func (p *GoPromise) resolveToReject(res Res, andHandle bool) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
 	p.res = res
 	_, s := p.status.SetRejectedResolved()
+	if andHandle {
+		p.status.SetHandled() // set to Handled, if requested
+	}
 	close(p.resChan)
 
 	// panic if the safe mode is enabled(the default), and the promise
@@ -604,11 +610,14 @@ func (p *GoPromise) resolveToReject(res Res) {
 	}
 }
 
-func (p *GoPromise) resolveToFulfill(res Res) {
+func (p *GoPromise) resolveToFulfill(res Res, andHandle bool) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
 	p.res = res
 	p.status.SetFulfilledResolved()
+	if andHandle {
+		p.status.SetHandled() // set to Handled, if requested
+	}
 	close(p.resChan)
 }
 
@@ -826,7 +835,7 @@ func (p *GoPromise) finallyCall(prev *GoPromise, cb finallyCb, once bool, d time
 			// and resolve fulfill, with nil Res, as the panic must have been
 			// already handled(otherwise the program would have crashed and we
 			// would never reach this).
-			p.resolveToFulfill(nil)
+			p.resolveToFulfill(nil, false)
 		} else {
 			// save the new result
 			*resP = res
