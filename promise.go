@@ -160,6 +160,9 @@ func (p *GoPromise) WaitChan() chan bool {
 // otherwise it returns true.
 //
 // If the wait duration, d, is 0 or less, it will be like in an Wait call.
+//
+// Deprecated: for the same functionality, use the WaitChan method with a
+// self-created timer channel(see the timers example).
 func (p *GoPromise) WaitUntil(d time.Duration) (ok bool) {
 	// reset to 0 if d is negative, as they are equal in the API,
 	// and don't pass negative duration, as it's special, internally
@@ -180,6 +183,9 @@ func (p *GoPromise) GetRes() (res Res, ok bool) {
 // and returns its result, res, and ok = true, if the promise hasn't
 // panicked, nor the wait timed-put, otherwise it returns res = nil,
 // and ok = false.
+//
+// Deprecated: for the same functionality, use the WaitChan and the GetRes
+// methods with a self-created timer channel(see the timers example).
 func (p *GoPromise) GetResUntil(d time.Duration) (res Res, ok bool) {
 	// reset to 0 if d is negative, as they are equal in the API,
 	// and don't pass negative duration, as it's special, internally

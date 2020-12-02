@@ -52,6 +52,9 @@ type Promise interface {
 	//
 	// If the underlying Promise implementation is the GoPromise, and it's not
 	// panicked, then ok will = false, only if the wait timed-out.
+	//
+	// Deprecated: for the same functionality, use the WaitChan and the GetRes
+	// methods with a self-created timer channel(see the timers example).
 	WaitUntil(d time.Duration) (ok bool)
 
 	// GetRes waits the promise to be resolved, and returns its result, res,
@@ -77,6 +80,9 @@ type Promise interface {
 	// If the underlying Promise implementation is the GoPromise, and it's not
 	// panicked, then the res value will be invalid(ok = false), only if the wait
 	// timed-out.
+	//
+	// Deprecated: for the same functionality, use the WaitChan and the GetRes
+	// methods with a self-created timer channel(see the timers example).
 	GetResUntil(d time.Duration) (res Res, ok bool)
 
 	// Then waits the promise to be resolved, and calls the thenCb function, if
