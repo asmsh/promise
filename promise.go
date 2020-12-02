@@ -442,6 +442,80 @@ func (p *GoPromise) asyncFollow(cb func(res Res, ok bool, args []interface{}), a
 	}
 }
 
+// Delay returns a GoPromise value which will be resolved to this GoPromise(
+// by adopting its Res value, state, and fate), after a delay of at least
+// duration d. The delay starts after this GoPromise is resolved, accordingly.
+//
+// If this promise is resolved to fulfilled or pending, resolving the returned
+// promise will be delayed, only if onSucceed = true.
+//
+// If this promise is resolved to rejected or panicked, resolving the returned
+// promise will be delayed, only if onFail = true.
+//
+// If the promise is running in the safe mode(the default), the returned
+// Promise is a rejected promise, and the error is not caught(by a Catch call)
+// before the end of that promise's chain, a panic will happen with an error
+// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+//
+// If the returned promise is a panicked promise, and it's not recovered(by a
+// Recover call) before the end of the promise's chain, or before calling Finally,
+// it will re-panic(with the same value passed to the original 'panic' call).
+func (p *GoPromise) Delay(d time.Duration, onSucceed, onFail bool) Promise {
+	_, s := p.status.RegFollow()
+	newProm := newGoPromInter(status.IsFlagsNotSafe(s))
+	go newProm.delayCall(p, d, onSucceed, onFail, false, 0)
+	return newProm
+}
+
+func (p *GoPromise) delayCall(prev *GoPromise, dd time.Duration, onSucceed, onFail bool, once bool, wd time.Duration) {
+	// wait the previous promise to be resolved, for at least time wd
+	prev.wait(wd, true)
+
+	if s := prev.status.Read(); status.IsStatePending(s) {
+		// a pending state is considered a success
+		if onSucceed {
+			time.Sleep(dd)
+		}
+		p.resolveToPending()
+	} else if status.IsStateFulfilled(s) {
+		// set the previous promise as handled, and if it was already handled,
+		// resolve the delayed promise and handle it in the same step.
+		//
+		// this will be true if the previous promise wasn't already handled and
+		// this call just did, so the delayed promise should not be handled when
+		// resolved(handleDelayed = false).
+		// it will be false if the previous promise was already handled, so the
+		// delayed promise should be handled when resolved(handleDelayed = true),
+		// as this delay call is made on an already handled promise.
+		prevJustHandled, _ := prev.status.SetHandled()
+		handleDelayed := !prevJustHandled
+
+		// a fulfilled state is considered a success
+		if onSucceed {
+			time.Sleep(dd)
+		}
+		p.resolveToFulfill(prev.res, handleDelayed)
+	} else if status.IsStateRejected(s) {
+		prevJustHandled, _ := prev.status.SetHandled()
+		handleDelayed := !prevJustHandled
+
+		// a rejected state is considered a failure
+		if onFail {
+			time.Sleep(dd)
+		}
+		p.resolveToReject(prev.res, handleDelayed)
+	} else if status.IsStatePanicked(s) {
+		prevJustHandled, _ := prev.status.SetHandled()
+		handleDelayed := !prevJustHandled
+
+		// a panicked state is considered a failure
+		if onFail {
+			time.Sleep(dd)
+		}
+		p.resolveToPanic(prev.res, handleDelayed)
+	}
+}
+
 // Then waits the promise to be resolved, and calls the thenCb function, if
 // the promise is resolved to fulfilled or pending.
 //

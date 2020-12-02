@@ -85,6 +85,26 @@ type Promise interface {
 	// methods with a self-created timer channel(see the timers example).
 	GetResUntil(d time.Duration) (res Res, ok bool)
 
+	// Delay returns a Promise value which will be resolved to this Promise(
+	// by adopting its Res value, state, and fate), after a delay of at least
+	// duration d. The delay starts after this Promise is resolved, accordingly.
+	//
+	// If this promise is resolved to fulfilled or pending, resolving the returned
+	// promise will be delayed, only if onSucceed = true.
+	//
+	// If this promise is resolved to rejected or panicked, resolving the returned
+	// promise will be delayed, only if onFail = true.
+	//
+	// If the promise is running in the safe mode(the default), the returned
+	// Promise is a rejected promise, and the error is not caught(by a Catch call)
+	// before the end of that promise's chain, a panic will happen with an error
+	// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+	//
+	// If the returned promise is a panicked promise, and it's not recovered(by a
+	// Recover call) before the end of the promise's chain, or before calling Finally,
+	// it will re-panic(with the same value passed to the original 'panic' call).
+	Delay(d time.Duration, onSucceed, onFail bool) Promise
+
 	// Then waits the promise to be resolved, and calls the thenCb function, if
 	// the promise is resolved to fulfilled or pending.
 	//
