@@ -912,9 +912,8 @@ func (p *GoPromise) finallyCall(prev *GoPromise, cb finallyCb, once bool, d time
 		res := cb(false)
 		if res == nil {
 			// a nil Res value is returned, don't resolve to the previous Res,
-			// and resolve fulfill, with nil Res, as the panic must have been
-			// already handled(otherwise the program would have crashed and we
-			// would never reach this).
+			// and resolve to fulfill, with nil Res, as the panic can only be
+			// handled by a Recover call and before calling Finally.
 			p.resolveToFulfill(nil, false)
 		} else {
 			// save the new result

@@ -506,7 +506,7 @@ func (s *PromStatus) SetHandled() (set bool, status uint32) {
 	// create a new status value from the current one
 	ns := cs
 
-	// panic if the fate is not 'resolved' or 'handled', or the state is not 'pending'
+	// panic if the state is 'pending', or the fate is neither 'resolved' nor 'handled'
 	if ns&stateBitsSetMask == statePending || ns&fateBitsSetMask < fateResolved {
 		// release the lock, so if the panic is recovered, the status is unlocked
 		s.saveAndReleaseLock(ns)
