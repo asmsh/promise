@@ -589,11 +589,6 @@ func (p *GoPromise) resolveToPanic(res Res) {
 	}
 }
 
-func (p *GoPromise) panicSync(res Res) {
-	p.res = res
-	p.status.SetPanickedResolvedSync()
-}
-
 func (p *GoPromise) resolveToReject(res Res) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
@@ -609,22 +604,12 @@ func (p *GoPromise) resolveToReject(res Res) {
 	}
 }
 
-func (p *GoPromise) rejectSync(res Res) {
-	p.res = res
-	p.status.SetRejectedResolvedSync()
-}
-
 func (p *GoPromise) resolveToFulfill(res Res) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
 	p.res = res
 	p.status.SetFulfilledResolved()
 	close(p.resChan)
-}
-
-func (p *GoPromise) fulfillSync(res Res) {
-	p.res = res
-	p.status.SetFulfilledResolvedSync()
 }
 
 // resolveToPending sets the state to Pending, and the fate to Resolved, then
@@ -643,6 +628,21 @@ func (p *GoPromise) resolveToPending() {
 
 	// close the resChan to unblock all waiting calls
 	close(p.resChan)
+}
+
+func (p *GoPromise) panicSync(res Res) {
+	p.res = res
+	p.status.SetPanickedResolvedSync()
+}
+
+func (p *GoPromise) rejectSync(res Res) {
+	p.res = res
+	p.status.SetRejectedResolvedSync()
+}
+
+func (p *GoPromise) fulfillSync(res Res) {
+	p.res = res
+	p.status.SetFulfilledResolvedSync()
 }
 
 // Catch waits the promise to be resolved, and calls the catchCb function,
