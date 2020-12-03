@@ -537,6 +537,14 @@ func IsChainEmpty(status uint32) bool {
 	return chainMode < chainModeRead
 }
 
+func IsFateUnresolved(status uint32) bool {
+	return status&fateBitsSetMask == fateUnresolved
+}
+
+func IsFateResolving(status uint32) bool {
+	return status&fateBitsSetMask == fateResolving
+}
+
 func IsFateResolved(status uint32) bool {
 	fate := status & fateBitsSetMask
 	return fate == fateResolved
