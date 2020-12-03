@@ -126,7 +126,7 @@ type Promise interface {
 	//
 	// It will panic if a nil callback is passed.
 	//
-	// For more, see 'Callback Notes' in the package comment.
+	// For more details, see 'Callback Notes' in the package comment.
 	Then(thenCb func(res Res, ok bool) Res) Promise
 
 	// Catch waits the promise to be resolved, and calls the catchCb function,
@@ -158,7 +158,7 @@ type Promise interface {
 	//
 	// It will panic if a nil callback is passed.
 	//
-	// For more, see 'Callback Notes' in the package comment.
+	// For more details, see 'Callback Notes' in the package comment.
 	Catch(catchCb func(err error, res Res, ok bool) Res) Promise
 
 	// Recover waits the promise to be resolved, and calls the recoverCb function,
@@ -182,7 +182,7 @@ type Promise interface {
 	//
 	// It will panic if a nil callback is passed.
 	//
-	// For more, see 'Callback Notes' in the package comment.
+	// For more details, see 'Callback Notes' in the package comment.
 	Recover(recoverCb func(v interface{}, ok bool) Res) Promise
 
 	// Finally waits the promise to be resolved, and calls the finallyCb function,
@@ -211,7 +211,7 @@ type Promise interface {
 	//
 	// It will panic if a nil callback is passed.
 	//
-	// For more, see 'Callback Notes' in the package comment.
+	// For more details, see 'Callback Notes' in the package comment.
 	Finally(finallyCb func(ok bool) Res) Promise
 
 	// this is a private interface that's specific to the different types and
