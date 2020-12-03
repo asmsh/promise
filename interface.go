@@ -28,6 +28,11 @@ import (
 // It's a private interface, which can only be implemented by embedding any
 // type that implement it from this module.
 type Promise interface {
+	// Status returns the status of this promise at this specific moment.
+	//
+	// The returned value corresponds only to the time it was created at.
+	Status() Status
+
 	// Wait waits the promise to be resolved. It returns false, if the promise
 	// has panicked, otherwise it follows the rules of the underlying Promise
 	// implementation.

@@ -136,6 +136,14 @@ func newGoPromSync(nonSafe bool) *GoPromise {
 	return p
 }
 
+// Status returns the status of this promise at this specific moment.
+//
+// The returned value corresponds only to the time it was created at.
+func (p *GoPromise) Status() Status {
+	s := p.status.Read()
+	return Status(s)
+}
+
 // Wait waits the promise to be resolved. It returns false, if the promise
 // has panicked, otherwise it returns true.
 func (p *GoPromise) Wait() (ok bool) {
