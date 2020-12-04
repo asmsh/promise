@@ -66,8 +66,8 @@
 // * The GoPromise's 'ok' callback parameter will always be true(except in
 // a Finally callback on a panicked promise).
 //
-// * The GoPromise's 'ok' return parameter(for GetRes and GetResUntil) will
-// always be true(except on a panicked promise)
+// * The GoPromise's 'ok' return parameter(for GetRes) will always be true(
+// except on a panicked promise).
 //
 //
 // Callback Notes:-

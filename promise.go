@@ -163,44 +163,11 @@ func (p *GoPromise) WaitChan() chan bool {
 	return c
 }
 
-// WaitUntil waits the promise to be resolved for at least the duration d.
-// It returns false, if the promise has panicked, or the wait timed-out,
-// otherwise it returns true.
-//
-// If the wait duration, d, is 0 or less, it will be like in an Wait call.
-//
-// Deprecated: for the same functionality, use the WaitChan method with a
-// self-created timer channel(see the timers example).
-func (p *GoPromise) WaitUntil(d time.Duration) (ok bool) {
-	// reset to 0 if d is negative, as they are equal in the API,
-	// and don't pass negative duration, as it's special, internally
-	if d < 0 {
-		d = 0
-	}
-	return p.waitCall(false, false, d) // wait for at least duration d
-}
-
 // GetRes waits the promise to be resolved, and returns its result, res,
 // and ok = true, if the promise hasn't panicked, otherwise it returns
 // res = nil, and ok = false.
 func (p *GoPromise) GetRes() (res Res, ok bool) {
-	return p.GetResUntil(0) // wait infinitely
-}
-
-// GetResUntil waits the promise to be resolved for at least the duration d,
-// and returns its result, res, and ok = true, if the promise hasn't
-// panicked, nor the wait timed-put, otherwise it returns res = nil,
-// and ok = false.
-//
-// Deprecated: for the same functionality, use the WaitChan and the GetRes
-// methods with a self-created timer channel(see the timers example).
-func (p *GoPromise) GetResUntil(d time.Duration) (res Res, ok bool) {
-	// reset to 0 if d is negative, as they are equal in the API,
-	// and don't pass negative duration, as it's special, internally
-	if d < 0 {
-		d = 0
-	}
-	ok = p.waitCall(true, false, d) // wait for at least duration d
+	ok = p.waitCall(true, false, 0) // wait infinitely
 	if !ok {
 		return
 	}
