@@ -22,19 +22,29 @@
 // A Promise provides an easy way for returning results from a goroutine, and/or
 // waiting for it to finish, plus other features.
 //
+//
+// States and Fates:-
+//
 // A Promise has four states, and it can be in only one of them, at any time:
-// Pending: the computation that corresponds to this Promise has not finished.
-// Fulfilled: the computation that corresponds to this Promise has finished and
+//
+// * Pending: the computation that corresponds to this Promise has not finished.
+//
+// * Fulfilled: the computation that corresponds to this Promise has finished and
 // returned a Res value with no error or with a nil error at the end.
-// Rejected: the computation that corresponds to this Promise has finished and
+//
+// * Rejected: the computation that corresponds to this Promise has finished and
 // returned a Res value with a non-nil error at the end.
-// Panicked: the computation that corresponds to this Promise has caused a panic.
+//
+// * Panicked: the computation that corresponds to this Promise has caused a panic.
 //
 // A Promise has three fates, and it can be in only one of them, at any time:
-// Unresolved: the computation that corresponds to this Promise is still working,
+//
+// * Unresolved: the computation that corresponds to this Promise is still working,
 // and the final state of the Promise is still unknown.
-// Resolved: the state of the Promise is now known, and final.
-// Handled: the result of the Promise has been passed to some call of its methods.
+//
+// * Resolved: the state of the Promise is now known, and final.
+//
+// * Handled: the result of the Promise has been passed to some call of its methods.
 //
 //
 // General Notes:-
