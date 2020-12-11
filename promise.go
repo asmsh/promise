@@ -341,82 +341,6 @@ func (p *GoPromise) interWaitProc(timerChan <-chan time.Time, resolveOnTimeout b
 	}
 }
 
-// asyncRead is used internally to implement promise extension functions.
-//
-// as it's registered as a 'read' call, it can prevent UnCaughtErr panics if
-// the promise is about to be rejected, but it can't prevent a panicked promise
-// from re-broadcasting the panic.
-//
-// the cb will be called with ok = true, only if the promise is fulfilled
-// or rejected.
-func (p *GoPromise) asyncRead(cb func(res Res, ok bool, args []interface{}), args ...interface{}) {
-	// register this as a 'read' call, and return if no callback is passed
-	p.status.RegRead()
-	if cb == nil {
-		return
-	}
-
-	// asynchronously, wait the promise to be resolved and call cb, accordingly
-	go p.asyncReadCall(cb, args, false, 0)
-}
-
-// asyncReadCall will call the cb with argument that corresponds to the result
-// of a GetRes call.
-//
-// if the promise panics without having a 'follow' call, then the program will
-// crash, so if the promise' state is found to be panicked, here, this means
-// that, either it's already handled, or there are one or more follow calls
-// in the chain that might handle it, and if the panic reached the end of the
-// chain without finding a Recover call, the promise will re-broadcast the
-// panic, so there's no need to care about panics here.
-func (p *GoPromise) asyncReadCall(cb readCb, args []interface{}, once bool, d time.Duration) {
-	// wait the promise to be resolved, for at least time d
-	p.wait(d, false)
-
-	// run the callback, regardless the previous promise is pending, fulfilled,
-	// rejected, or panicked.
-	if s := p.status.Read(); status.IsStatePending(s) || status.IsStatePanicked(s) {
-		// the previous promise has timedout, or panicked, run the callback
-		// with a nil result and ok = false, as if it timedout, the promise
-		// was timed, and if it's panicked, await can't handle panics.
-		cb(nil, false, args)
-	} else {
-		// the previous promise is fulfilled, or rejected, but both of them
-		// can be handled through await, so set the handled flag, as the
-		// promise is about to be handled, and update ok accordingly.
-		ok, _ := p.status.SetHandled()
-		if !once && !ok {
-			// ignore the handled flag result if the promise isn't onetime
-			ok = true
-		}
-		// run the callback, accordingly
-		if !ok {
-			// the promise is a onetime promise and has already been handled
-			cb(nil, false, args)
-		} else {
-			// pass the result of promise without coping it, but don't forget
-			// to copy it if the result will be passed to any user-facing calls.
-			cb(p.res, ok, args)
-		}
-	}
-}
-
-// asyncFollow is used internally to implement promise extension functions.
-//
-// as it's registered as a 'follow' call, it can prevent UnCaughtErr panics if
-// the promise is about to be rejected, and also prevent a panicked promise from
-// re-broadcasting the panic.
-//
-// the cb will be called with ok = true, only if the promise is fulfilled
-// or rejected.
-func (p *GoPromise) asyncFollow(cb func(res Res, ok bool, args []interface{}), args ...interface{}) {
-	// register this as a 'follow' call, and return if no callback is passed
-	p.status.RegFollow()
-	if cb == nil {
-		return
-	}
-}
-
 // Delay returns a GoPromise value which will be resolved to this GoPromise(
 // by adopting its Res value, state, and fate), after a delay of at least
 // duration d. The delay starts after this GoPromise is resolved, accordingly.
@@ -925,3 +849,79 @@ func (p *GoPromise) finallyCall(prev *GoPromise, cb finallyCb, once bool, d time
 }
 
 func (*GoPromise) privateImplementation() {}
+
+// asyncRead is used internally to implement promise extension functions.
+//
+// as it's registered as a 'read' call, it can prevent UnCaughtErr panics if
+// the promise is about to be rejected, but it can't prevent a panicked promise
+// from re-broadcasting the panic.
+//
+// the cb will be called with ok = true, only if the promise is fulfilled
+// or rejected.
+func (p *GoPromise) asyncRead(cb func(res Res, ok bool, args []interface{}), args ...interface{}) {
+	// register this as a 'read' call, and return if no callback is passed
+	p.status.RegRead()
+	if cb == nil {
+		return
+	}
+
+	// asynchronously, wait the promise to be resolved and call cb, accordingly
+	go p.asyncReadCall(cb, args, false, 0)
+}
+
+// asyncReadCall will call the cb with argument that corresponds to the result
+// of a GetRes call.
+//
+// if the promise panics without having a 'follow' call, then the program will
+// crash, so if the promise' state is found to be panicked, here, this means
+// that, either it's already handled, or there are one or more follow calls
+// in the chain that might handle it, and if the panic reached the end of the
+// chain without finding a Recover call, the promise will re-broadcast the
+// panic, so there's no need to care about panics here.
+func (p *GoPromise) asyncReadCall(cb readCb, args []interface{}, once bool, d time.Duration) {
+	// wait the promise to be resolved, for at least time d
+	p.wait(d, false)
+
+	// run the callback, regardless the previous promise is pending, fulfilled,
+	// rejected, or panicked.
+	if s := p.status.Read(); status.IsStatePending(s) || status.IsStatePanicked(s) {
+		// the previous promise has timedout, or panicked, run the callback
+		// with a nil result and ok = false, as if it timedout, the promise
+		// was timed, and if it's panicked, await can't handle panics.
+		cb(nil, false, args)
+	} else {
+		// the previous promise is fulfilled, or rejected, but both of them
+		// can be handled through await, so set the handled flag, as the
+		// promise is about to be handled, and update ok accordingly.
+		ok, _ := p.status.SetHandled()
+		if !once && !ok {
+			// ignore the handled flag result if the promise isn't onetime
+			ok = true
+		}
+		// run the callback, accordingly
+		if !ok {
+			// the promise is a onetime promise and has already been handled
+			cb(nil, false, args)
+		} else {
+			// pass the result of promise without coping it, but don't forget
+			// to copy it if the result will be passed to any user-facing calls.
+			cb(p.res, ok, args)
+		}
+	}
+}
+
+// asyncFollow is used internally to implement promise extension functions.
+//
+// as it's registered as a 'follow' call, it can prevent UnCaughtErr panics if
+// the promise is about to be rejected, and also prevent a panicked promise from
+// re-broadcasting the panic.
+//
+// the cb will be called with ok = true, only if the promise is fulfilled
+// or rejected.
+func (p *GoPromise) asyncFollow(cb func(res Res, ok bool, args []interface{}), args ...interface{}) {
+	// register this as a 'follow' call, and return if no callback is passed
+	p.status.RegFollow()
+	if cb == nil {
+		return
+	}
+}
