@@ -167,6 +167,7 @@ func (p *GoPromise) WaitChan() chan bool {
 // and ok = true, if the promise hasn't panicked, otherwise it returns
 // res = nil, and ok = false.
 func (p *GoPromise) GetRes() (res Res, ok bool) {
+	p.status.RegRead()
 	ok = p.waitCall(true, false, 0) // wait infinitely
 	if !ok {
 		return
