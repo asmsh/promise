@@ -565,8 +565,9 @@ func (p *GoPromise) resolveToPanic(res Res, andHandle bool) {
 	}
 	close(p.resChan)
 
-	// re-broadcast the panic if the promise is not followed
-	if !status.IsChainModeFollow(s) {
+	// re-broadcast the panic if the safe mode is enabled(the default),
+	// and the promise is not followed.
+	if !status.IsFlagsNotSafe(s) && !status.IsChainModeFollow(s) {
 		panic(res[0])
 	}
 }
