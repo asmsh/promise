@@ -50,6 +50,7 @@ func (res Res) Last() (last interface{}, ok bool) {
 // GetErr returns the last element of this Res value, if its type is error.
 // It returns nil if this Res value is empty or the type of the last element
 // is not error.
+// Deprecated: Use the err return parameter of the Err method instead.
 func (res Res) GetErr() error {
 	last, ok := res.Last()
 	if !ok {
@@ -64,6 +65,7 @@ func (res Res) GetErr() error {
 
 // IsErrRes returns true if this Res value represents an error result, which
 // is a result that has a non-nil error as its last element.
+// Deprecated: Use the isError return parameter of the Err method instead.
 func (res Res) IsErrRes() bool {
 	return res.GetErr() != nil
 }

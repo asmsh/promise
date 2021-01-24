@@ -216,7 +216,7 @@ func (p *GoPromise) waitCall(resCall, once bool, d time.Duration) (ok bool) {
 	// default), panic with uncaught error.
 	if status.IsStateRejected(s) {
 		if !status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
-			err := p.res.GetErr()
+			err, _ := p.res.Err()
 			panic(newUnCaughtErr(err))
 		}
 	}
@@ -569,7 +569,7 @@ func (p *GoPromise) handleReturns(resP *Res) {
 // if called from the resolverCb, then it will be called once on the same
 // promise, as it's protected by the Resolving fate setter.
 func (p *GoPromise) resolveToRes(res Res) {
-	if res.IsErrRes() {
+	if _, isError := res.Err(); isError {
 		p.resolveToReject(res, false)
 	} else {
 		p.resolveToFulfill(res, false)
@@ -610,7 +610,7 @@ func (p *GoPromise) resolveToReject(res Res, andHandle bool) {
 	// panic if the safe mode is enabled(the default), and the promise
 	// is not followed, nor has any calls that can prevent such panics.
 	if !status.IsFlagsNotSafe(s) && status.IsChainEmpty(s) {
-		err := res.GetErr()
+		err, _ := p.res.Err()
 		panic(newUnCaughtErr(err))
 	}
 }
@@ -721,7 +721,7 @@ func (p *GoPromise) catchCall(prev *GoPromise, cb catchCb, once bool, d time.Dur
 		*resP = cb(nil, nil, false)
 	} else {
 		// get the error responsible for rejecting the previous promise
-		err := prev.res.GetErr()
+		err, _ := prev.res.Err()
 
 		// pass a copy of the previous result, to keep it immutable
 		prevRes := prev.res.Copy()

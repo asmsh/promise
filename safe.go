@@ -207,7 +207,7 @@ func Delay(res Res, d time.Duration, onSucceed, onFail bool) *GoPromise {
 
 // handles rejection and fulfillment only
 func delayCall(p *GoPromise, res Res, d time.Duration, onSucceed, onFail bool) {
-	if res.IsErrRes() {
+	if _, isError := res.Err(); isError {
 		// a rejected state is considered a failure
 		if onFail {
 			time.Sleep(d)
@@ -241,7 +241,7 @@ func Wrap(res Res) *GoPromise {
 }
 
 func wrapCall(p *GoPromise, res Res) {
-	if res.IsErrRes() {
+	if _, isError := res.Err(); isError {
 		p.rejectSync(res)
 	} else {
 		p.fulfillSync(res)
