@@ -68,6 +68,25 @@ func (res Res) IsErrRes() bool {
 	return res.GetErr() != nil
 }
 
+// Err checks if the last element of this Res value is a non-nil error value
+// and returns the error value and true, otherwise it returns nil and false.
+//
+// It returns nil and false if this Res value is empty, the type of the last
+// element is not error, or the last element is a nil error value.
+func (res Res) Err() (err error, isError bool) {
+	last, ok := res.Last()
+	if !ok {
+		return nil, false
+	}
+
+	err, ok = last.(error)
+	if !ok {
+		return nil, false
+	}
+
+	return err, err != nil
+}
+
 // IsZero returns true if this Res value has no elements, or if all of its
 // elements are nil, otherwise it returns false.
 func (res Res) IsZero() bool {
