@@ -221,7 +221,7 @@ const (
 	// starting with a shift amount of 14, which is the number of bits used by
 	// previous sections.
 
-	// promise types
+	// promise chain types
 	FlagsTypeOnce uint32 = 1 << (iota + 14)
 	FlagsTypeTimed
 	_ // reserved
@@ -304,7 +304,7 @@ func (s *PromStatus) RegRead() (firstRead bool, status uint32) {
 	ns := cs
 
 	// set the chain mode to read, only if the fate is unresolved or
-	// resolving, and the chain mode is none.
+	// resolving, and the chain mode is none or wait.
 	if ns&fateBitsSetMask < fateResolved {
 		if ns&chainModeBitsSetMask < chainModeRead {
 			ns &= chainModeBitsClrMask // clear the chain mode bits

@@ -608,7 +608,7 @@ func (p *GoPromise) resolveToReject(res Res, andHandle bool) {
 	close(p.resChan)
 
 	// panic if the safe mode is enabled(the default), and the promise
-	// is not followed, nor has any calls that can prevent such panics.
+	// is not followed, nor has any read or wait calls.
 	if !status.IsFlagsNotSafe(s) && status.IsChainEmpty(s) {
 		err, _ := p.res.Err()
 		panic(newUnCaughtErr(err))
