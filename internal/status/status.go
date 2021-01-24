@@ -318,6 +318,29 @@ func (s *PromStatus) RegRead() (firstRead bool, status uint32) {
 	return firstRead, ns
 }
 
+// RegWait declares that there's a wait call registered on this promise,
+// like a 'Wait', or 'asyncWait' calls.
+func (s *PromStatus) RegWait() (firstWait bool, status uint32) {
+	// read the current status value, and acquire the update lock
+	cs := s.readAndAcquireLock()
+	// create a new status value from the current one
+	ns := cs
+
+	// set the chain mode to wait, only if the fate is unresolved or
+	// resolving, and the chain mode is none.
+	if ns&fateBitsSetMask < fateResolved {
+		if ns&chainModeBitsSetMask < chainModeWait {
+			ns &= chainModeBitsClrMask // clear the chain mode bits
+			ns |= chainModeWait        // set the chain mode to wait
+			firstWait = true           // this is the first set to wait
+		}
+	}
+
+	// save the new status value, and release the update lock
+	s.saveAndReleaseLock(ns)
+	return firstWait, ns
+}
+
 // SetCalledFinally declares that 'Finally' has been called on this promise.
 // 'Finally' got its own flag, cause it can't set the fate to 'Handled', so
 // it need another approach to detect calls, for the once implementation.
@@ -531,10 +554,10 @@ func IsChainModeFollow(status uint32) bool {
 	return chainMode == chainModeFollow
 }
 
-// IsChainEmpty returns true if the chain mode is less than 'chainModeRead'
+// IsChainEmpty returns true if the chain mode is 'chainModeNone'
 func IsChainEmpty(status uint32) bool {
 	chainMode := status & chainModeBitsSetMask
-	return chainMode < chainModeRead
+	return chainMode == chainModeNone
 }
 
 func IsFateUnresolved(status uint32) bool {

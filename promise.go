@@ -147,6 +147,7 @@ func (p *GoPromise) Status() Status {
 // Wait waits the promise to be resolved. It returns false, if the promise
 // has panicked, otherwise it returns true.
 func (p *GoPromise) Wait() (ok bool) {
+	p.status.RegWait()
 	return p.waitCall(false, false, 0) // wait infinitely
 }
 
@@ -180,25 +181,48 @@ func (p *GoPromise) GetRes() (res Res, ok bool) {
 
 // ok priority: panics > timeout > onetime
 func (p *GoPromise) waitCall(resCall, once bool, d time.Duration) (ok bool) {
-	// wait the promise to be resolved, for at least time d
+	// wait the promise to be resolved, for at least time d, and
+	// then read its status.
 	timedout := p.wait(d, false)
-
-	// if the promise has panicked, or the wait timed-out, return false
 	s := p.status.Read()
-	if status.IsStatePanicked(s) || timedout {
+
+	// if the promise has panicked and has been handled, return
+	// false, otherwise re-broadcast the panic, if the safe mode
+	// is enabled(the default), and if not, just return false.
+	if status.IsStatePanicked(s) {
+		if !status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
+			panic(p.res[0])
+		} else {
+			return false
+		}
+	}
+
+	// if the wait timed-out, return false
+	if timedout {
 		return false
 	}
 
 	// set the flags and update the ok value, accordingly
 	if resCall {
 		// if the caller need the result, set the handled flag
-		ok, _ = p.status.SetHandled()
+		ok, s = p.status.SetHandled()
 	} else {
 		// otherwise, don't set it, but use its value anyway
 		ok = !status.IsFateHandled(s)
 	}
+
+	// if the promise is rejected and hasn't been handled(either
+	// by this call or another), and the safe mode is enabled(the
+	// default), panic with uncaught error.
+	if status.IsStateRejected(s) {
+		if !status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
+			err := p.res.GetErr()
+			panic(newUnCaughtErr(err))
+		}
+	}
+
+	// ignore the handled flag result if the promise isn't onetime
 	if !once && !ok {
-		// ignore the handled flag result if the promise isn't onetime
 		ok = true
 	}
 	return
@@ -567,8 +591,8 @@ func (p *GoPromise) resolveToPanic(res Res, andHandle bool) {
 	close(p.resChan)
 
 	// re-broadcast the panic if the safe mode is enabled(the default),
-	// and the promise is not followed.
-	if !status.IsFlagsNotSafe(s) && !status.IsChainModeFollow(s) {
+	// and the promise is not followed, nor has any read or wait calls.
+	if !status.IsFlagsNotSafe(s) && status.IsChainEmpty(s) {
 		panic(res[0])
 	}
 }
