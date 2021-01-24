@@ -77,8 +77,9 @@
 // * If the callback called runtime.Goexit, the returned promise will be
 // fulfilled to 'nil'.
 //
-// * The underlying implementation of the returned Promise is the same as
-// the receiver promise's.
+// * The underlying implementation of the returned Promise is always the
+// default implementation(GoPromise), unless stated otherwise in the callback
+// or the corresponding constructor docs.
 //
 // * If the callback returned a non-nil error value as the last element in
 // the returned Res value, the returned Promise will be a 'rejected' promise,
@@ -87,15 +88,17 @@
 //
 // * If the promise is running in the safe mode(the default), the returned
 // Promise is a rejected promise, and the error is not caught(by a Catch call)
-// before the end of that promise's chain, a panic will happen with an error
-// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+// before the end of that promise's chain, or the promise result is not read(by
+// a GetRes call), a panic will happen with an error value of type *UnCaughtErr,
+// which has that uncaught error 'wrapped' inside it.
 //
 // * If the callback caused a panic, the resulting Promise will be a 'panicked'
 // promise, and all subsequent promises in any promise chain derived from it,
 // until recovering from the panic on each of these chains(by a Recover call).
 //
-// * If the returned Promise is a panicked promise, and it's not recovered(by a
-// Recover call) before the end of the promise's chain, or before calling Finally,
+// * If the promise is running in the safe mode(the default), the returned
+// Promise is a panicked promise, and it's not recovered(by a Recover call)
+// before the end of the promise's chain, or before calling Finally,
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 //
@@ -103,10 +106,12 @@
 //
 // * The module provides two modes for promise creation, 'Safe', and 'NonSafe'.
 //
-// * In the 'NonSafe' version, a rejected promise(resolved to the 'rejected'
-// state) will not panic if it reached the end of its promise chain without
-// being caught(by a 'Catch' call). But in the 'Safe' version a panic will
-// happen in that case.
+// * In the 'NonSafe' version, a 'rejected' or 'panicked' promise(resolved
+// to the 'rejected' state or the 'panicked' state, respectively) will not
+// panic if it reached the end of its promise chain without being handled(
+// by a 'Catch' call or 'GetRes' call, in case of a 'rejected' promise, or
+// a 'Recover' call, in case of 'panicked' promise).
+// But in the 'Safe' version a panic will happen in either of these cases.
 //
 // * The 'NonSafe' version is accessible from the NonSafeAPI variable.
 //

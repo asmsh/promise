@@ -23,19 +23,18 @@ import "time"
 // All promises created through this will be 'NonSafe', and all promises
 // that are derived from them too.
 //
-// In the 'NonSafe' version, a 'rejected' promise(resolved to the 'rejected'
-// state) will not panic if it reached the end of its promise chain without
-// being caught(by a 'Catch' call). But in the 'Safe' version a panic will
-// happen in that case.
+// In the 'NonSafe' version, a 'rejected' or 'panicked' promise(resolved
+// to the 'rejected' state or the 'panicked' state, respectively) will not
+// panic if it reached the end of its promise chain without being handled(
+// by a 'Catch' call or 'GetRes' call, in case of a 'rejected' promise, or
+// a 'Recover' call, in case of 'panicked' promise).
+// But in the 'Safe' version a panic will happen in either of these cases.
 //
-// It should be used with care, as errors might be returned and go unnoticed.
+// It should be used with care, as errors and panics might be returned or
+// occurred and go unnoticed.
 //
-// Note that, in either versions, 'Safe', or 'NonSafe', if a panic happened
-// and not recovered before the end of the promise chain(by a 'Recover' call),
-// a panic will happen.
-//
-// It is an extension variable that's sole purpose is to organize the API of
-// the module, and encourage the use of the 'Safe' version of API.
+// It is an extension variable that's sole purpose is to organize the API
+// of the module, and encourage the use of the 'Safe' version of API.
 var NonSafeAPI nonSafeCalls
 
 // dummy type with private field to make it unique than the empty struct,

@@ -57,9 +57,10 @@ func goCall(p *GoPromise, fun func()) {
 // If the callback called runtime.Goexit, the returned promise will be fulfilled
 // to 'nil'.
 //
-// If the returned promise is rejected, and the error isn't caught(by a Catch
-// call) before the end of the promise's chain, a panic will happen with an error
-// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+// If the returned promise is rejected, and the error is not caught(by a Catch
+// call) before the end of the promise's chain, or the promise result is not
+// read(by a GetRes call), a panic will happen with an error value of type
+// *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
 //
 // If the returned promise is a panicked promise, and it's not recovered(by a
 // Recover call) before the end of the promise's chain, or before calling Finally,
@@ -98,9 +99,10 @@ func goResCall(p *GoPromise, fun func() Res) {
 // If the resChan is not usd as described above, a panic will happen when it's
 // used, either on the caller side, or here, internally.
 //
-// If the returned promise is rejected, and the error isn't caught(by a Catch
-// call) before the end of the promise's chain, a panic will happen with an error
-// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+// If the returned promise is rejected, and the error is not caught(by a Catch
+// call) before the end of the promise's chain, or the promise result is not
+// read(by a GetRes call), a panic will happen with an error value of type
+// *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
 func New(resChan chan Res) *GoPromise {
 	prom := newGoPromExter(resChan, false)
 	return prom
@@ -137,9 +139,10 @@ func New(resChan chan Res) *GoPromise {
 // The provided vals, if passed from a slice/array, the slice/array shouldn't
 // be modified after this call.
 //
-// If the returned promise is rejected, and the error isn't caught(by a Catch
-// call) before the end of the promise's chain, a panic will happen with an error
-// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+// If the returned promise is rejected, and the error is not caught(by a Catch
+// call) before the end of the promise's chain, or the promise result is not
+// read(by a GetRes call), a panic will happen with an error value of type
+// *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
 //
 // If the returned promise is a panicked promise, and it's not recovered(by a
 // Recover call) before the end of the promise's chain, or before calling Finally,
@@ -196,9 +199,10 @@ func resolverCall(p *GoPromise, cb func(fulfill func(...interface{}), reject fun
 //
 // The provided res value shouldn't be modified after this call.
 //
-// If the returned promise is rejected, and the error isn't caught(by a Catch
-// call) before the end of the promise's chain, a panic will happen with an error
-// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+// If the returned promise is rejected, and the error is not caught(by a Catch
+// call) before the end of the promise's chain, or the promise result is not
+// read(by a GetRes call), a panic will happen with an error value of type
+// *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
 func Delay(res Res, d time.Duration, onSucceed, onFail bool) *GoPromise {
 	prom := newGoPromInter(false)
 	go delayCall(prom, res, d, onSucceed, onFail)
@@ -233,7 +237,8 @@ func delayCall(p *GoPromise, res Res, d time.Duration, onSucceed, onFail bool) {
 //
 // If the returned promise is rejected, it will not panic with an *UnCaughtErr
 // error, but all subsequent promises in any promise chain derived from it will,
-// until the error is caught on each of these chains(by a Catch call).
+// until the error is caught on each of these chains(by a Catch call), or the
+// promise result is read(by a GetRes call).
 func Wrap(res Res) *GoPromise {
 	prom := newGoPromSync(false)
 	wrapCall(prom, res)
@@ -270,9 +275,10 @@ func Fulfill(vals ...interface{}) *GoPromise {
 // The provided vals, if passed from a slice/array, the slice/array shouldn't
 // be modified after this call.
 //
-// The returned promise, if rejected, will not panic with an *UnCaughtErr error,
-// but all subsequent promises in any promise chain derived from it will, until
-// the error is caught on each of these chains(by a Catch call).
+// If the returned promise is rejected, it will not panic with an *UnCaughtErr
+// error, but all subsequent promises in any promise chain derived from it will,
+// until the error is caught on each of these chains(by a Catch call), or the
+// promise result is read(by a GetRes call).
 func Reject(err error, vals ...interface{}) *GoPromise {
 	prom := newGoPromSync(false)
 	// fulfill if err is nil, so that Catch is never called with a nil error

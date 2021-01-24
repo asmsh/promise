@@ -296,7 +296,7 @@ func (s *PromStatus) RegFollow() (firstFollow bool, status uint32) {
 }
 
 // RegRead declares that there's a read call registered on this promise,
-// like a 'Finally', or 'asyncRead' calls.
+// like a 'Finally', 'GetRes', or 'asyncRead' calls.
 func (s *PromStatus) RegRead() (firstRead bool, status uint32) {
 	// read the current status value, and acquire the update lock
 	cs := s.readAndAcquireLock()
