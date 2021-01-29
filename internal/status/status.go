@@ -280,14 +280,11 @@ func (s *PromStatus) RegFollow() (firstFollow bool, status uint32) {
 	// create a new status value from the current one
 	ns := cs
 
-	// set the chain mode to follow, only if the fate is unresolved or
-	// resolving, and the chain mode is either none, temp, or wait.
-	if ns&fateBitsSetMask < fateResolved {
-		if ns&chainModeBitsSetMask < chainModeFollow {
-			ns &= chainModeBitsClrMask // clear the chain mode bits
-			ns |= chainModeFollow      // set the chain mode to follow
-			firstFollow = true         // this is the first set to follow
-		}
+	// set the chain mode to follow, only if the chain mode is none, temp, or wait
+	if ns&chainModeBitsSetMask < chainModeFollow {
+		ns &= chainModeBitsClrMask // clear the chain mode bits
+		ns |= chainModeFollow      // set the chain mode to follow
+		firstFollow = true         // this is the first set to follow
 	}
 
 	// save the new status value, and release the update lock
@@ -303,14 +300,11 @@ func (s *PromStatus) RegRead() (firstRead bool, status uint32) {
 	// create a new status value from the current one
 	ns := cs
 
-	// set the chain mode to read, only if the fate is unresolved or
-	// resolving, and the chain mode is none or wait.
-	if ns&fateBitsSetMask < fateResolved {
-		if ns&chainModeBitsSetMask < chainModeRead {
-			ns &= chainModeBitsClrMask // clear the chain mode bits
-			ns |= chainModeRead        // set the chain mode to read
-			firstRead = true           // this is the first set to read
-		}
+	// set the chain mode to read, only if the chain mode is none or wait
+	if ns&chainModeBitsSetMask < chainModeRead {
+		ns &= chainModeBitsClrMask // clear the chain mode bits
+		ns |= chainModeRead        // set the chain mode to read
+		firstRead = true           // this is the first set to read
 	}
 
 	// save the new status value, and release the update lock
@@ -326,14 +320,11 @@ func (s *PromStatus) RegWait() (firstWait bool, status uint32) {
 	// create a new status value from the current one
 	ns := cs
 
-	// set the chain mode to wait, only if the fate is unresolved or
-	// resolving, and the chain mode is none.
-	if ns&fateBitsSetMask < fateResolved {
-		if ns&chainModeBitsSetMask < chainModeWait {
-			ns &= chainModeBitsClrMask // clear the chain mode bits
-			ns |= chainModeWait        // set the chain mode to wait
-			firstWait = true           // this is the first set to wait
-		}
+	// set the chain mode to wait, only if the chain mode is none
+	if ns&chainModeBitsSetMask < chainModeWait {
+		ns &= chainModeBitsClrMask // clear the chain mode bits
+		ns |= chainModeWait        // set the chain mode to wait
+		firstWait = true           // this is the first set to wait
 	}
 
 	// save the new status value, and release the update lock
