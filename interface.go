@@ -206,7 +206,7 @@ type UnCaughtErr struct {
 }
 
 func (e *UnCaughtErr) Error() string {
-	return fmt.Sprintf("UnCaught error in the promise chain:> %v", e.err)
+	return fmt.Sprintf("UnCaught error in the promise chain: %v", e.err)
 }
 
 func (e *UnCaughtErr) Unwrap() error {
