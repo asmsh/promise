@@ -394,6 +394,32 @@ func TestGoRes(t *testing.T) {
 	})
 }
 
+func TestDelay(t *testing.T) {
+	t.Run("normal res", func(t *testing.T) {
+		wantRes := promise.Res{"go", "golang"}
+		t.Run("parallel chain", func(t *testing.T) {
+			p := promise.Delay(wantRes, 1000, true, true)
+			parallelChainTestRunner(t, p, wantRes, nil, nil, true, false, false)
+		})
+		t.Run("sequential chain", func(t *testing.T) {
+			p := promise.Delay(wantRes, 1000, true, true)
+			sequentialChainTestRunner(t, p, wantRes, nil, nil, true, false, false)
+		})
+	})
+
+	t.Run("error res", func(t *testing.T) {
+		wantRes := promise.Res{"go", newTestErr()}
+		t.Run("parallel chain", func(t *testing.T) {
+			p := promise.Delay(wantRes, 1000, true, true)
+			parallelChainTestRunner(t, p, wantRes, newTestErr(), nil, false, true, false)
+		})
+		t.Run("sequential chain", func(t *testing.T) {
+			p := promise.Delay(wantRes, 1000, true, true)
+			sequentialChainTestRunner(t, p, wantRes, newTestErr(), nil, false, true, false)
+		})
+	})
+}
+
 func TestWrap(t *testing.T) {
 	t.Run("normal res", func(t *testing.T) {
 		wantRes := promise.Res{"go", "golang"}
