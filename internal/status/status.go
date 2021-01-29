@@ -540,6 +540,10 @@ func (s *PromStatus) SetHandled() (set bool, status uint32) {
 	return set, ns
 }
 
+func IsChainModeRead(status uint32) bool {
+	return status&chainModeBitsSetMask == chainModeRead
+}
+
 func IsChainModeFollow(status uint32) bool {
 	chainMode := status & chainModeBitsSetMask
 	return chainMode == chainModeFollow
