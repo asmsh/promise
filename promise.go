@@ -228,7 +228,7 @@ func (p *GoPromise) waitCall(resCall, once bool, d time.Duration) (ok bool) {
 	}
 
 	// ignore the handled flag result if the promise isn't onetime
-	if !once && !ok {
+	if !once {
 		ok = true
 	}
 	return
@@ -271,11 +271,11 @@ func (p *GoPromise) wait(d time.Duration, resolveOnTimeout bool) (timeout bool) 
 		return false
 	}
 
-	// create the timer chan if a duration is passed
-	var t *time.Timer
+	// create the timer chan if a non-zero duration is passed
 	var tc <-chan time.Time
 	if d > 0 {
-		t = time.NewTimer(d)
+		t := time.NewTimer(d)
+		defer t.Stop()
 		tc = t.C
 	}
 
@@ -286,10 +286,6 @@ func (p *GoPromise) wait(d time.Duration, resolveOnTimeout bool) (timeout bool) 
 		timeout = p.interWaitProc(tc, resolveOnTimeout)
 	}
 
-	// if a timer is used, stop it to free its resources
-	if t != nil {
-		t.Stop()
-	}
 	return
 }
 
@@ -491,7 +487,7 @@ func (p *GoPromise) thenCall(prev *GoPromise, cb thenCb, once bool, d time.Durat
 	// flag, as the promise is about to be handled, and update ok accordingly.
 	if ok {
 		ok, _ = prev.status.SetHandled()
-		if !once && !ok {
+		if !once {
 			// ignore the handled flag result if the promise isn't onetime
 			ok = true
 		}
@@ -775,7 +771,7 @@ func (p *GoPromise) recoverCall(prev *GoPromise, cb recoverCb, once bool, d time
 	// the previous promise hasn't timedout and is panicked, set the handled
 	// flag, as the promise is about to be handled, and update ok accordingly.
 	ok, _ := prev.status.SetHandled()
-	if !once && !ok {
+	if !once {
 		// ignore the handled flag result if the promise isn't onetime
 		ok = true
 	}
@@ -863,7 +859,7 @@ func (p *GoPromise) finallyCall(prev *GoPromise, cb finallyCb, once bool, d time
 		// set the 'call' flag of the 'finally' callback(as it's about to
 		// be called), and update ok accordingly.
 		ok, _ := prev.status.SetCalledFinally()
-		if !once && !ok {
+		if !once {
 			// ignore the handled flag result if the promise isn't onetime
 			ok = true
 		}
@@ -926,7 +922,7 @@ func (p *GoPromise) asyncReadCall(cb readCb, args []interface{}, once bool, d ti
 		// can be handled through await, so set the handled flag, as the
 		// promise is about to be handled, and update ok accordingly.
 		ok, _ := p.status.SetHandled()
-		if !once && !ok {
+		if !once {
 			// ignore the handled flag result if the promise isn't onetime
 			ok = true
 		}
