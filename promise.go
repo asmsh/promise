@@ -186,11 +186,14 @@ func (p *GoPromise) waitCall(resCall, once bool, d time.Duration) (ok bool) {
 	timedout := p.wait(d, false)
 	s := p.status.Read()
 
-	// if the promise has panicked and has been handled, return
-	// false, otherwise re-broadcast the panic, if the safe mode
-	// is enabled(the default), and if not, just return false.
+	// if the promise is panicked, panic with the same panic value
+	// if there's no follow calls registered on the promise (cause
+	// panic can be recovered through only one of them, a Recover
+	// call), and it's still not handled, but only if the safe mode
+	// is enabled(the default), otherwise just return false.
 	if status.IsStatePanicked(s) {
-		if !status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
+		if !status.IsChainModeFollow(s) &&
+			!status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
 			panic(p.res[0])
 		} else {
 			return false
@@ -211,11 +214,14 @@ func (p *GoPromise) waitCall(resCall, once bool, d time.Duration) (ok bool) {
 		ok = !status.IsFateHandled(s)
 	}
 
-	// if the promise is rejected and hasn't been handled(either
-	// by this call or another), and the safe mode is enabled(the
-	// default), panic with uncaught error.
+	// if the promise is rejected, panic with uncaught error if
+	// there's no follow or read calls registered on the promise
+	// (cause rejection can be caught through only any of them,
+	// a Catch or GetRes call), and it's still not handled, but
+	// only if the safe mode is enabled(the default).
 	if status.IsStateRejected(s) {
-		if !status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
+		if !status.IsChainModeRead(s) && !status.IsChainModeFollow(s) &&
+			!status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
 			err, _ := p.res.Err()
 			panic(newUnCaughtErr(err))
 		}
