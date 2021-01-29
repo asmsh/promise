@@ -50,8 +50,8 @@ Go 1.13+
 
 ```go
 p := promise.GoRes(func () promise.Res {
-/* do some work, asynchronously */
-return promise.Res{"go", "golang"} // return any values(as elements)
+	/* do some work, asynchronously */
+	return promise.Res{"go", "golang"} // return any values(as elements)
 })
 ```
 
@@ -59,7 +59,7 @@ return promise.Res{"go", "golang"} // return any values(as elements)
 
 ```go
 p := promise.Go(func () {
-/* do some work, asynchronously */
+	/* do some work, asynchronously */
 })
 ```
 
