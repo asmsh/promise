@@ -260,14 +260,6 @@ func (p *GoPromise) wait(d time.Duration, resolveOnTimeout bool) (timeout bool) 
 	// if the fate is Resolved or Handled don't wait, as they are guaranteed
 	// to happen after the result is saved, and after the resChan is closed.
 	if status.IsFateResolved(s) || status.IsFateHandled(s) {
-		// panic if the resChan has any elements, as the promise is Resolved,
-		// and the result of the promise is already received.
-		// this will be true, only if the resChan is created externally, and
-		// more than one value is sent on it, which is considered a bad usage.
-		if len(p.resChan) != 0 {
-			panic(multipleSendsPanicMsg)
-		}
-
 		return false
 	}
 
@@ -313,6 +305,11 @@ func (p *GoPromise) exterWaitProc(timerChan <-chan time.Time, resolveOnTimeout b
 				// call, either internally or externally(in the user's code) is
 				// allowed, and considered a result for a bad usage of the chan.
 				p.resolveToRes(res)
+
+				// only one value should be sent, but more is sent, panic
+				if len(p.resChan) != 0 {
+					panic(multipleSendsPanicMsg)
+				}
 			} else if !(status.IsFateResolved(s) && status.IsStatePending(s)) {
 				// the only allowed reason for not setting the fate to Resolving
 				// here, is that the promise is resolved to pending, because of
