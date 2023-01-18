@@ -89,7 +89,7 @@
 // * If the promise is running in the safe mode(the default), the returned
 // Promise is a rejected promise, and the error is not caught(by a Catch call)
 // before the end of that promise's chain, or the promise result is not read(by
-// a GetRes call), a panic will happen with an error value of type *UnCaughtErr,
+// a GetRes call), a panic will happen with an error value of type *UncaughtErr,
 // which has that uncaught error 'wrapped' inside it.
 //
 // * If the callback caused a panic, the resulting Promise will be a 'panicked'

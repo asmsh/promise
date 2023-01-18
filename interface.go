@@ -72,7 +72,7 @@ type Promise interface {
 	// If the promise is running in the safe mode(the default), the returned
 	// Promise is a rejected promise, and the error is not caught(by a Catch call)
 	// before the end of that promise's chain, a panic will happen with an error
-	// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+	// value of type *UncaughtErr, which has that uncaught error 'wrapped' inside it.
 	//
 	// If the returned promise is a panicked promise, and it's not recovered(by a
 	// Recover call) before the end of the promise's chain, or before calling Finally,
@@ -199,20 +199,20 @@ type Promise interface {
 	asyncFollow(cb func(res Res, ok bool, args []interface{}), args ...interface{})
 }
 
-// UnCaughtErr wraps an error that happened in a promise chain, but hasn't
+// UncaughtErr wraps an error that happened in a promise chain, but hasn't
 // been caught, by the end of that chain.
-type UnCaughtErr struct {
+type UncaughtErr struct {
 	err error
 }
 
-func (e *UnCaughtErr) Error() string {
-	return fmt.Sprintf("UnCaught error in the promise chain: %v", e.err)
+func (e *UncaughtErr) Error() string {
+	return fmt.Sprintf("Uncaught error in the promise chain: %v", e.err)
 }
 
-func (e *UnCaughtErr) Unwrap() error {
+func (e *UncaughtErr) Unwrap() error {
 	return e.err
 }
 
-func newUnCaughtErr(err error) error {
-	return &UnCaughtErr{err: err}
+func newUncaughtErr(err error) error {
+	return &UncaughtErr{err: err}
 }

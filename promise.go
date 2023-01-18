@@ -223,7 +223,7 @@ func (p *GoPromise) waitCall(resCall, once bool, d time.Duration) (ok bool) {
 		if !status.IsChainModeRead(s) && !status.IsChainModeFollow(s) &&
 			!status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
 			err, _ := p.res.Err()
-			panic(newUnCaughtErr(err))
+			panic(newUncaughtErr(err))
 		}
 	}
 
@@ -378,7 +378,7 @@ func (p *GoPromise) interWaitProc(timerChan <-chan time.Time, resolveOnTimeout b
 // If the promise is running in the safe mode(the default), the returned
 // Promise is a rejected promise, and the error is not caught(by a Catch call)
 // before the end of that promise's chain, a panic will happen with an error
-// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
+// value of type *UncaughtErr, which has that uncaught error 'wrapped' inside it.
 //
 // If the returned promise is a panicked promise, and it's not recovered(by a
 // Recover call) before the end of the promise's chain, or before calling Finally,
@@ -564,7 +564,7 @@ func (p *GoPromise) handleReturns(resP *Res) {
 // if called from handleReturns, then it will be called once on the same
 // promise, as it's protected by the Resolving fate setter.
 // if called from finallyCall(before handleReturns), then it will be called
-// once once on the same promise, by design.
+// once on the same promise, by design.
 // if called from the resolverCb, then it will be called once on the same
 // promise, as it's protected by the Resolving fate setter.
 func (p *GoPromise) resolveToRes(res Res) {
@@ -610,7 +610,7 @@ func (p *GoPromise) resolveToReject(res Res, andHandle bool) {
 	// is not followed, nor has any read or wait calls.
 	if !status.IsFlagsNotSafe(s) && status.IsChainEmpty(s) {
 		err, _ := p.res.Err()
-		panic(newUnCaughtErr(err))
+		panic(newUncaughtErr(err))
 	}
 }
 
@@ -877,7 +877,7 @@ func (*GoPromise) privateImplementation() {}
 
 // asyncRead is used internally to implement promise extension functions.
 //
-// as it's registered as a 'read' call, it can prevent UnCaughtErr panics if
+// as it's registered as a 'read' call, it can prevent UncaughtErr panics if
 // the promise is about to be rejected, but it can't prevent a panicked promise
 // from re-broadcasting the panic.
 //
@@ -937,7 +937,7 @@ func (p *GoPromise) asyncReadCall(cb readCb, args []interface{}, once bool, d ti
 
 // asyncFollow is used internally to implement promise extension functions.
 //
-// as it's registered as a 'follow' call, it can prevent UnCaughtErr panics if
+// as it's registered as a 'follow' call, it can prevent UncaughtErr panics if
 // the promise is about to be rejected, and also prevent a panicked promise from
 // re-broadcasting the panic.
 //
