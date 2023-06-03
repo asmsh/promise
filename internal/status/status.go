@@ -144,9 +144,9 @@ func (s *PromStatus) saveAndReleaseLock(newStatus uint32) {
 	}
 }
 
-// Read returns the current status value, if it's not being updated rightnow,
+// Load returns the current status value, if it's not being updated right now,
 // and if it's, it waits until it's updated then return the value.
-func (s *PromStatus) Read() (currentStatus uint32) {
+func (s *PromStatus) Load() (currentStatus uint32) {
 	// read the current status value, and return it, as long as the
 	// read value is not the locked status, otherwise, wait until the
 	// read value becomes different than the locked status.

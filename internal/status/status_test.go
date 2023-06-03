@@ -54,13 +54,13 @@ func BenchmarkPromStatus_Setters_Parallel(b *testing.B) {
 	})
 }
 
-func BenchmarkPromStatus_Read(b *testing.B) {
+func BenchmarkPromStatus_Load(b *testing.B) {
 	b.Run("unlocked status", func(b *testing.B) {
 		s := PromStatus(0)
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			s.Read()
+			s.Load()
 		}
 	})
 	b.Run("locked status", func(b *testing.B) {
@@ -75,7 +75,7 @@ func BenchmarkPromStatus_Read(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			s.Read()
+			s.Load()
 		}
 	})
 }
@@ -743,7 +743,7 @@ func TestPromStatus_Flags(t *testing.T) {
 		s.SetHandled()
 
 		// check that the flags section equals the expected value
-		if ns := s.Read(); !equalsStatusFlags(ns, tt.wantFlags) {
+		if ns := s.Load(); !equalsStatusFlags(ns, tt.wantFlags) {
 			t.Errorf("unexpected PromStatus.Flags value. got: '%v', want: '%v'", ns, tt.wantFlags)
 		}
 	}
