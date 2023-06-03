@@ -295,26 +295,6 @@ func (s *PromStatus) Read() (currentStatus uint32) {
 	return cs
 }
 
-// RegFollow declares that there's a follow call registered on this promise,
-// like a 'Then', 'Catch', or 'Recover' calls.
-func (s *PromStatus) RegFollow() (firstFollow bool, status uint32) {
-	// read the current status value, and acquire the update lock
-	cs := s.readAndAcquireLock()
-	// create a new status value from the current one
-	ns := cs
-
-	// set the chain mode to follow, only if the chain mode is none, temp, or wait
-	if ns&chainModeBitsSetMask < chainModeFollow {
-		ns &= chainModeBitsClrMask // clear the chain mode bits
-		ns |= chainModeFollow      // set the chain mode to follow
-		firstFollow = true         // this is the first set to follow
-	}
-
-	// save the new status value, and release the update lock
-	s.saveAndReleaseLock(ns)
-	return firstFollow, ns
-}
-
 // RegRead declares that there's a read call registered on this promise,
 // like a 'Finally', 'GetRes', or 'asyncRead' calls.
 func (s *PromStatus) RegRead() (firstRead bool, status uint32) {
@@ -353,6 +333,26 @@ func (s *PromStatus) RegWait() (firstWait bool, status uint32) {
 	// save the new status value, and release the update lock
 	s.saveAndReleaseLock(ns)
 	return firstWait, ns
+}
+
+// RegFollow declares that there's a follow call registered on this promise,
+// like a 'Then', 'Catch', or 'Recover' calls.
+func (s *PromStatus) RegFollow() (firstFollow bool, status uint32) {
+	// read the current status value, and acquire the update lock
+	cs := s.readAndAcquireLock()
+	// create a new status value from the current one
+	ns := cs
+
+	// set the chain mode to follow, only if the chain mode is none, temp, or wait
+	if ns&chainModeBitsSetMask < chainModeFollow {
+		ns &= chainModeBitsClrMask // clear the chain mode bits
+		ns |= chainModeFollow      // set the chain mode to follow
+		firstFollow = true         // this is the first set to follow
+	}
+
+	// save the new status value, and release the update lock
+	s.saveAndReleaseLock(ns)
+	return firstFollow, ns
 }
 
 // SetCalledFinally declares that 'Finally' has been called on this promise.
@@ -563,19 +563,21 @@ func (s *PromStatus) SetHandled() (set bool, status uint32) {
 	return set, ns
 }
 
+// IsChainEmpty returns true if the chain mode is 'chainModeNone'
+func IsChainEmpty(status uint32) bool {
+	return status&chainModeBitsSetMask == chainModeNone
+}
+
+func IsChainModeWait(status uint32) bool {
+	return status&chainModeBitsSetMask == chainModeWait
+}
+
 func IsChainModeRead(status uint32) bool {
 	return status&chainModeBitsSetMask == chainModeRead
 }
 
 func IsChainModeFollow(status uint32) bool {
-	chainMode := status & chainModeBitsSetMask
-	return chainMode == chainModeFollow
-}
-
-// IsChainEmpty returns true if the chain mode is 'chainModeNone'
-func IsChainEmpty(status uint32) bool {
-	chainMode := status & chainModeBitsSetMask
-	return chainMode == chainModeNone
+	return status&chainModeBitsSetMask == chainModeFollow
 }
 
 func IsFateUnresolved(status uint32) bool {
@@ -587,41 +589,45 @@ func IsFateResolving(status uint32) bool {
 }
 
 func IsFateResolved(status uint32) bool {
-	fate := status & fateBitsSetMask
-	return fate == fateResolved
+	return status&fateBitsSetMask == fateResolved
 }
 
 func IsFateHandled(status uint32) bool {
-	fate := status & fateBitsSetMask
-	return fate == fateHandled
+	return status&fateBitsSetMask == fateHandled
 }
 
 func IsStatePending(status uint32) bool {
-	state := status & stateBitsSetMask
-	return state == statePending
+	return status&stateBitsSetMask == statePending
 }
 
 func IsStateFulfilled(status uint32) bool {
-	state := status & stateBitsSetMask
-	return state == stateFulfilled
+	return status&stateBitsSetMask == stateFulfilled
 }
 
 func IsStateRejected(status uint32) bool {
-	state := status & stateBitsSetMask
-	return state == stateRejected
+	return status&stateBitsSetMask == stateRejected
 }
 
 func IsStatePanicked(status uint32) bool {
-	state := status & stateBitsSetMask
-	return state == statePanicked
+	return status&stateBitsSetMask == statePanicked
 }
 
-func IsFlagsExternal(status uint32) bool {
-	flags := status & FlagsIsExternal
-	return flags == FlagsIsExternal
+func IsFlagsOnce(status uint32) bool {
+	return status&FlagsTypeOnce == FlagsTypeOnce
+}
+
+func IsFlagsTimed(status uint32) bool {
+	return status&FlagsTypeTimed == FlagsTypeTimed
 }
 
 func IsFlagsNotSafe(status uint32) bool {
-	flags := status & FlagsIsNotSafe
-	return flags == FlagsIsNotSafe
+	return status&FlagsIsNotSafe == FlagsIsNotSafe
+}
+
+func IsFlagsExternal(status uint32) bool {
+	return status&FlagsIsExternal == FlagsIsExternal
+}
+
+func NewFromFlags(status uint32) PromStatus {
+	return PromStatus(status & flagsBitsSetMask)
 }
