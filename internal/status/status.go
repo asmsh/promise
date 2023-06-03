@@ -184,16 +184,16 @@ const (
 	// previous sections.
 
 	// chain modes, using 2 bits
-	chainModeNone uint32 = iota << 4
-	chainModeWait
-	chainModeRead
-	chainModeFollow
+	chainModeNone   uint32 = iota << 4
+	chainModeWait   uint32 = iota << 4
+	chainModeRead   uint32 = iota << 4
+	chainModeFollow uint32 = iota << 4
 
 	// chain flags, and calls flags, using 4 bits
-	chainCalledFinally = 1 << 6
-	_                  = 1 << 7 // reserved
-	_                  = 1 << 8 // reserved
-	_                  = 1 << 9 // reserved
+	chainCalledFinally uint32 = 1 << 6
+	_                         = 1 << 7 // reserved
+	_                         = 1 << 8 // reserved
+	_                         = 1 << 9 // reserved
 
 	// chainModeBitsSetMask and chainModeBitsClrMask are &-ed with the status
 	// to get the chain value and clear the chain value, respectively.
@@ -206,10 +206,11 @@ const (
 	// starting with a shift amount of 10, which is the number of bits used by
 	// previous sections.
 
+	// fate modes, using 2 bits
 	fateUnresolved uint32 = iota << 10
-	fateResolving
-	fateResolved
-	fateHandled
+	fateResolving  uint32 = iota << 10
+	fateResolved   uint32 = iota << 10
+	fateHandled    uint32 = iota << 10
 
 	// fateBitsSetMask and fateBitsCLrMask are &-ed with the status to get
 	// the fate value and clear the fate value, respectively.
@@ -222,10 +223,11 @@ const (
 	// starting with a shift amount of 12, which is the number of bits used by
 	// previous sections.
 
-	statePending uint32 = iota << 12
-	stateFulfilled
-	stateRejected
-	statePanicked
+	// state modes, using 2 bits
+	statePending   uint32 = iota << 12
+	stateFulfilled uint32 = iota << 12
+	stateRejected  uint32 = iota << 12
+	statePanicked  uint32 = iota << 12
 
 	// stateBitsSetMask and stateBitsCLrMask are &-ed with the status to get
 	// the state value and clear the state value, respectively.
@@ -238,17 +240,21 @@ const (
 	// starting with a shift amount of 14, which is the number of bits used by
 	// previous sections.
 
-	// promise chain types
-	FlagsTypeOnce uint32 = 1 << (iota + 14)
-	FlagsTypeTimed
-	_ // reserved
-	_ // reserved
+	// promise chain types...
+	FlagsTypeOnce  uint32 = 1 << (iota + 14)
+	FlagsTypeTimed uint32 = 1 << (iota + 14)
+	_                     = 1 << (iota + 14) // reserved
+	_                     = 1 << (iota + 14) // reserved
 
-	// promise features
-	FlagsIsNotSafe
-	FlagsIsExternal
-	_ // reserved
-	_ // reserved
+	// promise features...
+	FlagsIsNotSafe  uint32 = 1 << (iota + 14)
+	FlagsIsExternal uint32 = 1 << (iota + 14)
+	_                      = 1 << (iota + 14) // reserved
+	_                      = 1 << (iota + 14) // reserved
+
+	// 255 = 1111_1111 (the 8 flags above)
+	flagsBitsSetMask uint32 = 255 << 14
+	flagsBitsClrMask        = ^flagsBitsSetMask
 )
 
 func (s *PromStatus) readAndAcquireLock() (currentStatus uint32) {
