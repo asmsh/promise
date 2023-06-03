@@ -278,7 +278,7 @@ func (s *PromStatus) saveAndReleaseLock(newStatus uint32) {
 	// save the new status value, and release the update lock
 	if !cas((*uint32)(s), lockAcquired, newStatus) {
 		// panic if the status value has been changed unexpectedly
-		panic("promise: internal: the promise' status has been changed unexpectedly")
+		panic("promise: internal: unexpected status change")
 	}
 }
 
