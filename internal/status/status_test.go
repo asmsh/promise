@@ -698,3 +698,53 @@ func TestPromStatus_Fate_State_Panicked_Sync(t *testing.T) {
 		t.Errorf("PromStatus bits, other than fate's and state's, have changed, unexpectedly")
 	}
 }
+
+func equalsStatusFlags(s1, s2 uint32) bool {
+	s1Flags := s1 & flagsBitsSetMask
+	s2Flags := s2 & flagsBitsSetMask
+	return s1Flags == s2Flags
+}
+
+func TestPromStatus_Flags(t *testing.T) {
+	tests := []struct {
+		name       string
+		initStatus uint32
+		wantFlags  uint32
+	}{
+		{
+			name:       "no flags",
+			initStatus: 0,
+			wantFlags:  0,
+		},
+		{
+			name:       "1 flag",
+			initStatus: FlagsTypeOnce,
+			wantFlags:  FlagsTypeOnce,
+		},
+		{
+			name:       "multiple flags",
+			initStatus: FlagsTypeOnce | FlagsTypeTimed | FlagsIsNotSafe | FlagsIsExternal,
+			wantFlags:  FlagsTypeOnce | FlagsTypeTimed | FlagsIsNotSafe | FlagsIsExternal,
+		},
+	}
+
+	for _, tt := range tests {
+		// init the status value
+		s := PromStatus(tt.initStatus)
+
+		// execute some calls on the status value
+		s.RegRead()
+		s.RegWait()
+		s.RegFollow()
+		s.SetCalledFinally()
+		s.SetResolving()
+		s.ClearResolving()
+		s.SetFulfilledResolved()
+		s.SetHandled()
+
+		// check that the flags section equals the expected value
+		if ns := s.Read(); !equalsStatusFlags(ns, tt.wantFlags) {
+			t.Errorf("unexpected PromStatus.Flags value. got: '%v', want: '%v'", ns, tt.wantFlags)
+		}
+	}
+}
