@@ -80,16 +80,6 @@ func BenchmarkPromStatus_Read(b *testing.B) {
 	})
 }
 
-func isChainModeNone(status uint32) bool {
-	chainMode := status & chainModeBitsSetMask
-	return chainMode == chainModeNone
-}
-
-func isChainModeRead(status uint32) bool {
-	chainMode := status & chainModeBitsSetMask
-	return chainMode == chainModeRead
-}
-
 // isChainOnlyChanged returns true if all other bits, other than chain's,
 // are 0, otherwise it returns false.
 func isChainOnlyChanged(s uint32) bool {
@@ -100,9 +90,6 @@ func isChainOnlyChanged(s uint32) bool {
 func TestPromStatus_Chain(t *testing.T) {
 	s := PromStatus(0)
 
-	if !isChainModeNone(uint32(s)) {
-		t.Errorf("unexpected PromStatus.Chain value, expected: none")
-	}
 	if !IsChainEmpty(uint32(s)) {
 		t.Errorf("unexpected PromStatus.Chain value, expected: none")
 	}
@@ -115,7 +102,7 @@ func TestPromStatus_Chain(t *testing.T) {
 	if uint32(s) != ns {
 		t.Errorf("RegRead returned unexpected status value")
 	}
-	if !isChainModeRead(ns) {
+	if !IsChainModeRead(ns) {
 		t.Errorf("unexpected PromStatus.Chain value, expected: read")
 	}
 	if IsChainEmpty(uint32(s)) {
@@ -133,7 +120,7 @@ func TestPromStatus_Chain(t *testing.T) {
 	if uint32(s) != ns {
 		t.Errorf("RegRead returned unexpected status value")
 	}
-	if !isChainModeRead(ns) {
+	if !IsChainModeRead(ns) {
 		t.Errorf("unexpected PromStatus.Chain value, expected: read")
 	}
 	if IsChainEmpty(uint32(s)) {
@@ -198,16 +185,6 @@ func TestPromStatus_Chain(t *testing.T) {
 	}
 }
 
-func isFateUnresolved(status uint32) bool {
-	fate := status & fateBitsSetMask
-	return fate == fateUnresolved
-}
-
-func isFateResolving(status uint32) bool {
-	fate := status & fateBitsSetMask
-	return fate == fateResolving
-}
-
 // isFateOnlyChanged returns true if all other bits, other than fate's,
 // are 0, otherwise it returns false.
 func isFateOnlyChanged(s uint32) bool {
@@ -218,7 +195,7 @@ func isFateOnlyChanged(s uint32) bool {
 func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	s := PromStatus(0)
 
-	if !isFateUnresolved(uint32(s)) {
+	if !IsFateUnresolved(uint32(s)) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: unresolved")
 	}
 	if !IsStatePending(uint32(s)) {
@@ -233,7 +210,7 @@ func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	if uint32(s) != ns {
 		t.Errorf("SetResolving returned unexpected status value")
 	}
-	if !isFateResolving(ns) {
+	if !IsFateResolving(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: resolving")
 	}
 	if !IsStatePending(ns) {
@@ -251,7 +228,7 @@ func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	if uint32(s) != ns {
 		t.Errorf("SetResolving returned unexpected status value")
 	}
-	if !isFateResolving(ns) {
+	if !IsFateResolving(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: resolving")
 	}
 	if !IsStatePending(ns) {
@@ -269,10 +246,10 @@ func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	if uint32(s) != ns {
 		t.Errorf("ClearResolving returned unexpected status value")
 	}
-	if isFateResolving(ns) {
+	if IsFateResolving(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: unresolved")
 	}
-	if !isFateUnresolved(ns) {
+	if !IsFateUnresolved(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: unresolved")
 	}
 	if !IsStatePending(ns) {
@@ -290,10 +267,10 @@ func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	if uint32(s) != ns {
 		t.Errorf("ClearResolving returned unexpected status value")
 	}
-	if isFateResolving(ns) {
+	if IsFateResolving(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: unresolved")
 	}
-	if !isFateUnresolved(ns) {
+	if !IsFateUnresolved(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: unresolved")
 	}
 	if !IsStatePending(ns) {
