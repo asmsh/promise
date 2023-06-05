@@ -158,7 +158,7 @@ func (s *PromStatus) Load() (currentStatus uint32) {
 }
 
 // RegRead declares that there's a read call registered on this promise,
-// like a 'Finally', 'GetRes', or 'asyncRead' calls.
+// like a 'Finally', 'Res', or 'asyncRead' calls.
 func (s *PromStatus) RegRead() (firstRead bool, status uint32) {
 	// read the current status value, and acquire the update lock
 	cs := s.readAndAcquireLock()
@@ -220,6 +220,7 @@ func (s *PromStatus) RegFollow() (firstFollow bool, status uint32) {
 // SetCalledFinally declares that 'Finally' has been called on this promise.
 // 'Finally' got its own flag, cause it can't set the fate to 'Handled', so
 // it need another approach to detect calls, for the once implementation.
+// Deprecated:
 func (s *PromStatus) SetCalledFinally() (firstCall bool, status uint32) {
 	// read the current status value, and acquire the update lock
 	cs := s.readAndAcquireLock()
@@ -281,6 +282,7 @@ func (s *PromStatus) ClearResolving() (cleared bool, status uint32) {
 }
 
 // SetPendingResolved is required for the TimedPromise
+// Deprecated:
 func (s *PromStatus) SetPendingResolved() (set bool, status uint32) {
 	// read the current status value, and acquire the update lock
 	cs := s.readAndAcquireLock()
@@ -430,6 +432,12 @@ func IsChainEmpty(status uint32) bool {
 	return status&chainModeBitsSetMask == chainModeNone
 }
 
+// IsChainAtLeastRead returns true if the chain mode is either 'chainModeRead'
+// or 'chainModeFollow'.
+func IsChainAtLeastRead(status uint32) bool {
+	return status&chainModeBitsSetMask >= chainModeRead
+}
+
 func IsChainModeWait(status uint32) bool {
 	return status&chainModeBitsSetMask == chainModeWait
 }
@@ -458,6 +466,7 @@ func IsFateHandled(status uint32) bool {
 	return status&fateBitsSetMask == fateHandled
 }
 
+// Deprecated:
 func IsStatePending(status uint32) bool {
 	return status&stateBitsSetMask == statePending
 }
