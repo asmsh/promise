@@ -399,7 +399,7 @@ func (p *GenericPromise[T]) Then(thenCb func(val T) Result[T]) Promise[T] {
 func (p *GenericPromise[T]) thenCall(
 	ctx context.Context,
 	prev *GenericPromise[T],
-	cb func(val T) Result[T],
+	cb thenCallback[T],
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
 	_, s := prev.wait(ctx)
@@ -420,7 +420,7 @@ func (p *GenericPromise[T]) thenCall(
 	}
 
 	// run the callback with the actual promise result
-	p.runThenCallback(res, cb)
+	runCallback(p, res, s, cb)
 }
 
 func (p *GenericPromise[T]) handleFollow(prevRes Result[T], andResolve bool) (res Result[T], ok bool) {
@@ -445,23 +445,6 @@ func (p *GenericPromise[T]) handleFollow(prevRes Result[T], andResolve bool) (re
 	}
 
 	return res, validHandle
-}
-
-func (p *GenericPromise[T]) runThenCallback(prevRes Result[T], cb func(val T) Result[T]) {
-	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Result[T])
-	defer p.handleReturns(resP)
-
-	// run the callback and extract the result
-	res := cb(prevRes.Val())
-
-	// if the callback returned invalid result, set the promise result to
-	// the appropriate error result, otherwise set it to the value returned.
-	if res == nil {
-		*resP = result.Err[T](ErrPromiseNilResult)
-	} else {
-		*resP = res
-	}
 }
 
 // this handles invalid follow from then, catch, and recover calls.
@@ -663,7 +646,7 @@ func (p *GenericPromise[T]) Catch(catchCb func(val T, err error) Result[T]) Prom
 func (p *GenericPromise[T]) catchCall(
 	ctx context.Context,
 	prev *GenericPromise[T],
-	cb func(val T, err error) Result[T],
+	cb catchCallback[T],
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
 	_, s := prev.wait(ctx)
@@ -680,24 +663,7 @@ func (p *GenericPromise[T]) catchCall(
 	res, _ := p.handleFollow(prev.res, false)
 
 	// run the callback with the actual promise result
-	p.runCatchCallback(res, cb)
-}
-
-func (p *GenericPromise[T]) runCatchCallback(prevRes Result[T], cb func(val T, err error) Result[T]) {
-	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Result[T])
-	defer p.handleReturns(resP)
-
-	// run the callback and extract the result
-	res := cb(prevRes.Val(), prevRes.Err())
-
-	// if the callback returned invalid result, set the promise result to
-	// the appropriate error result, otherwise set it to the value returned.
-	if res == nil {
-		*resP = result.Err[T](ErrPromiseNilResult)
-	} else {
-		*resP = res
-	}
+	runCallback(p, res, s, cb)
 }
 
 // Recover waits the promise to be resolved, and calls the recoverCb function,
@@ -729,7 +695,7 @@ func (p *GenericPromise[T]) Recover(recoverCb func(v any) Result[T]) Promise[T] 
 func (p *GenericPromise[T]) recoverCall(
 	ctx context.Context,
 	prev *GenericPromise[T],
-	cb func(v any) Result[T],
+	cb recoverCallback[T],
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
 	_, s := prev.wait(ctx)
@@ -750,24 +716,7 @@ func (p *GenericPromise[T]) recoverCall(
 	}
 
 	// run the callback with the actual promise result
-	p.runRecoverCallback(res, cb)
-}
-
-func (p *GenericPromise[T]) runRecoverCallback(prevRes Result[T], cb func(v any) Result[T]) {
-	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Result[T])
-	defer p.handleReturns(resP)
-
-	// run the callback and extract the result
-	res := cb(prevRes.Err().(*UncaughtPanic).v)
-
-	// if the callback returned invalid result, set the promise result to
-	// the appropriate error result, otherwise set it to the value returned.
-	if res == nil {
-		*resP = result.Err[T](ErrPromiseNilResult)
-	} else {
-		*resP = res
-	}
+	runCallback(p, res, s, cb)
 }
 
 // Finally waits the promise to be resolved, and calls the finallyCb function,
@@ -809,30 +758,13 @@ func (p *GenericPromise[T]) Finally(finallyCb func(s Status) Result[T]) Promise[
 func (p *GenericPromise[T]) finallyCall(
 	ctx context.Context,
 	prev *GenericPromise[T],
-	cb func(s Status) Result[T],
+	cb finallyCallback[T],
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
 	_, s := prev.wait(ctx)
 
 	// run the callback with the actual promise result
-	p.runFinallyCallback(s, cb)
-}
-
-func (p *GenericPromise[T]) runFinallyCallback(prevStatus uint32, cb func(s Status) Result[T]) {
-	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Result[T])
-	defer p.handleReturns(resP)
-
-	// run the callback and extract the result
-	res := cb(Status(prevStatus))
-
-	// if the callback returned invalid result, set the promise result to
-	// the appropriate error result, otherwise set it to the value returned.
-	if res == nil {
-		*resP = result.Err[T](ErrPromiseNilResult)
-	} else {
-		*resP = res
-	}
+	runCallback(p, prev.res, s, cb)
 }
 
 func (p *GenericPromise[T]) privateImplementation() {}
