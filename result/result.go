@@ -17,6 +17,21 @@
 // arbitrary generic values from functions/methods.
 package result
 
+func Empty[T any]() EmptyRes[T] {
+	return EmptyRes[T]{}
+}
+
+type EmptyRes[T any] struct{}
+
+func (r EmptyRes[T]) Val() T {
+	var v T
+	return v
+}
+
+func (r EmptyRes[T]) Err() error {
+	return nil
+}
+
 func Val[T any](val T) ValRes[T] {
 	return ValRes[T]{val: val}
 }

@@ -119,6 +119,7 @@ func ReuseAny(base AnyRes, vals ...any) (res AnyRes) {
 // returned AnyRes value, the returned Promise will be a 'rejected' promise.
 //
 // Values of this type must not be modified after returned from any callback.
+// TODO: maybe choose another name, something like VectorRes
 type AnyRes []any
 
 func (res AnyRes) Val() AnyRes {
