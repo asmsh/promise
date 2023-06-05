@@ -15,7 +15,6 @@
 package promise
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -27,7 +26,7 @@ import (
 //
 // It's a private interface, which can only be implemented by embedding any
 // type that implement it from this module.
-type Promise interface {
+type Promise[T any] interface {
 	// Status returns the status of this promise at this specific moment.
 	//
 	// The returned value corresponds only to the time it was created at.
@@ -37,9 +36,9 @@ type Promise interface {
 	// has panicked, otherwise it follows the rules of the underlying Promise
 	// implementation.
 	//
-	// If the underlying Promise implementation is the GoPromise, and it's not
+	// If the underlying Promise implementation is the GenericPromise, and it's not
 	// panicked, then ok will always = true.
-	Wait() (ok bool)
+	Wait()
 
 	// WaitChan returns a newly created channel, which a boolean value will be
 	// sent on, for only one time, after waiting the promise to be resolved.
@@ -47,17 +46,20 @@ type Promise interface {
 	//
 	// If it's called on a resolved promise, the value will be sent without
 	// waiting.
-	WaitChan() chan bool
+	WaitChan() chan struct{}
 
-	// GetRes waits the promise to be resolved, and returns its result, res,
+	// Res waits the promise to be resolved, and returns its result, res,
 	// and a boolean, ok, which will be true only if res is valid.
 	//
 	// The res value will be invalid(ok = false), if the promise has panicked,
 	// otherwise it follows the rules of the underlying Promise implementation.
 	//
-	// If the underlying Promise implementation is the GoPromise, and it's not
+	// If the underlying Promise implementation is the GenericPromise, and it's not
 	// panicked, then the res value will always be valid(ok = true).
-	GetRes() (res Res, ok bool)
+	Res() Result[T]
+
+	// TODO: ??
+	//ResChan() <-chan Result[T]
 
 	// Delay returns a Promise value which will be resolved to this Promise(
 	// by adopting its Res value, state, and fate), after a delay of at least
@@ -72,12 +74,12 @@ type Promise interface {
 	// If the promise is running in the safe mode(the default), the returned
 	// Promise is a rejected promise, and the error is not caught(by a Catch call)
 	// before the end of that promise's chain, a panic will happen with an error
-	// value of type *UncaughtErr, which has that uncaught error 'wrapped' inside it.
+	// value of type *UncaughtError, which has that uncaught error 'wrapped' inside it.
 	//
 	// If the returned promise is a panicked promise, and it's not recovered(by a
 	// Recover call) before the end of the promise's chain, or before calling Finally,
 	// it will re-panic(with the same value passed to the original 'panic' call).
-	Delay(d time.Duration, onSucceed, onFail bool) Promise
+	Delay(d time.Duration, onSucceed, onFail bool) Promise[T]
 
 	// Then waits the promise to be resolved, and calls the thenCb function, if
 	// the promise is resolved to fulfilled or pending(the promise didn't return
@@ -92,16 +94,16 @@ type Promise interface {
 	// a boolean, ok, which will be true, only if res is valid.
 	//
 	// The res parameter will always be valid(and ok = true), if the underlying
-	// Promise implementation is the GoPromise.
+	// Promise implementation is the GenericPromise.
 	//
 	// The ok parameter's value(and the validity of other parameter) will
 	// follow the rules of each of the other Promise implementations(other
-	// than GoPromise), which are described at their methods.
+	// than GenericPromise), which are described at their methods.
 	//
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Then(thenCb func(res Res, ok bool) Res) Promise
+	Then(thenCb func(val T) Result[T]) Promise[T]
 
 	// Catch waits the promise to be resolved, and calls the catchCb function,
 	// if the promise is resolved to rejected(the promise returned an error).
@@ -117,11 +119,11 @@ type Promise interface {
 	// and res, are valid.
 	//
 	// The err, and the res parameters will always be valid(and ok = true), if
-	// the underlying Promise implementation is the GoPromise.
+	// the underlying Promise implementation is the GenericPromise.
 	//
 	// The ok parameter's value(and the validity of other parameters) will
 	// follow the rules of each of the other Promise implementations(other
-	// than GoPromise), which are described at their methods.
+	// than GenericPromise), which are described at their methods.
 	//
 	// The result is passed here with the error, because, in Go, errors are
 	// just values, so returning them is not always considered an unwanted
@@ -133,7 +135,7 @@ type Promise interface {
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Catch(catchCb func(err error, res Res, ok bool) Res) Promise
+	Catch(catchCb func(val T, err error) Result[T]) Promise[T]
 
 	// Recover waits the promise to be resolved, and calls the recoverCb function,
 	// if the promise is resolved to panicked(the promise caused a panic).
@@ -148,16 +150,16 @@ type Promise interface {
 	// boolean, ok, which will be true, only if v is valid.
 	//
 	// The v parameter will always be valid(and ok = true), if the underlying
-	// Promise implementation is the GoPromise.
+	// Promise implementation is the GenericPromise.
 	//
 	// The ok parameter's value(and the validity of other parameter) will
 	// follow the rules of each of the other Promise implementations(other
-	// than GoPromise), which are described at their methods.
+	// than GenericPromise), which are described at their methods.
 	//
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Recover(recoverCb func(v interface{}, ok bool) Res) Promise
+	Recover(recoverCb func(v any) Result[T]) Promise[T]
 
 	// Finally waits the promise to be resolved, and calls the finallyCb function,
 	// regardless the promise is rejected, panicked, or neither.
@@ -174,19 +176,19 @@ type Promise interface {
 	// The Res value returned from the callback must not be modified after return.
 	//
 	// The finallyCb is passed with one arguments, a boolean, ok, which will
-	// always be true, if the underlying Promise implementation is the GoPromise,
+	// always be true, if the underlying Promise implementation is the GenericPromise,
 	// and the promise hasn't panicked.
-	// But, if the underlying Promise implementation is the GoPromise, and the
+	// But, if the underlying Promise implementation is the GenericPromise, and the
 	// promise has panicked, ok will be false.
 	//
 	// The ok parameter's value will follow the rules of each of the other
-	// Promise implementations(other than GoPromise), which are described
+	// Promise implementations(other than GenericPromise), which are described
 	// at their methods.
 	//
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Finally(finallyCb func(ok bool) Res) Promise
+	Finally(finallyCb func(s Status) Result[T]) Promise[T]
 
 	// this is a private interface that's specific to the different types and
 	// functions in this module, and knows about them.
@@ -195,24 +197,6 @@ type Promise interface {
 	// the following method are/will be used internally to implement extension
 	// functions in this module, which are functions that accepts promises and
 	// extends their functionality or provide new functionality.
-	asyncRead(cb func(res Res, ok bool, args []interface{}), args ...interface{})
-	asyncFollow(cb func(res Res, ok bool, args []interface{}), args ...interface{})
-}
-
-// UncaughtErr wraps an error that happened in a promise chain, but hasn't
-// been caught, by the end of that chain.
-type UncaughtErr struct {
-	err error
-}
-
-func (e *UncaughtErr) Error() string {
-	return fmt.Sprintf("Uncaught error in the promise chain: %v", e.err)
-}
-
-func (e *UncaughtErr) Unwrap() error {
-	return e.err
-}
-
-func newUncaughtErr(err error) error {
-	return &UncaughtErr{err: err}
+	asyncRead(cb func(res Result[T], args []any), args ...any)
+	asyncFollow(cb func(res Result[T], args []any), args ...any)
 }

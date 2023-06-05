@@ -22,7 +22,6 @@
 // A Promise provides an easy way for returning results from a goroutine, and/or
 // waiting for it to finish, plus other features.
 //
-//
 // States and Fates:-
 //
 // A Promise has four states, and it can be in only one of them, at any time:
@@ -46,7 +45,6 @@
 //
 // * Handled: the result of the Promise has been passed to some call of its methods.
 //
-//
 // General Notes:-
 //
 // * Once the Promise's fate is Resolved, its result value will not change.
@@ -58,7 +56,6 @@
 //
 // * For a Promise's fate to be Handled, its fate must first be Resolved.
 //
-//
 // Implementations:-
 //
 // * The module provides one Promise implementation, GoPromise(the default).
@@ -66,9 +63,8 @@
 // * The GoPromise's 'ok' callback parameter will always be true(except in
 // a Finally callback on a panicked promise).
 //
-// * The GoPromise's 'ok' return parameter(for GetRes) will always be true(
+// * The GoPromise's 'ok' return parameter(for Res) will always be true(
 // except on a panicked promise).
-//
 //
 // Callback Notes:-
 //
@@ -89,7 +85,7 @@
 // * If the promise is running in the safe mode(the default), the returned
 // Promise is a rejected promise, and the error is not caught(by a Catch call)
 // before the end of that promise's chain, or the promise result is not read(by
-// a GetRes call), a panic will happen with an error value of type *UncaughtErr,
+// a Res call), a panic will happen with an error value of type *UncaughtError,
 // which has that uncaught error 'wrapped' inside it.
 //
 // * If the callback caused a panic, the resulting Promise will be a 'panicked'
@@ -101,7 +97,6 @@
 // before the end of the promise's chain, or before calling Finally,
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
-//
 // Modes:-
 //
 // * The module provides two modes for promise creation, 'Safe', and 'NonSafe'.
@@ -109,7 +104,7 @@
 // * In the 'NonSafe' version, a 'rejected' or 'panicked' promise(resolved
 // to the 'rejected' state or the 'panicked' state, respectively) will not
 // panic if it reached the end of its promise chain without being handled(
-// by a 'Catch' call or 'GetRes' call, in case of a 'rejected' promise, or
+// by a 'Catch' call or 'Res' call, in case of a 'rejected' promise, or
 // a 'Recover' call, in case of 'panicked' promise).
 // But in the 'Safe' version a panic will happen in either of these cases.
 //

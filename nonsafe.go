@@ -26,7 +26,7 @@ import "time"
 // In the 'NonSafe' version, a 'rejected' or 'panicked' promise(resolved
 // to the 'rejected' state or the 'panicked' state, respectively) will not
 // panic if it reached the end of its promise chain without being handled(
-// by a 'Catch' call or 'GetRes' call, in case of a 'rejected' promise, or
+// by a 'Catch' call or 'Res' call, in case of a 'rejected' promise, or
 // a 'Recover' call, in case of 'panicked' promise).
 // But in the 'Safe' version a panic will happen in either of these cases.
 //
@@ -45,7 +45,7 @@ func (nonSafeCalls) Go(fun func()) *GoPromise {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	prom := newGoPromInter(true)
+	prom := newPromInter(true)
 	go goCall(prom, fun)
 	return prom
 }
@@ -54,13 +54,13 @@ func (nonSafeCalls) GoRes(fun func() Res) *GoPromise {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	prom := newGoPromInter(true)
+	prom := newPromInter(true)
 	go goResCall(prom, fun)
 	return prom
 }
 
 func (nonSafeCalls) New(resChan chan Res) *GoPromise {
-	prom := newGoPromExter(resChan, true)
+	prom := newPromExter(resChan, true)
 	return prom
 }
 
@@ -68,31 +68,31 @@ func (nonSafeCalls) Resolver(resolverCb func(fulfill func(vals ...interface{}), 
 	if resolverCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	prom := newGoPromInter(true)
+	prom := newPromInter(true)
 	go resolverCall(prom, resolverCb)
 	return prom
 }
 
 func (nonSafeCalls) Wrap(res Res) *GoPromise {
-	prom := newGoPromSync(true)
+	prom := newPromSync(true)
 	wrapCall(prom, res)
 	return prom
 }
 
 func (nonSafeCalls) Delay(res Res, d time.Duration, onSucceed, onFail bool) *GoPromise {
-	prom := newGoPromInter(true)
+	prom := newPromInter(true)
 	go delayCall(prom, res, d, onSucceed, onFail)
 	return prom
 }
 
 func (nonSafeCalls) Fulfill(vals ...interface{}) *GoPromise {
-	newProm := newGoPromSync(true)
+	newProm := newPromSync(true)
 	newProm.fulfillSync(vals)
 	return newProm
 }
 
 func (nonSafeCalls) Reject(err error, vals ...interface{}) *GoPromise {
-	prom := newGoPromSync(true)
+	prom := newPromSync(true)
 	if len(vals) == 0 {
 		prom.rejectSync(Res{err})
 		return prom
@@ -102,7 +102,7 @@ func (nonSafeCalls) Reject(err error, vals ...interface{}) *GoPromise {
 }
 
 func (nonSafeCalls) Panic(v interface{}) *GoPromise {
-	prom := newGoPromSync(true)
+	prom := newPromSync(true)
 	prom.panicSync(Res{v})
 	return prom
 }

@@ -21,6 +21,18 @@ import (
 	"github.com/asmsh/promise"
 )
 
+func Test(t *testing.T) {
+	p := promise.Go(func() {
+		panic("some panic msg")
+	})
+	a := *p
+	//a := p
+
+	a.Then(func(res promise.Res, ok bool) promise.Res {
+		return res
+	})
+}
+
 func TestPanicking(t *testing.T) {
 	t.Run("valid handling", func(t *testing.T) {
 		defer func() {
@@ -74,8 +86,8 @@ func TestPanicking(t *testing.T) {
 		p := promise.Go(func() {
 			panic("test_panic")
 		})
-		if _, got := p.GetRes(); got != false {
-			t.Errorf("GetRes() = %v, want: false", got)
+		if _, got := p.Res(); got != false {
+			t.Errorf("Res() = %v, want: false", got)
 		}
 	})
 }
@@ -111,8 +123,8 @@ func TestRejection(t *testing.T) {
 		p := promise.GoRes(func() promise.Res {
 			return promise.Res{newTestErr()}
 		})
-		if _, got := p.GetRes(); got != true {
-			t.Errorf("GetRes() = %v, want: true", got)
+		if _, got := p.Res(); got != true {
+			t.Errorf("Res() = %v, want: true", got)
 		}
 		if got := p.Wait(); got != true {
 			t.Errorf("Wait() = %v, want: true", got)
@@ -131,8 +143,8 @@ func TestRejection(t *testing.T) {
 	//		return promise.Res{newTestErr()}
 	//	})
 	//	go func() {
-	//		if _, got := p.GetRes(); got != true {
-	//			t.Errorf("GetRes() = %v, want: true", got)
+	//		if _, got := p.Res(); got != true {
+	//			t.Errorf("Res() = %v, want: true", got)
 	//		}
 	//	}()
 	//	if got := p.Wait(); got != true {
@@ -152,13 +164,13 @@ func TestRejection(t *testing.T) {
 				t.Fatalf("expected a panic with error, but got: %v", v)
 			}
 
-			ucErr, ok := err.(*promise.UnCaughtErr)
+			ucErr, ok := err.(*promise.UncaughtError)
 			if !ok {
-				t.Fatalf("expected a panic with UnCaughtErr error, but got: %v", v)
+				t.Fatalf("expected a panic with UncaughtError error, but got: %v", v)
 			}
 
 			if ucErr.Unwrap() != newTestErr() {
-				t.Fatalf("expected a panic with UnCaughtErr error wrapping a test error, but got: %v", v)
+				t.Fatalf("expected a panic with UncaughtError error wrapping a test error, but got: %v", v)
 			}
 		}()
 
@@ -216,7 +228,7 @@ func TestImmutability(t *testing.T) {
 		}).Wait()
 
 		// ensure that the returned result still the same as returned from creation
-		res, _ := p.GetRes()
+		res, _ := p.Res()
 		if got := res[0]; got != expectedVal {
 			t.Errorf("Wait()[0] = %v, want: %v", got, expectedVal)
 		}
@@ -230,16 +242,16 @@ func TestImmutability(t *testing.T) {
 		})
 	})
 
-	t.Run("from the GetRes' result", func(t *testing.T) {
+	t.Run("from the Res' result", func(t *testing.T) {
 		p := promise.GoRes(func() (res promise.Res) {
 			return promise.Res{expectedVal}
 		})
-		res, _ := p.GetRes()
+		res, _ := p.Res()
 		// change the first element value
 		res[0] = newVal
 
 		// ensure that the returned result still the same as returned from creation
-		res2, _ := p.GetRes()
+		res2, _ := p.Res()
 		if got := res2[0]; got != expectedVal {
 			t.Errorf("Wait()[0] = %v, want: %v", got, expectedVal)
 		}
@@ -290,27 +302,53 @@ func TestNew(t *testing.T) {
 }
 
 func TestNew_Panic(t *testing.T) {
-	defer func() {
-		v := recover()
-		if v == nil {
-			t.Fatalf("New(): sent two values on resChan with no panic")
-		}
-		if v != "promise: Only one send should be done on the resChan" {
-			t.Errorf("New(): panic with unexpected value")
-		}
-	}()
+	t.Run("multiple sends", func(t *testing.T) {
+		defer func() {
+			v := recover()
+			if v == nil {
+				t.Fatalf("New(): sent two values on resChan with no panic")
+			}
+			if v != "promise: Only one send should be done on the resChan" {
+				t.Errorf("New(): panic with unexpected value")
+			}
+		}()
 
-	wantRes := promise.Res{"go", "golang"}
-	resChan := make(chan promise.Res, 1)
-	p1 := promise.New(resChan)
-	go func() {
-		resChan <- wantRes[:1]
-		resChan <- wantRes[1:]
-	}()
+		wantRes := promise.Res{"go", "golang"}
+		resChan := make(chan promise.Res, 1)
+		p1 := promise.New(resChan)
+		go func() {
+			resChan <- wantRes[:1]
+			resChan <- wantRes[1:]
+		}()
 
-	p1.Wait()
-	p1.GetRes()
-	t.Errorf("New().GetRes() should panic, but it didn't")
+		p1.Wait()
+		p1.Res()
+		t.Errorf("New().Res() should panic, but it didn't")
+	})
+
+	t.Run("close after send", func(t *testing.T) {
+		defer func() {
+			v := recover()
+			if v == nil {
+				t.Fatalf("New(): sent two values on resChan with no panic")
+			}
+			if v != "promise: Only one send should be done on the resChan" {
+				t.Errorf("New(): panic with unexpected value")
+			}
+		}()
+
+		wantRes := promise.Res{"go", "golang"}
+		resChan := make(chan promise.Res, 1)
+		p1 := promise.New(resChan)
+		go func() {
+			resChan <- wantRes[:1]
+			resChan <- wantRes[1:]
+		}()
+
+		go p1.Wait()
+		p1.Res()
+		t.Errorf("New().Res() should panic, but it didn't")
+	})
 }
 
 func TestGo(t *testing.T) {
@@ -620,10 +658,10 @@ func equalRess(res1, res2 promise.Res) bool {
 }
 
 // parallelChainTestRunner tests general usage of methods: Then, Catch, Recover,
-// Finally, Wait, and GetRes
+// Finally, Wait, and Res
 // corner cases are tested through explicit test functions
 func parallelChainTestRunner(t *testing.T, p promise.Promise,
-	wantRes promise.Res, // for Then, Catch, and GetRes
+	wantRes promise.Res, // for Then, Catch, and Res
 	wantErr error,       // for Catch
 	wantV interface{},   // for Recover
 	callThen,
@@ -706,12 +744,12 @@ func parallelChainTestRunner(t *testing.T, p promise.Promise,
 		t.Errorf("Parallel Wait() = %v, want: %v", gotOk, wantOk)
 	}
 
-	gotRes, gotOk := p.GetRes()
+	gotRes, gotOk := p.Res()
 	if !equalRess(gotRes, wantRes) {
-		t.Errorf("Parallel GetRes().res = %v, want %v", gotRes, wantRes)
+		t.Errorf("Parallel Res().res = %v, want %v", gotRes, wantRes)
 	}
 	if gotOk != wantOk {
-		t.Errorf("Parallel GetRes().ok = %v, want: %v", gotOk, wantOk)
+		t.Errorf("Parallel Res().ok = %v, want: %v", gotOk, wantOk)
 	}
 
 	if gotOk := p.Wait(); gotOk != wantOk {
@@ -744,7 +782,7 @@ func parallelChainTestRunner(t *testing.T, p promise.Promise,
 }
 
 func sequentialChainTestRunner(t *testing.T, p promise.Promise,
-	wantRes promise.Res, // for Then, Catch, and GetRes
+	wantRes promise.Res, // for Then, Catch, and Res
 	wantErr error,       // for Catch
 	wantV interface{},   // for Recover
 	callThen,
@@ -819,12 +857,12 @@ func sequentialChainTestRunner(t *testing.T, p promise.Promise,
 		t.Errorf("Sequential Wait() = %v, want: %v", gotOk, wantOk)
 	}
 
-	gotRes, gotOk := p.GetRes()
+	gotRes, gotOk := p.Res()
 	if !equalRess(gotRes, wantRes) {
-		t.Errorf("Sequential GetRes().res = %v, want %v", gotRes, wantRes)
+		t.Errorf("Sequential Res().res = %v, want %v", gotRes, wantRes)
 	}
 	if gotOk != wantOk {
-		t.Errorf("Sequential GetRes().ok = %v, want: %v", gotOk, wantOk)
+		t.Errorf("Sequential Res().ok = %v, want: %v", gotOk, wantOk)
 	}
 
 	if gotOk := p.Wait(); gotOk != wantOk {
