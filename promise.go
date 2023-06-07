@@ -94,66 +94,48 @@ func (p *GenericPromise[T]) Res() Result[T] {
 }
 
 func (p *GenericPromise[T]) waitCall(ctx context.Context, andHandle bool) Result[T] {
-	// wait the promise to be resolved, or until its context is Done,
-	// and then read its status.
+	// wait the promise to be resolved, or until its context is Done.
 	_, s := p.wait(ctx)
+
+	// we only need to do the following special checks if it's not a 'Handle' call,
+	// since a 'Handle' call will always prevent the execution of the different
+	// uncaught handlers, regardless of the promise chain or state.
+	if !andHandle {
+		if !status.IsChainAtLeastRead(s) && !status.IsFateHandled(s) {
+			if status.IsStatePanicked(s) {
+				// the promise is panicked, not handled, and there are no chained
+				// calls to handle it, run the uncaught panic handler, and continue.
+				p.uncaughtPanicHandler()
+			}
+
+			if status.IsStateRejected(s) {
+				// the promise is rejected, not handled, and there are no chained
+				// calls to handle it, run the uncaught error handler, and continue.
+				p.uncaughtErrorHandler()
+			}
+		}
+
+		// return without the result, since it's not needed(not a 'Handle' call)
+		return nil
+	}
 
 	// if it's a call to handle the result, set the 'Handled' flag.
 	// also, keep track of whether this handle was valid(first) or not,
 	// to decide whether we should return the actual result of the promise
 	// or an erroneous one.
-	var validHandle bool
-	if andHandle {
-		validHandle, s = p.status.SetHandled()
-	}
-
-	if status.IsStatePanicked(s) {
-		// the promise is panicked, it's not handled, and there are no
-		// chained calls to handle it, execute the uncaught panic handler.
-		if !status.IsChainAtLeastRead(s) && !status.IsFateHandled(s) {
-			p.uncaughtPanicHandler()
-		}
-
-		// move forward to return the actual result of the promise, if needed
-		if andHandle {
-			return p.res
-		} else {
-			return nil
-		}
-	}
-
-	if status.IsStateRejected(s) {
-		// the promise is rejected, it's not handled, and there are no
-		// chained calls to handle it, execute the uncaught error handler.
-		if !status.IsChainAtLeastRead(s) && !status.IsFateHandled(s) {
-			p.uncaughtErrorHandler()
-		}
-
-		// move forward to return the actual result of the promise, if needed
-		if andHandle {
-			return p.res
-		} else {
-			return nil
-		}
-	}
+	validHandle, s := p.status.SetHandled()
 
 	// if the promise isn't a one-time promise, all handle calls will be valid
 	if !status.IsFlagsOnce(s) {
 		validHandle = true
 	}
 
-	if andHandle {
-		if validHandle {
-			// it's a valid handle call, return the actual result of the promise
-			return p.res
-		} else {
-			// otherwise, return an erroneous result
-			return result.Err[T](ErrPromiseConsumed)
-		}
+	// return the actual result of the promise, or an erroneous one
+	if validHandle {
+		return p.res
+	} else {
+		return result.Err[T](ErrPromiseConsumed)
 	}
-
-	// don't return the result if it's not needed
-	return nil
 }
 
 func (p *GenericPromise[T]) Delay(
