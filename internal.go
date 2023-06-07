@@ -248,20 +248,22 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 	// make sure that only one call will resolve the promise, or return if
 	// the promise is already resolved, so that we don't recover panics when
 	// we don't need to.
-	set, _ := p.status.SetResolving()
-	if !set {
+	if set, _ := p.status.SetResolving(); !set {
 		return
 	}
 
-	// FIXME: double check that this will work with runtime.Goexit()
-	v := recover()
-	if v == nil {
-		// no panic, resolve to the AnyRes value pointed to, as the callback is
-		// either returned normally, or through a call to runtime.Goexit call,
-		// and in either case the AnyRes value pointed to will not change here.
-		p.resolveToRes(*resP)
+	// FIXME: double check that this will work with runtime.Goexit(), prevent the goroutine from terminating
+	if v := recover(); v == nil {
+		// the callback returned normally, or through a call to runtime.Goexit.
+		if resP == nil {
+			// return from a callback that doesn't support Result returning.
+			p.resolveToFulfilledRes(result.Empty[T](), false)
+		} else {
+			// return from a callback that requires Result returning,
+			p.resolveToRes(*resP)
+		}
 	} else {
-		// a panic happened, resolve to panicked, with the panic value.
+		// a panic happened, resolve to panicked with the panic value.
 		p.resolveToPanickedRes(result.Err[T](newUncaughtPanic(v)), false)
 	}
 }
@@ -280,6 +282,10 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 // if called from the resolverCb, then it will be called once on the same
 // promise, as it's protected by the Resolving fate setter.
 func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
+	if res == nil {
+		return p.resolveToRejectedWithErr(ErrPromiseNilResult, false)
+	}
+
 	if err := res.Err(); err != nil {
 		return p.resolveToRejectedRes(res, false)
 	} else {

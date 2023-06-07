@@ -6,8 +6,11 @@ import (
 )
 
 var (
-	ErrPromiseTimeout   = errors.New("promise: timeout")
-	ErrPromiseConsumed  = errors.New("promise: already handled")
+	ErrPromiseTimeout  = errors.New("promise: timeout")
+	ErrPromiseConsumed = errors.New("promise: already handled")
+
+	// ErrPromiseNilResult will be returned when a callback returns nil as Result value,
+	// when a callback calls panic with nil, or when a callback calls runtime.Goexit.
 	ErrPromiseNilResult = errors.New("promise: got nil as result")
 )
 
