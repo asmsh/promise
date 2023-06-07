@@ -160,7 +160,8 @@ func (p *GenericPromise[T]) delayCall(
 	_, s := prev.wait(ctx)
 
 	// mark the promise as 'Handled', and check whether we should continue or not.
-	// this will reject immediately if the promise was already handled.
+	// FIXME: we shouldn't
+	//  this will reject immediately if the promise was already handled.
 	res, ok := p.handleFollow(prev.res, true)
 	if !ok {
 		return
@@ -226,7 +227,7 @@ func (p *GenericPromise[T]) thenCall(
 	}
 
 	// run the callback with the actual promise result
-	runCallback(p, res, s, cb)
+	runCallback(p, cb, true, res, s)
 }
 
 // Catch waits the promise to be resolved, and calls the catchCb function,
@@ -282,7 +283,7 @@ func (p *GenericPromise[T]) catchCall(
 	res, _ := p.handleFollow(prev.res, false)
 
 	// run the callback with the actual promise result
-	runCallback(p, res, s, cb)
+	runCallback(p, cb, true, res, s)
 }
 
 // Recover waits the promise to be resolved, and calls the recoverCb function,
@@ -335,7 +336,7 @@ func (p *GenericPromise[T]) recoverCall(
 	}
 
 	// run the callback with the actual promise result
-	runCallback(p, res, s, cb)
+	runCallback(p, cb, true, res, s)
 }
 
 // Finally waits the promise to be resolved, and calls the finallyCb function,
@@ -383,5 +384,5 @@ func (p *GenericPromise[T]) finallyCall(
 	_, s := prev.wait(ctx)
 
 	// run the callback with the actual promise result
-	runCallback(p, prev.res, s, cb)
+	runCallback(p, cb, true, prev.res, s)
 }

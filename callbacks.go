@@ -20,11 +20,20 @@ type callbackFunc[T any] interface {
 	call(res Result[T], s uint32) Result[T]
 }
 
+type goCallback[T any] func()
+type goResCallback[T any] func() Result[T]
 type thenCallback[T any] func(val T) Result[T]
 type catchCallback[T any] func(val T, err error) Result[T]
 type recoverCallback[T any] func(v any) Result[T]
 type finallyCallback[T any] func(s Status) Result[T]
 
+func (cb goCallback[T]) call(res Result[T], s uint32) Result[T] {
+	cb()
+	return nil
+}
+func (cb goResCallback[T]) call(res Result[T], s uint32) Result[T] {
+	return cb()
+}
 func (cb thenCallback[T]) call(res Result[T], s uint32) Result[T] {
 	return cb(res.Val())
 }
@@ -40,16 +49,28 @@ func (cb finallyCallback[T]) call(res Result[T], s uint32) Result[T] {
 
 func runCallback[T any](
 	p *GenericPromise[T],
+	cb callbackFunc[T],
+	supportResult bool,
 	prevRes Result[T],
 	prevStatus uint32,
-	cb callbackFunc[T],
 ) {
+	// create the Result pointer, to keep track of any result returned
+	var resP *Result[T]
+	if supportResult {
+		resP = new(Result[T])
+	}
+
 	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Result[T])
 	defer p.handleReturns(resP)
 
 	// run the callback and extract the result
 	res := cb.call(prevRes, prevStatus)
+
+	// if the callback doesn't support Result returning, return early, as
+	// the rest of the logic isn't relevant anymore.
+	if !supportResult {
+		return
+	}
 
 	// if the callback returned invalid result, set the promise result to
 	// the appropriate error result, otherwise set it to the value returned.
