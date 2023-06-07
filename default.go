@@ -213,10 +213,8 @@ func delayCall[T any](
 		if onFail {
 			time.Sleep(d)
 		}
-		p.resolveToRejectedWithErr(ErrPromiseNilResult, false)
-	}
-
-	if err := res.Err(); err != nil {
+		p.resolveToRejectedRes(result.Err[T](ErrPromiseNilResult), false)
+	} else if err := res.Err(); err != nil {
 		if onFail {
 			time.Sleep(d)
 		}

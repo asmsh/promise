@@ -179,7 +179,7 @@ func (p *GenericPromise[T]) exterWaitProc(ctx context.Context) (timeout bool, s 
 
 		return false, s
 	case <-ctx.Done():
-		s = p.resolveToRejectedWithErr(ErrPromiseTimeout, false)
+		s = p.resolveToRejectedRes(result.Err[T](ErrPromiseTimeout), false)
 		return true, s
 	}
 }
@@ -192,7 +192,7 @@ func (p *GenericPromise[T]) interWaitProc(ctx context.Context) (timeout bool, s 
 		s = p.status.Load()
 		return false, s
 	case <-ctx.Done():
-		s = p.resolveToRejectedWithErr(ErrPromiseTimeout, false)
+		s = p.resolveToRejectedRes(result.Err[T](ErrPromiseTimeout), false)
 		return true, s
 	}
 }
@@ -283,10 +283,8 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 // promise, as it's protected by the Resolving fate setter.
 func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
 	if res == nil {
-		return p.resolveToRejectedWithErr(ErrPromiseNilResult, false)
-	}
-
-	if err := res.Err(); err != nil {
+		return p.resolveToRejectedRes(result.Err[T](ErrPromiseNilResult), false)
+	} else if err := res.Err(); err != nil {
 		return p.resolveToRejectedRes(res, false)
 	} else {
 		return p.resolveToFulfilledRes(res, false)
@@ -326,11 +324,6 @@ func (p *GenericPromise[T]) resolveToPanickedRes(res Result[T], andHandle bool) 
 	}
 
 	return
-}
-
-func (p *GenericPromise[T]) resolveToRejectedWithErr(err error, andHandle bool) (s uint32) {
-	res := result.Err[T](err)
-	return p.resolveToRejectedRes(res, andHandle)
 }
 
 func (p *GenericPromise[T]) uncaughtErrorHandler() {
