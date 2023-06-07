@@ -242,55 +242,16 @@ func delayCall[T any](
 // error, but all subsequent promises in any promise chain derived from it will,
 // until the error is caught on each of these chains(by a Catch call), or the
 // promise result is read(by a Res call).
-func Wrap(res Res) *GoPromise {
-	prom := newPromSync(false)
-	wrapCall(prom, res)
-	return prom
-}
-
-func wrapCall(p *GoPromise, res Res) {
-	if _, isError := res.Err(); isError {
+func Wrap(res Result[result.AnyRes]) *GoPromise {
+	p := newPromSync[result.AnyRes]()
+	if res == nil {
+		p.rejectSync(result.Err[result.AnyRes](ErrPromiseNilResult))
+	} else if err := res.Err(); err != nil {
 		p.rejectSync(res)
 	} else {
 		p.fulfillSync(res)
 	}
-}
-
-// Fulfill returns a GoPromise that's fulfilled, synchronously, and whose result
-// is a Res value that contains the passed values, vals(if present).
-//
-// The provided vals, if passed from a slice/array, the slice/array shouldn't be
-// modified after this call.
-func Fulfill(vals ...interface{}) *GoPromise {
-	prom := newPromSync(false)
-	prom.fulfillSync(vals)
-	return prom
-}
-
-// Reject returns a GoPromise that's rejected, synchronously, and whose result
-// is a Res value that contains, both, the passed values, vals(if present), and
-// the provided error, err(after vals, at the end), only if err is a non-nil
-// error value.
-//
-// If err is a nil error value, it returns a GoPromise that's fulfilled,
-// synchronously, and whose result is a Res value that contains vals.
-//
-// The provided vals, if passed from a slice/array, the slice/array shouldn't
-// be modified after this call.
-//
-// If the returned promise is rejected, it will not panic with an *UncaughtError
-// error, but all subsequent promises in any promise chain derived from it will,
-// until the error is caught on each of these chains(by a Catch call), or the
-// promise result is read(by a Res call).
-func Reject(err error, vals ...interface{}) *GoPromise {
-	prom := newPromSync(false)
-	// fulfill if err is nil, so that Catch is never called with a nil error
-	if err == nil {
-		prom.fulfillSync(append(vals, err))
-		return prom
-	}
-	prom.rejectSync(append(vals, err))
-	return prom
+	return p
 }
 
 // Panic returns a GoPromise that's resolved to panicked, synchronously, and
