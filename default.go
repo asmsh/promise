@@ -15,9 +15,9 @@
 package promise
 
 import (
-	"github.com/asmsh/promise/internal/status"
 	"time"
 
+	"github.com/asmsh/promise/internal/status"
 	"github.com/asmsh/promise/result"
 )
 
@@ -39,16 +39,10 @@ func Go(fun func()) *GoPromise {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	prom := newPromInter[result.AnyRes]()
-	go goCall(prom, fun)
-	return prom
-}
 
-func goCall(p *GoPromise, fun func()) {
-	// defer the return handler to handle panics and runtime.Goexit calls.
-	defer p.handleReturns(nil)
-	// call the go func, then fulfill and return
-	fun()
+	p := newPromInter[result.AnyRes]()
+	go runCallback(p, goCallback[result.AnyRes](fun), false, nil, 0)
+	return p
 }
 
 // GoRes runs the provided function, fun, in a separate goroutine, and returns
@@ -72,21 +66,14 @@ func goCall(p *GoPromise, fun func()) {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func GoRes[T any](fun func() Result[T]) *GoPromise {
+func GoRes(fun func() Result[result.AnyRes]) *GoPromise {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	prom := newPromInter[result.AnyRes]()
-	go goResCall(prom, fun)
-	return prom
-}
 
-func goResCall[T any](p *GoPromise, fun func() Result[T]) {
-	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Result[T])
-	defer p.handleReturns(resP)
-	// call the go func and get its result
-	*resP = fun()
+	p := newPromInter[result.AnyRes]()
+	go runCallback(p, goResCallback[result.AnyRes](fun), true, nil, 0)
+	return p
 }
 
 // New returns a GoPromise that's created using the provided resChan.
@@ -208,22 +195,33 @@ func resolverCall(p *GoPromise, cb func(fulfill func(...interface{}), reject fun
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Delay(res Res, d time.Duration, onSucceed, onFail bool) *GoPromise {
-	prom := newPromInter(false)
-	go delayCall(prom, res, d, onSucceed, onFail)
-	return prom
+func Delay(res Result[result.AnyRes], d time.Duration, onSucceed, onFail bool) *GoPromise {
+	p := newPromInter[result.AnyRes]()
+	go delayCall(p, res, d, onSucceed, onFail)
+	return p
 }
 
 // handles rejection and fulfillment only
-func delayCall(p *GoPromise, res Res, d time.Duration, onSucceed, onFail bool) {
-	if _, isError := res.Err(); isError {
-		// a rejected state is considered a failure
+func delayCall[T any](
+	p *GenericPromise[T],
+	res Result[T],
+	d time.Duration,
+	onSucceed bool,
+	onFail bool,
+) {
+	if res == nil {
+		if onFail {
+			time.Sleep(d)
+		}
+		p.resolveToRejectedWithErr(ErrPromiseNilResult, false)
+	}
+
+	if err := res.Err(); err != nil {
 		if onFail {
 			time.Sleep(d)
 		}
 		p.resolveToRejectedRes(res, false)
 	} else {
-		// a fulfilled state is considered a success
 		if onSucceed {
 			time.Sleep(d)
 		}
