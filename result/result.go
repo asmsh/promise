@@ -21,63 +21,32 @@ func Empty[T any]() EmptyRes[T] {
 	return EmptyRes[T]{}
 }
 
-type EmptyRes[T any] struct{}
-
-func (r EmptyRes[T]) Val() T {
-	var v T
-	return v
-}
-
-func (r EmptyRes[T]) Err() error {
-	return nil
-}
-
 func Val[T any](val T) ValRes[T] {
 	return ValRes[T]{val: val}
-}
-
-type ValRes[T any] struct {
-	val T
-}
-
-func (r ValRes[T]) Val() T {
-	return r.val
-}
-
-func (r ValRes[T]) Err() error {
-	return nil
 }
 
 func Err[T any](err error) ErrRes[T] {
 	return ErrRes[T]{err: err}
 }
 
-type ErrRes[T any] struct {
-	err error
-}
-
-func (r ErrRes[T]) Val() T {
-	var v T
-	return v
-}
-
-func (r ErrRes[T]) Err() error {
-	return r.err
-}
-
 func ValErr[T any](val T, err error) ValErrRes[T] {
 	return ValErrRes[T]{val: val, err: err}
 }
 
+type EmptyRes[T any] struct{}
+type ValRes[T any] struct{ val T }
+type ErrRes[T any] struct{ err error }
 type ValErrRes[T any] struct {
 	val T
 	err error
 }
 
-func (r ValErrRes[T]) Val() T {
-	return r.val
-}
+func (r EmptyRes[T]) Val() (v T) { return v }
+func (r ValRes[T]) Val() T       { return r.val }
+func (r ErrRes[T]) Val() (v T)   { return v }
+func (r ValErrRes[T]) Val() T    { return r.val }
 
-func (r ValErrRes[T]) Err() error {
-	return r.err
-}
+func (r EmptyRes[T]) Err() error  { return nil }
+func (r ValRes[T]) Err() error    { return nil }
+func (r ErrRes[T]) Err() error    { return r.err }
+func (r ValErrRes[T]) Err() error { return r.err }
