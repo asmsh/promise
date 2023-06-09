@@ -368,19 +368,29 @@ func (p *GenericPromise[T]) resolveToFulfilledRes(res Result[T], andHandle bool)
 	return
 }
 
-func (p *GenericPromise[T]) panicSync(res Result[T]) {
-	p.res = res
-	p.status.SetPanickedResolvedSync()
+func (p *GenericPromise[T]) resolveToResSync(res Result[T]) (s uint32) {
+	if res == nil {
+		return p.rejectSync(result.Err[T](ErrPromiseNilResult))
+	} else if err := res.Err(); err != nil {
+		return p.rejectSync(res)
+	} else {
+		return p.fulfillSync(res)
+	}
 }
 
-func (p *GenericPromise[T]) rejectSync(res Result[T]) {
+func (p *GenericPromise[T]) panicSync(res Result[T]) (s uint32) {
 	p.res = res
-	p.status.SetRejectedResolvedSync()
+	return p.status.SetPanickedResolvedSync()
 }
 
-func (p *GenericPromise[T]) fulfillSync(res Result[T]) {
+func (p *GenericPromise[T]) rejectSync(res Result[T]) (s uint32) {
 	p.res = res
-	p.status.SetFulfilledResolvedSync()
+	return p.status.SetRejectedResolvedSync()
+}
+
+func (p *GenericPromise[T]) fulfillSync(res Result[T]) (s uint32) {
+	p.res = res
+	return p.status.SetFulfilledResolvedSync()
 }
 
 func (p *GenericPromise[T]) privateImplementation() {}

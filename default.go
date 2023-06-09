@@ -248,13 +248,7 @@ func delayCall[T any](
 // promise result is read(by a Res call).
 func Wrap(res Result[result.AnyRes]) *GoPromise {
 	p := newPromSync[result.AnyRes]()
-	if res == nil {
-		p.rejectSync(result.Err[result.AnyRes](ErrPromiseNilResult))
-	} else if err := res.Err(); err != nil {
-		p.rejectSync(res)
-	} else {
-		p.fulfillSync(res)
-	}
+	p.resolveToResSync(res)
 	return p
 }
 
