@@ -141,38 +141,44 @@ func New(resChan chan Result[result.AnyRes]) *GoPromise {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Resolver(resolverCb func(fulfill func(vals ...interface{}), reject func(err error, vals ...interface{}))) *GoPromise {
+func Resolver(resolverCb func(fulfill func(val result.AnyRes), reject func(err error, val result.AnyRes))) *GoPromise {
 	if resolverCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	prom := newPromInter(false)
-	go resolverCall(prom, resolverCb)
-	return prom
+
+	p := newPromInter[result.AnyRes]()
+	go resolverCall(p, resolverCb)
+	return p
 }
 
-func resolverCall(p *GoPromise, cb func(fulfill func(...interface{}), reject func(error, ...interface{}))) {
+func resolverCall[T any](
+	p *GenericPromise[T],
+	cb func(fulfill func(T), reject func(error, T)),
+) {
 	// defer the return handler to handle panics and runtime.Goexit calls
 	defer p.handleReturns(nil)
 
-	// create the resolver functions, and pass them to the callback
-	fulfill := func(vals ...interface{}) {
+	// create the resolver functions and pass them to the callback
+	fulfill := func(val T) {
 		set, _ := p.status.SetResolving()
 		if !set {
 			return
 		}
 
 		// only one call(from fulfill or reject) will reach this point
-		p.resolveToRes(vals)
+		p.resolveToFulfilledRes(result.Val(val), false)
 	}
-	reject := func(err error, vals ...interface{}) {
+
+	reject := func(err error, val T) {
 		set, _ := p.status.SetResolving()
 		if !set {
 			return
 		}
 
 		// only one call(from fulfill or reject) will reach this point
-		p.resolveToRes(append(vals, err))
+		p.resolveToRejectedRes(result.ValErr(val, err), false)
 	}
+
 	cb(fulfill, reject)
 }
 
