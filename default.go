@@ -266,8 +266,8 @@ func Wrap(res Result[result.AnyRes]) *GoPromise {
 // All subsequent promises in any promise chain derived from the returned
 // promise needs to call Recover, before the end of each promise's chain,
 // otherwise all these promise will re-panic(with the passed value, v).
-func Panic(v interface{}) *GoPromise {
-	prom := newPromSync(false)
-	prom.panicSync(Res{v})
-	return prom
+func Panic(v any) *GoPromise {
+	p := newPromSync[result.AnyRes]()
+	p.panicSync(result.Err[result.AnyRes](newUncaughtPanic(v)))
+	return p
 }
