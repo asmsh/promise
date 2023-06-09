@@ -227,7 +227,7 @@ func (p *GenericPromise[T]) thenCall(
 	}
 
 	// run the callback with the actual promise result
-	runCallback(p, cb, true, res, s)
+	runCallback[T](p, cb, true, res, s)
 }
 
 // Catch waits the promise to be resolved, and calls the catchCb function,
@@ -283,7 +283,7 @@ func (p *GenericPromise[T]) catchCall(
 	res, _ := p.handleFollow(prev.res, false)
 
 	// run the callback with the actual promise result
-	runCallback(p, cb, true, res, s)
+	runCallback[T](p, cb, true, res, s)
 }
 
 // Recover waits the promise to be resolved, and calls the recoverCb function,
@@ -336,7 +336,7 @@ func (p *GenericPromise[T]) recoverCall(
 	}
 
 	// run the callback with the actual promise result
-	runCallback(p, cb, true, res, s)
+	runCallback[T](p, cb, true, res, s)
 }
 
 // Finally waits the promise to be resolved, and calls the finallyCb function,
@@ -384,5 +384,5 @@ func (p *GenericPromise[T]) finallyCall(
 	_, s := prev.wait(ctx)
 
 	// run the callback with the actual promise result
-	runCallback(p, cb, true, prev.res, s)
+	runCallback[T](p, cb, true, prev.res, s)
 }

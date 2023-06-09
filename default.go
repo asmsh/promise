@@ -41,7 +41,7 @@ func Go(fun func()) *GoPromise {
 	}
 
 	p := newPromInter[result.AnyRes]()
-	go runCallback(p, goCallback[result.AnyRes](fun), false, nil, 0)
+	go runCallback[result.AnyRes](p, goCallback[result.AnyRes](fun), false, nil, 0)
 	return p
 }
 
@@ -72,7 +72,7 @@ func GoRes(fun func() Result[result.AnyRes]) *GoPromise {
 	}
 
 	p := newPromInter[result.AnyRes]()
-	go runCallback(p, goResCallback[result.AnyRes](fun), true, nil, 0)
+	go runCallback[result.AnyRes](p, goResCallback[result.AnyRes](fun), true, nil, 0)
 	return p
 }
 
