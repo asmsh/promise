@@ -134,7 +134,7 @@ func (p *GenericPromise[T]) waitCall(ctx context.Context, andHandle bool) Result
 	if validHandle {
 		return p.res
 	} else {
-		return result.Err[T](ErrPromiseConsumed)
+		return Err[T](ErrPromiseConsumed)
 	}
 }
 

@@ -19,3 +19,37 @@ type Result[T any] interface {
 	Val() T
 	Err() error
 }
+
+func Empty[T any]() EmptyResult[T] {
+	return EmptyResult[T]{}
+}
+
+func Val[T any](val T) ValResult[T] {
+	return ValResult[T]{val: val}
+}
+
+func Err[T any](err error) ErrResult[T] {
+	return ErrResult[T]{err: err}
+}
+
+func ValErr[T any](val T, err error) ValErrResult[T] {
+	return ValErrResult[T]{val: val, err: err}
+}
+
+type EmptyResult[T any] struct{}
+type ValResult[T any] struct{ val T }
+type ErrResult[T any] struct{ err error }
+type ValErrResult[T any] struct {
+	val T
+	err error
+}
+
+func (r EmptyResult[T]) Val() (v T) { return v }
+func (r ValResult[T]) Val() T       { return r.val }
+func (r ErrResult[T]) Val() (v T)   { return v }
+func (r ValErrResult[T]) Val() T    { return r.val }
+
+func (r EmptyResult[T]) Err() error  { return nil }
+func (r ValResult[T]) Err() error    { return nil }
+func (r ErrResult[T]) Err() error    { return r.err }
+func (r ValErrResult[T]) Err() error { return r.err }

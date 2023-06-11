@@ -166,7 +166,7 @@ func resolverCall[T any](
 		}
 
 		// only one call(from fulfill or reject) will reach this point
-		p.resolveToFulfilledRes(result.Val(val), false)
+		p.resolveToFulfilledRes(Val(val), false)
 	}
 
 	reject := func(err error, val T) {
@@ -176,7 +176,7 @@ func resolverCall[T any](
 		}
 
 		// only one call(from fulfill or reject) will reach this point
-		p.resolveToRejectedRes(result.ValErr(val, err), false)
+		p.resolveToRejectedRes(ValErr(val, err), false)
 	}
 
 	cb(fulfill, reject)
@@ -219,7 +219,7 @@ func delayCall[T any](
 		if onFail {
 			time.Sleep(d)
 		}
-		p.resolveToRejectedRes(result.Err[T](ErrPromiseNilResult), false)
+		p.resolveToRejectedRes(Err[T](ErrPromiseNilResult), false)
 	} else if err := res.Err(); err != nil {
 		if onFail {
 			time.Sleep(d)
@@ -262,6 +262,6 @@ func Wrap(res Result[result.AnyRes]) *GoPromise {
 // otherwise all these promise will re-panic(with the passed value, v).
 func Panic(v any) *GoPromise {
 	p := newPromSync[result.AnyRes]()
-	p.panicSync(result.Err[result.AnyRes](newUncaughtPanic(v)))
+	p.panicSync(Err[result.AnyRes](newUncaughtPanic(v)))
 	return p
 }

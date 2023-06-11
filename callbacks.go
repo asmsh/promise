@@ -14,8 +14,6 @@
 
 package promise
 
-import "github.com/asmsh/promise/result"
-
 type callbackFunc[T any] interface {
 	call(res Result[T], s uint32) Result[T]
 }
@@ -75,7 +73,7 @@ func runCallback[T any](
 	// if the callback returned invalid result, set the promise result to
 	// the appropriate error result, otherwise set it to the value returned.
 	if res == nil {
-		*resP = result.Err[T](ErrPromiseNilResult)
+		*resP = Err[T](ErrPromiseNilResult)
 	} else {
 		*resP = res
 	}

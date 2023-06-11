@@ -18,7 +18,6 @@ import (
 	"context"
 
 	"github.com/asmsh/promise/internal/status"
-	"github.com/asmsh/promise/result"
 )
 
 // panic messages
@@ -179,7 +178,7 @@ func (p *GenericPromise[T]) exterWaitProc(ctx context.Context) (timeout bool, s 
 
 		return false, s
 	case <-ctx.Done():
-		s = p.resolveToRejectedRes(result.Err[T](ErrPromiseTimeout), false)
+		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout), false)
 		return true, s
 	}
 }
@@ -192,7 +191,7 @@ func (p *GenericPromise[T]) interWaitProc(ctx context.Context) (timeout bool, s 
 		s = p.status.Load()
 		return false, s
 	case <-ctx.Done():
-		s = p.resolveToRejectedRes(result.Err[T](ErrPromiseTimeout), false)
+		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout), false)
 		return true, s
 	}
 }
@@ -210,7 +209,7 @@ func (p *GenericPromise[T]) handleFollow(prevRes Result[T], andResolve bool) (re
 
 	// and if this handle call isn't valid, return and/or reject appropriate error
 	if !validHandle {
-		res = result.Err[T](ErrPromiseConsumed)
+		res = Err[T](ErrPromiseConsumed)
 		if andResolve {
 			p.resolveToRejectedRes(res, false)
 		}
@@ -257,14 +256,14 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 		// the callback returned normally, or through a call to runtime.Goexit.
 		if resP == nil {
 			// return from a callback that doesn't support Result returning.
-			p.resolveToFulfilledRes(result.Empty[T](), false)
+			p.resolveToFulfilledRes(Empty[T](), false)
 		} else {
 			// return from a callback that requires Result returning,
 			p.resolveToRes(*resP)
 		}
 	} else {
 		// a panic happened, resolve to panicked with the panic value.
-		p.resolveToPanickedRes(result.Err[T](newUncaughtPanic(v)), false)
+		p.resolveToPanickedRes(Err[T](newUncaughtPanic(v)), false)
 	}
 }
 
@@ -283,7 +282,7 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 // promise, as it's protected by the Resolving fate setter.
 func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
 	if res == nil {
-		return p.resolveToRejectedRes(result.Err[T](ErrPromiseNilResult), false)
+		return p.resolveToRejectedRes(Err[T](ErrPromiseNilResult), false)
 	} else if err := res.Err(); err != nil {
 		return p.resolveToRejectedRes(res, false)
 	} else {
@@ -370,7 +369,7 @@ func (p *GenericPromise[T]) resolveToFulfilledRes(res Result[T], andHandle bool)
 
 func (p *GenericPromise[T]) resolveToResSync(res Result[T]) (s uint32) {
 	if res == nil {
-		return p.rejectSync(result.Err[T](ErrPromiseNilResult))
+		return p.rejectSync(Err[T](ErrPromiseNilResult))
 	} else if err := res.Err(); err != nil {
 		return p.rejectSync(res)
 	} else {
