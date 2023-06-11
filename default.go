@@ -16,9 +16,19 @@ package promise
 
 import (
 	"time"
+)
 
-	"github.com/asmsh/promise/internal/status"
-	"github.com/asmsh/promise/result"
+var (
+	defaultPipelineConfig = PipelineConfig{
+		UncaughtPanicHandler: func(v any) {
+			panic(newUncaughtPanic(v).Error())
+		},
+		UncaughtErrHandler: func(err error) {
+			panic(newUncaughtError(err).Error())
+		},
+	}
+
+	defaultPipeline = NewPipeline[any](defaultPipelineConfig)
 )
 
 // Go runs the provided function, fun, in a separate goroutine, and returns
@@ -35,14 +45,12 @@ import (
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Go(fun func()) *GoPromise {
-	if fun == nil {
-		panic(nilCallbackPanicMsg)
-	}
+func Go(fun func()) Promise[any] {
+	return defaultPipeline.Go(fun)
+}
 
-	p := newPromInter[result.AnyRes]()
-	go runCallback[result.AnyRes](p, goCallback[result.AnyRes](fun), false, nil, 0)
-	return p
+func GoErr(fun func() error) Promise[any] {
+	return defaultPipeline.GoErr(fun)
 }
 
 // GoRes runs the provided function, fun, in a separate goroutine, and returns
@@ -66,14 +74,8 @@ func Go(fun func()) *GoPromise {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func GoRes(fun func() Result[result.AnyRes]) *GoPromise {
-	if fun == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	p := newPromInter[result.AnyRes]()
-	go runCallback[result.AnyRes](p, goResCallback[result.AnyRes](fun), true, nil, 0)
-	return p
+func GoRes(fun func() Result[any]) Promise[any] {
+	return defaultPipeline.GoRes(fun)
 }
 
 // New returns a GoPromise that's created using the provided resChan.
@@ -95,9 +97,8 @@ func GoRes(fun func() Result[result.AnyRes]) *GoPromise {
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func New(resChan chan Result[result.AnyRes]) *GoPromise {
-	prom := newPromExter(resChan, status.FlagsIsNotSafe)
-	return prom
+func New(resChan chan Result[any]) Promise[any] {
+	return defaultPipeline.New(resChan)
 }
 
 // Resolver provides a JavaScript-like promise creation. It runs the provided
@@ -125,6 +126,7 @@ func New(resChan chan Result[result.AnyRes]) *GoPromise {
 // If the resolverCb causes a panic after calling fulfill or reject, the panic
 // will not be recovered by the promise.
 //
+// FIXME: we should lift the blow restriction
 // The fulfill and reject functions should not be called asynchronously, or more
 // specifically, they should be called and returned before the resolverCb return.
 //
@@ -141,60 +143,8 @@ func New(resChan chan Result[result.AnyRes]) *GoPromise {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Resolver(resolverCb func(fulfill func(val ...result.AnyRes), reject func(err error, val ...result.AnyRes))) *GoPromise {
-	if resolverCb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	p := newPromInter[result.AnyRes]()
-	go resolverCall(p, resolverCb)
-	return p
-}
-
-func resolverCall[T any](
-	p *GenericPromise[T],
-	cb func(fulfill func(...T), reject func(error, ...T)),
-) {
-	// defer the return handler to handle panics and runtime.Goexit calls
-	defer p.handleReturns(nil)
-
-	// create the resolver functions and pass them to the callback
-	fulfill := func(val ...T) {
-		set, _ := p.status.SetResolving()
-		if !set {
-			return
-		}
-
-		// only one call(from fulfill or reject) will reach this point
-
-		if len(val) == 0 {
-			p.resolveToFulfilledRes(Empty[T](), false)
-		} else {
-			p.resolveToFulfilledRes(Val(val[0]), false)
-		}
-	}
-
-	reject := func(err error, val ...T) {
-		set, _ := p.status.SetResolving()
-		if !set {
-			return
-		}
-
-		// only one call(from fulfill or reject) will reach this point
-
-		if err == nil {
-			fulfill(val...)
-			return
-		}
-
-		if len(val) == 0 {
-			p.resolveToRejectedRes(Err[T](err), false)
-		} else {
-			p.resolveToRejectedRes(ValErr(val[0], err), false)
-		}
-	}
-
-	cb(fulfill, reject)
+func Resolver(resolverCb func(fulfill func(val ...any), reject func(err error, val ...any))) Promise[any] {
+	return defaultPipeline.Resolver(resolverCb)
 }
 
 // Delay returns a GoPromise that's resolved to the passed Res value, res,
@@ -216,36 +166,8 @@ func resolverCall[T any](
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Delay(res Result[result.AnyRes], d time.Duration, onSucceed, onFail bool) *GoPromise {
-	p := newPromInter[result.AnyRes]()
-	go delayCall(p, res, d, onSucceed, onFail)
-	return p
-}
-
-// handles rejection and fulfillment only
-func delayCall[T any](
-	p *GenericPromise[T],
-	res Result[T],
-	d time.Duration,
-	onSucceed bool,
-	onFail bool,
-) {
-	if res == nil {
-		if onFail {
-			time.Sleep(d)
-		}
-		p.resolveToRejectedRes(Err[T](ErrPromiseNilResult), false)
-	} else if err := res.Err(); err != nil {
-		if onFail {
-			time.Sleep(d)
-		}
-		p.resolveToRejectedRes(res, false)
-	} else {
-		if onSucceed {
-			time.Sleep(d)
-		}
-		p.resolveToFulfilledRes(res, false)
-	}
+func Delay(res Result[any], d time.Duration, onSucceed, onFail bool) Promise[any] {
+	return defaultPipeline.Delay(res, d, onSucceed, onFail)
 }
 
 // Wrap returns a GoPromise that's resolved, synchronously, to the provided
@@ -261,10 +183,8 @@ func delayCall[T any](
 // error, but all subsequent promises in any promise chain derived from it will,
 // until the error is caught on each of these chains(by a Catch call), or the
 // promise result is read(by a Res call).
-func Wrap(res Result[result.AnyRes]) *GoPromise {
-	p := newPromSync[result.AnyRes]()
-	p.resolveToResSync(res)
-	return p
+func Wrap(res Result[any]) Promise[any] {
+	return defaultPipeline.Wrap(res)
 }
 
 // Panic returns a GoPromise that's resolved to panicked, synchronously, and
@@ -275,8 +195,6 @@ func Wrap(res Result[result.AnyRes]) *GoPromise {
 // All subsequent promises in any promise chain derived from the returned
 // promise needs to call Recover, before the end of each promise's chain,
 // otherwise all these promise will re-panic(with the passed value, v).
-func Panic(v any) *GoPromise {
-	p := newPromSync[result.AnyRes]()
-	p.panicSync(Err[result.AnyRes](newUncaughtPanic(v)))
-	return p
+func Panic(v any) Promise[any] {
+	return defaultPipeline.Panic(v)
 }
