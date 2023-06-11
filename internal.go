@@ -43,25 +43,10 @@ func newPromInter[T any](flags ...uint32) *GenericPromise[T] {
 // newPromExter creates a new GenericPromise which is resolved externally,
 // using an external allocated channel, the passed resChan.
 func newPromExter[T any](resChan chan Result[T], flags ...uint32) *GenericPromise[T] {
-	if resChan == nil {
-		panic(nilResChanPanicMsg)
+	p := &GenericPromise[T]{
+		resChan: resChan,
+		status:  status.PromStatus(status.FlagsIsExternal),
 	}
-
-	p := &GenericPromise[T]{resChan: resChan}
-
-	// set the flags of the promise, accordingly
-	for f := range flags {
-		p.status = p.status | status.PromStatus(f)
-	}
-
-	return p
-}
-
-// newPromSync creates a new GenericPromise which is resolved synchronously,
-// just after it's created.
-func newPromSync[T any](flags ...uint32) *GenericPromise[T] {
-	p := &GenericPromise[T]{resChan: make(chan Result[T])}
-	close(p.resChan)
 
 	// set the flags of the promise, accordingly
 	for f := range flags {
@@ -77,6 +62,20 @@ func newPromFollow[T any](ps uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		resChan: make(chan Result[T]),
 		status:  status.NewFromFlags(ps),
+	}
+
+	return p
+}
+
+// newPromSync creates a new GenericPromise which is resolved synchronously,
+// just after it's created.
+func newPromSync[T any](flags ...uint32) *GenericPromise[T] {
+	p := &GenericPromise[T]{resChan: make(chan Result[T])}
+	close(p.resChan)
+
+	// set the flags of the promise, accordingly
+	for f := range flags {
+		p.status = p.status | status.PromStatus(f)
 	}
 
 	return p
