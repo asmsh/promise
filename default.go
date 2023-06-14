@@ -19,13 +19,16 @@ import (
 )
 
 var (
+	defUncaughtPanicHandler = func(v any) {
+		panic(newUncaughtPanic(v).Error())
+	}
+	defUncaughtErrorHandler = func(err error) {
+		panic(newUncaughtError(err).Error())
+	}
+
 	defaultPipelineConfig = PipelineConfig{
-		UncaughtPanicHandler: func(v any) {
-			panic(newUncaughtPanic(v).Error())
-		},
-		UncaughtErrHandler: func(err error) {
-			panic(newUncaughtError(err).Error())
-		},
+		UncaughtPanicHandler: defUncaughtPanicHandler,
+		UncaughtErrHandler:   defUncaughtErrorHandler,
 	}
 
 	defaultPipeline = NewPipeline[any](defaultPipelineConfig)

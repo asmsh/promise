@@ -25,6 +25,8 @@ import (
 //
 // The zero value will block forever on any calls.
 type GenericPromise[T any] struct {
+	pipeline *Pipeline[T]
+
 	// holds the result of the promise.
 	// written once, before the resChan channel is closed.
 	//

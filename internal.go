@@ -292,11 +292,12 @@ func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
 func (p *GenericPromise[T]) uncaughtPanicHandler() {
 	// TODO: make sure the Err() response is of type UncaughtPanic
 	err := p.res.Err()
-	defUncaughtPanicHandler(err.(*UncaughtPanic))
-}
-
-func defUncaughtPanicHandler(e *UncaughtPanic) {
-	panic(e.Error())
+	v := err.(*UncaughtPanic).v
+	if cb := p.pipeline.config.UncaughtPanicHandler; cb != nil {
+		cb(v)
+	} else {
+		defUncaughtPanicHandler(v)
+	}
 }
 
 // if called from handleInvalidFollow, then it will be called once on the
@@ -325,11 +326,12 @@ func (p *GenericPromise[T]) resolveToPanickedRes(res Result[T], andHandle bool) 
 }
 
 func (p *GenericPromise[T]) uncaughtErrorHandler() {
-	defUncaughtErrorHandler(p.res.Err())
-}
-
-func defUncaughtErrorHandler(err error) {
-	panic(newUncaughtError(err).Error())
+	err := p.res.Err()
+	if cb := p.pipeline.config.UncaughtErrHandler; cb != nil {
+		cb(err)
+	} else {
+		defUncaughtErrorHandler(err)
+	}
 }
 
 func (p *GenericPromise[T]) resolveToRejectedRes(res Result[T], andHandle bool) (s uint32) {
