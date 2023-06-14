@@ -95,17 +95,17 @@ func resolverCall[T any](
 	}
 
 	reject := func(err error, val ...T) {
+		if err == nil {
+			fulfill(val...)
+			return
+		}
+
 		set, _ := p.status.SetResolving()
 		if !set {
 			return
 		}
 
 		// only one call(from fulfill or reject) will reach this point
-
-		if err == nil {
-			fulfill(val...)
-			return
-		}
 
 		if len(val) == 0 {
 			p.resolveToRejectedRes(Err[T](err), false)
