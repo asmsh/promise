@@ -142,7 +142,8 @@ func (p *GenericPromise[T]) Delay(
 	onFail bool,
 ) Promise[T] {
 	_, s := p.status.RegFollow()
-	newProm := newPromFollow[T](s)
+	p.pipeline.reserveGoroutine()
+	newProm := newPromFollow[T](p.pipeline, s)
 	go newProm.delayCall(context.Background(), p, d, onSucceed, onFail)
 	return newProm
 }
@@ -156,6 +157,9 @@ func (p *GenericPromise[T]) delayCall(
 ) {
 	// wait the previous promise to be resolved, or until ctx is closed
 	_, s := prev.wait(ctx)
+
+	// make sure we free this goroutine reservation
+	defer p.pipeline.freeGoroutine()
 
 	// mark the promise as 'Handled', and check whether we should continue or not.
 	// FIXME: we shouldn't
@@ -196,7 +200,8 @@ func (p *GenericPromise[T]) Then(thenCb func(val T) Result[T]) Promise[T] {
 	}
 
 	_, s := p.status.RegFollow()
-	newProm := newPromFollow[T](s)
+	p.pipeline.reserveGoroutine()
+	newProm := newPromFollow[T](p.pipeline, s)
 	go newProm.thenCall(context.Background(), p, thenCb)
 	return newProm
 }
@@ -208,6 +213,9 @@ func (p *GenericPromise[T]) thenCall(
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
 	_, s := prev.wait(ctx)
+
+	// make sure we free this goroutine reservation
+	defer p.pipeline.freeGoroutine()
 
 	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
 	if !status.IsStateFulfilled(s) {
@@ -225,7 +233,7 @@ func (p *GenericPromise[T]) thenCall(
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T](p, cb, true, res, s)
+	runCallback[T](p, cb, true, res, s, false)
 }
 
 // Catch waits the promise to be resolved, and calls the catchCb function,
@@ -256,7 +264,8 @@ func (p *GenericPromise[T]) Catch(catchCb func(val T, err error) Result[T]) Prom
 	}
 
 	_, s := p.status.RegFollow()
-	newProm := newPromFollow[T](s)
+	p.pipeline.reserveGoroutine()
+	newProm := newPromFollow[T](p.pipeline, s)
 	go newProm.catchCall(context.Background(), p, catchCb)
 	return newProm
 }
@@ -268,6 +277,9 @@ func (p *GenericPromise[T]) catchCall(
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
 	_, s := prev.wait(ctx)
+
+	// make sure we free this goroutine reservation
+	defer p.pipeline.freeGoroutine()
 
 	// 'Catch' can handle only the 'Rejected' state, so return otherwise
 	if !status.IsStateRejected(s) {
@@ -281,7 +293,7 @@ func (p *GenericPromise[T]) catchCall(
 	res, _ := p.handleFollow(prev.res, false)
 
 	// run the callback with the actual promise result
-	runCallback[T](p, cb, true, res, s)
+	runCallback[T](p, cb, true, res, s, false)
 }
 
 // Recover waits the promise to be resolved, and calls the recoverCb function,
@@ -305,7 +317,8 @@ func (p *GenericPromise[T]) Recover(recoverCb func(v any) Result[T]) Promise[T] 
 	}
 
 	_, s := p.status.RegFollow()
-	newProm := newPromFollow[T](s)
+	p.pipeline.reserveGoroutine()
+	newProm := newPromFollow[T](p.pipeline, s)
 	go newProm.recoverCall(context.Background(), p, recoverCb)
 	return newProm
 }
@@ -317,6 +330,9 @@ func (p *GenericPromise[T]) recoverCall(
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
 	_, s := prev.wait(ctx)
+
+	// make sure we free this goroutine reservation
+	defer p.pipeline.freeGoroutine()
 
 	// 'Recover' can handle only the 'Panicked' state, so return otherwise
 	if !status.IsStatePanicked(s) {
@@ -334,7 +350,7 @@ func (p *GenericPromise[T]) recoverCall(
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T](p, cb, true, res, s)
+	runCallback[T](p, cb, true, res, s, false)
 }
 
 // Finally waits the promise to be resolved, and calls the finallyCb function,
@@ -363,7 +379,8 @@ func (p *GenericPromise[T]) Finally(finallyCb func(s Status) Result[T]) Promise[
 	}
 
 	_, s := p.status.RegWait()
-	newProm := newPromFollow[T](s)
+	p.pipeline.reserveGoroutine()
+	newProm := newPromFollow[T](p.pipeline, s)
 	go newProm.finallyCall(context.Background(), p, finallyCb)
 	return newProm
 }
@@ -381,6 +398,9 @@ func (p *GenericPromise[T]) finallyCall(
 	// wait the previous promise to be resolved, as long as ctx is not done
 	_, s := prev.wait(ctx)
 
+	// make sure we free this goroutine reservation
+	defer p.pipeline.freeGoroutine()
+
 	// run the callback with the actual promise result
-	runCallback[T](p, cb, true, prev.res, s)
+	runCallback[T](p, cb, true, prev.res, s, false)
 }

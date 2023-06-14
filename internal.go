@@ -29,8 +29,11 @@ const (
 
 // newPromInter creates a new GenericPromise which is resolved internally,
 // using an internal allocated channel.
-func newPromInter[T any](flags ...uint32) *GenericPromise[T] {
-	p := &GenericPromise[T]{resChan: make(chan Result[T])}
+func newPromInter[T any](pipeline *Pipeline[T], flags ...uint32) *GenericPromise[T] {
+	p := &GenericPromise[T]{
+		pipeline: pipeline,
+		resChan:  make(chan Result[T]),
+	}
 
 	// set the flags of the promise, accordingly
 	for f := range flags {
@@ -42,10 +45,11 @@ func newPromInter[T any](flags ...uint32) *GenericPromise[T] {
 
 // newPromExter creates a new GenericPromise which is resolved externally,
 // using an external allocated channel, the passed resChan.
-func newPromExter[T any](resChan chan Result[T], flags ...uint32) *GenericPromise[T] {
+func newPromExter[T any](pipeline *Pipeline[T], resChan chan Result[T], flags ...uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
-		resChan: resChan,
-		status:  status.PromStatus(status.FlagsIsExternal),
+		pipeline: pipeline,
+		resChan:  resChan,
+		status:   status.PromStatus(status.FlagsIsExternal),
 	}
 
 	// set the flags of the promise, accordingly
@@ -58,10 +62,11 @@ func newPromExter[T any](resChan chan Result[T], flags ...uint32) *GenericPromis
 
 // newPromFollow creates a new GenericPromise, for one of the follow methods,
 // which is resolved internally, using an internal allocated channel.
-func newPromFollow[T any](ps uint32) *GenericPromise[T] {
+func newPromFollow[T any](pipeline *Pipeline[T], prevStatus uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
-		resChan: make(chan Result[T]),
-		status:  status.NewFromFlags(ps),
+		pipeline: pipeline,
+		resChan:  make(chan Result[T]),
+		status:   status.NewFromFlags(prevStatus),
 	}
 
 	return p
@@ -69,8 +74,11 @@ func newPromFollow[T any](ps uint32) *GenericPromise[T] {
 
 // newPromSync creates a new GenericPromise which is resolved synchronously,
 // just after it's created.
-func newPromSync[T any](flags ...uint32) *GenericPromise[T] {
-	p := &GenericPromise[T]{resChan: make(chan Result[T])}
+func newPromSync[T any](pipeline *Pipeline[T], flags ...uint32) *GenericPromise[T] {
+	p := &GenericPromise[T]{
+		pipeline: pipeline,
+		resChan:  make(chan Result[T]),
+	}
 	close(p.resChan)
 
 	// set the flags of the promise, accordingly
@@ -268,17 +276,10 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 
 // resolveToRes resolves the promise when the computation has finished normally,
 // without panic nor timeout.
-// the promise is either rejected or fulfilled, depending on whether the last
-// element of res is a non-nil error value or not, respectively.
+// the promise is either rejected or fulfilled.
 //
-// if called from exterWaitProc, then it will be called once on the same
-// promise, as it's protected by the Resolving fate setter.
-// if called from handleReturns, then it will be called once on the same
-// promise, as it's protected by the Resolving fate setter.
-// if called from finallyCall(before handleReturns), then it will be called
-// once on the same promise, by design.
-// if called from the resolverCb, then it will be called once on the same
-// promise, as it's protected by the Resolving fate setter.
+// if called from exterWaitProc or handleReturns, then it will be called once
+// on the same promise, as it's protected by the Resolving fate setter.
 func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
 	if res == nil {
 		return p.resolveToRejectedRes(Err[T](ErrPromiseNilResult), false)

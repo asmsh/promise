@@ -56,11 +56,17 @@ func runCallback[T any](
 	supportResult bool,
 	prevRes Result[T],
 	prevStatus uint32,
+	freeAfterDone bool,
 ) {
 	// create the Result pointer, to keep track of any result returned
 	var resP *Result[T]
 	if supportResult {
 		resP = new(Result[T])
+	}
+
+	// make sure we free this goroutine reservation if it's required
+	if freeAfterDone {
+		defer p.pipeline.freeGoroutine()
 	}
 
 	// defer the return handler to handle panics and runtime.Goexit calls

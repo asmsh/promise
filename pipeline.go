@@ -7,15 +7,28 @@ import (
 type PipelineConfig struct {
 	UncaughtPanicHandler func(v any)
 	UncaughtErrHandler   func(err error)
+
+	// Size is the allowed number of goroutines which this pipeline can run.
+	// This includes goroutines created for both, constructor calls(Go, GoRes, etc.)
+	// and follow calls(Then, Catch, etc.).
+	// If it's 0 or less, then the pipeline size is unlimited.
+	Size int
 }
 
 type Pipeline[T any] struct {
 	config *PipelineConfig
+
+	reserveChan chan struct{}
 }
 
 func NewPipeline[T any](c PipelineConfig) Pipeline[T] {
+	var reserveChan chan struct{}
+	if c.Size > 0 {
+		reserveChan = make(chan struct{}, c.Size)
+	}
 	return Pipeline[T]{
-		config: &c,
+		config:      &c,
+		reserveChan: reserveChan,
 	}
 }
 
@@ -24,8 +37,9 @@ func (pp *Pipeline[T]) Go(fun func()) Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	p := newPromInter[T]()
-	go runCallback[T](p, goCallback[T](fun), false, nil, 0)
+	pp.reserveGoroutine()
+	p := newPromInter[T](pp)
+	go runCallback[T](p, goCallback[T](fun), false, nil, 0, true)
 	return p
 }
 
@@ -34,8 +48,9 @@ func (pp *Pipeline[T]) GoErr(fun func() error) Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	p := newPromInter[T]()
-	go runCallback[T](p, goErrCallback[T](fun), true, nil, 0)
+	pp.reserveGoroutine()
+	p := newPromInter[T](pp)
+	go runCallback[T](p, goErrCallback[T](fun), true, nil, 0, true)
 	return p
 }
 
@@ -44,8 +59,9 @@ func (pp *Pipeline[T]) GoRes(fun func() Result[T]) Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	p := newPromInter[T]()
-	go runCallback[T](p, goResCallback[T](fun), true, nil, 0)
+	pp.reserveGoroutine()
+	p := newPromInter[T](pp)
+	go runCallback[T](p, goResCallback[T](fun), true, nil, 0, true)
 	return p
 }
 
@@ -54,7 +70,7 @@ func (pp *Pipeline[T]) New(resChan chan Result[T]) Promise[T] {
 		panic(nilResChanPanicMsg)
 	}
 
-	prom := newPromExter(resChan)
+	prom := newPromExter(pp, resChan)
 	return prom
 }
 
@@ -66,7 +82,8 @@ func (pp *Pipeline[T]) Resolver(resolverCb func(
 		panic(nilCallbackPanicMsg)
 	}
 
-	p := newPromInter[T]()
+	pp.reserveGoroutine()
+	p := newPromInter[T](pp)
 	go resolverCall(p, resolverCb)
 	return p
 }
@@ -75,6 +92,9 @@ func resolverCall[T any](
 	p *GenericPromise[T],
 	cb func(fulfill func(...T), reject func(error, ...T)),
 ) {
+	// make sure we free this goroutine reservation
+	defer p.pipeline.freeGoroutine()
+
 	// defer the return handler to handle panics and runtime.Goexit calls
 	defer p.handleReturns(nil)
 
@@ -122,7 +142,8 @@ func (pp *Pipeline[T]) Delay(
 	d time.Duration,
 	onSucceed, onFail bool,
 ) Promise[T] {
-	p := newPromInter[T]()
+	pp.reserveGoroutine()
+	p := newPromInter[T](pp)
 	go delayCall(p, res, d, onSucceed, onFail)
 	return p
 }
@@ -135,6 +156,9 @@ func delayCall[T any](
 	onSucceed bool,
 	onFail bool,
 ) {
+	// make sure we free this goroutine reservation
+	defer p.pipeline.freeGoroutine()
+
 	if res == nil {
 		if onFail {
 			time.Sleep(d)
@@ -154,13 +178,25 @@ func delayCall[T any](
 }
 
 func (pp *Pipeline[T]) Wrap(res Result[T]) Promise[T] {
-	p := newPromSync[T]()
+	p := newPromSync[T](pp)
 	p.resolveToResSync(res)
 	return p
 }
 
 func (pp *Pipeline[T]) Panic(v any) Promise[T] {
-	p := newPromSync[T]()
+	p := newPromSync[T](pp)
 	p.panicSync(Err[T](newUncaughtPanic(v)))
 	return p
+}
+
+func (pp *Pipeline[T]) reserveGoroutine() {
+	if pp.reserveChan != nil {
+		pp.reserveChan <- struct{}{}
+	}
+}
+
+func (pp *Pipeline[T]) freeGoroutine() {
+	if pp.reserveChan != nil {
+		<-pp.reserveChan
+	}
 }
