@@ -77,9 +77,10 @@ func newPromFollow[T any](pipeline *Pipeline[T], prevStatus uint32) *GenericProm
 func newPromSync[T any](pipeline *Pipeline[T], flags ...uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		pipeline: pipeline,
-		resChan:  make(chan Result[T]),
+		// not needed, since sync promises are resolved directly after created,
+		// and before being used.
+		resChan: nil,
 	}
-	close(p.resChan)
 
 	// set the flags of the promise, accordingly
 	for f := range flags {
