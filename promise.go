@@ -19,11 +19,7 @@ import (
 	"time"
 
 	"github.com/asmsh/promise/internal/status"
-	"github.com/asmsh/promise/result"
 )
-
-type GoPromise = GenericPromise[result.AnyRes]
-type AnyPromise = GenericPromise[any]
 
 // GenericPromise is the default implementation of the Promise interface
 //
