@@ -19,6 +19,7 @@ type callbackFunc[T any] interface {
 }
 
 type goCallback[T any] func()
+type goErrCallback[T any] func() error
 type goResCallback[T any] func() Result[T]
 type thenCallback[T any] func(val T) Result[T]
 type catchCallback[T any] func(val T, err error) Result[T]
@@ -28,6 +29,10 @@ type finallyCallback[T any] func(s Status) Result[T]
 func (cb goCallback[T]) call(res Result[T], s uint32) Result[T] {
 	cb()
 	return nil
+}
+func (cb goErrCallback[T]) call(res Result[T], s uint32) Result[T] {
+	err := cb()
+	return Err[T](err)
 }
 func (cb goResCallback[T]) call(res Result[T], s uint32) Result[T] {
 	return cb()
