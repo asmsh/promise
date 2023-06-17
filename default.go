@@ -52,12 +52,12 @@ type AnyPromise = Promise[any]
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Go(fun func()) AnyPromise {
-	return defaultPipeline.Go(fun)
+func Go(ctx context.Context, fun func()) AnyPromise {
+	return defaultPipeline.Go(ctx, fun)
 }
 
-func GoErr(fun func() error) AnyPromise {
-	return defaultPipeline.GoErr(fun)
+func GoErr(ctx context.Context, fun func() error) AnyPromise {
+	return defaultPipeline.GoErr(ctx, fun)
 }
 
 // GoRes runs the provided function, fun, in a separate goroutine, and returns
@@ -81,8 +81,8 @@ func GoErr(fun func() error) AnyPromise {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func GoRes(fun func(ctx context.Context) Result[any]) AnyPromise {
-	return defaultPipeline.GoRes(fun)
+func GoRes(ctx context.Context, fun func(ctx context.Context) Result[any]) AnyPromise {
+	return defaultPipeline.GoRes(ctx, fun)
 }
 
 // New returns a GoPromise that's created using the provided resChan.
