@@ -161,10 +161,11 @@ func (p *GenericPromise[T]) delayCall(
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
 
-	// mark the promise as 'Handled', and check whether we should continue or not.
+	// mark prev as 'Handled', and check whether we should continue or not.
+	// the res value returned will hold the correct value that should be used.
 	// FIXME: we shouldn't
 	//  this will reject immediately if the promise was already handled.
-	res, ok := p.handleFollow(prev.res, true)
+	res, ok := p.handleFollow(prev, true)
 	if !ok {
 		return
 	}
@@ -223,10 +224,10 @@ func (p *GenericPromise[T]) thenCall(
 		return
 	}
 
-	// mark the promise as 'Handled', and check whether we should continue or not.
-	// the result value returned will hold the correct value that should be handled
+	// mark prev as 'Handled', and check whether we should continue or not.
+	// the res value returned will hold the correct value that should be handled
 	// by the callback.
-	res, ok := p.handleFollow(prev.res, true)
+	res, ok := p.handleFollow(prev, true)
 	if !ok {
 		// return, since the promise is now resolved
 		return
@@ -287,10 +288,10 @@ func (p *GenericPromise[T]) catchCall(
 		return
 	}
 
-	// mark the promise as 'Handled'.
-	// the result value returned will hold the correct value that should be handled
+	// mark prev as 'Handled'.
+	// the res value returned will hold the correct value that should be handled
 	// by the callback.
-	res, _ := p.handleFollow(prev.res, false)
+	res, _ := p.handleFollow(prev, false)
 
 	// run the callback with the actual promise result
 	runCallback[T](p, cb, true, res, s, false)
@@ -340,10 +341,10 @@ func (p *GenericPromise[T]) recoverCall(
 		return
 	}
 
-	// mark the promise as 'Handled', and check whether we should continue or not.
-	// the result value returned will hold the correct value that should be handled
+	// mark prev as 'Handled', and check whether we should continue or not.
+	// the res value returned will hold the correct value that should be handled
 	// by the callback.
-	res, ok := p.handleFollow(prev.res, true)
+	res, ok := p.handleFollow(prev, true)
 	if !ok {
 		// return, since the promise is now resolved
 		return

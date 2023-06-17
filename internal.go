@@ -204,11 +204,11 @@ func (p *GenericPromise[T]) interWaitProc(ctx context.Context) (timeout bool, s 
 	}
 }
 
-func (p *GenericPromise[T]) handleFollow(prevRes Result[T], andResolve bool) (res Result[T], ok bool) {
+func (p *GenericPromise[T]) handleFollow(prev *GenericPromise[T], andResolve bool) (res Result[T], ok bool) {
 	// set the 'Handled' flag, and keep track of whether this handle is
 	// valid(first) or not, to decide whether we should move forward and
 	// use the actual result of the promise or reject with an erroneous one.
-	validHandle, s := p.status.SetHandled()
+	validHandle, s := prev.status.SetHandled()
 
 	// if the promise isn't a one-time promise, all handle calls will be valid
 	if !status.IsFlagsOnce(s) {
@@ -222,7 +222,7 @@ func (p *GenericPromise[T]) handleFollow(prevRes Result[T], andResolve bool) (re
 			p.resolveToRejectedRes(res, false)
 		}
 	} else {
-		res = prevRes
+		res = prev.res
 	}
 
 	return res, validHandle
