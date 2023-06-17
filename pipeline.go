@@ -140,11 +140,12 @@ func resolverCall[T any](
 func (pp *Pipeline[T]) Delay(
 	res Result[T],
 	d time.Duration,
-	onSucceed, onFail bool,
+	onSuccess bool,
+	onFailure bool,
 ) Promise[T] {
 	pp.reserveGoroutine()
 	p := newPromInter[T](pp)
-	go delayCall(p, res, d, onSucceed, onFail)
+	go delayCall(p, res, d, onSuccess, onFailure)
 	return p
 }
 
@@ -153,24 +154,24 @@ func delayCall[T any](
 	p *GenericPromise[T],
 	res Result[T],
 	d time.Duration,
-	onSucceed bool,
-	onFail bool,
+	onSuccess bool,
+	onFailure bool,
 ) {
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
 
 	if res == nil {
-		if onFail {
+		if onFailure {
 			time.Sleep(d)
 		}
 		p.resolveToRejectedRes(Err[T](ErrPromiseNilResult), false)
 	} else if err := res.Err(); err != nil {
-		if onFail {
+		if onFailure {
 			time.Sleep(d)
 		}
 		p.resolveToRejectedRes(res, false)
 	} else {
-		if onSucceed {
+		if onSuccess {
 			time.Sleep(d)
 		}
 		p.resolveToFulfilledRes(res, false)

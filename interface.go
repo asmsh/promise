@@ -66,10 +66,10 @@ type Promise[T any] interface {
 	// duration d. The delay starts after this Promise is resolved, accordingly.
 	//
 	// If this promise is resolved to fulfilled or pending, resolving the returned
-	// promise will be delayed, only if onSucceed = true.
+	// promise will be delayed, only if onSuccess = true.
 	//
 	// If this promise is resolved to rejected or panicked, resolving the returned
-	// promise will be delayed, only if onFail = true.
+	// promise will be delayed, only if onFailure = true.
 	//
 	// If the promise is running in the safe mode(the default), the returned
 	// Promise is a rejected promise, and the error is not caught(by a Catch call)
@@ -79,7 +79,7 @@ type Promise[T any] interface {
 	// If the returned promise is a panicked promise, and it's not recovered(by a
 	// Recover call) before the end of the promise's chain, or before calling Finally,
 	// it will re-panic(with the same value passed to the original 'panic' call).
-	Delay(d time.Duration, onSucceed, onFail bool) Promise[T]
+	Delay(d time.Duration, onSuccess, onFailure bool) Promise[T]
 
 	// Then waits the promise to be resolved, and calls the thenCb function, if
 	// the promise is resolved to fulfilled or pending(the promise didn't return

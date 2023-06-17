@@ -138,13 +138,13 @@ func (p *GenericPromise[T]) waitCall(ctx context.Context, andHandle bool) Result
 
 func (p *GenericPromise[T]) Delay(
 	d time.Duration,
-	onSucceed bool,
-	onFail bool,
+	onSuccess bool,
+	onFailure bool,
 ) Promise[T] {
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	newProm := newPromFollow[T](p.pipeline, s)
-	go newProm.delayCall(context.Background(), p, d, onSucceed, onFail)
+	go newProm.delayCall(context.Background(), p, d, onSuccess, onFailure)
 	return newProm
 }
 
@@ -152,8 +152,8 @@ func (p *GenericPromise[T]) delayCall(
 	ctx context.Context,
 	prev *GenericPromise[T],
 	dd time.Duration,
-	onSucceed bool,
-	onFail bool,
+	onSuccess bool,
+	onFailure bool,
 ) {
 	// wait the previous promise to be resolved, or until ctx is closed
 	_, s := prev.wait(ctx)
@@ -166,7 +166,7 @@ func (p *GenericPromise[T]) delayCall(
 	res, ok := p.handleFollow(prev, false)
 	if !ok {
 		// it's not a valid handle. it's considered a failure.
-		if onFail {
+		if onFailure {
 			time.Sleep(dd)
 		}
 		p.resolveToRejectedRes(res, false)
@@ -176,19 +176,19 @@ func (p *GenericPromise[T]) delayCall(
 	switch {
 	case status.IsStateFulfilled(s):
 		// a fulfilled state is considered a success
-		if onSucceed {
+		if onSuccess {
 			time.Sleep(dd)
 		}
 		p.resolveToFulfilledRes(res, false)
 	case status.IsStateRejected(s):
 		// a rejected state is considered a failure
-		if onFail {
+		if onFailure {
 			time.Sleep(dd)
 		}
 		p.resolveToRejectedRes(res, false)
 	case status.IsStatePanicked(s):
 		// a panicked state is considered a failure
-		if onFail {
+		if onFailure {
 			time.Sleep(dd)
 		}
 		p.resolveToPanickedRes(res, false)
