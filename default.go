@@ -15,6 +15,7 @@
 package promise
 
 import (
+	"context"
 	"time"
 )
 
@@ -80,7 +81,7 @@ func GoErr(fun func() error) AnyPromise {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func GoRes(fun func() Result[any]) AnyPromise {
+func GoRes(fun func(ctx context.Context) Result[any]) AnyPromise {
 	return defaultPipeline.GoRes(fun)
 }
 

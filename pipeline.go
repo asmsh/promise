@@ -1,6 +1,7 @@
 package promise
 
 import (
+	"context"
 	"time"
 )
 
@@ -39,7 +40,7 @@ func (pp *Pipeline[T]) Go(fun func()) Promise[T] {
 
 	pp.reserveGoroutine()
 	p := newPromInter[T](pp)
-	go runCallback[T](p, goCallback[T](fun), false, nil, 0, true)
+	go runCallback[T](context.Background(), p, goCallback[T](fun), false, nil, 0, true)
 	return p
 }
 
@@ -50,18 +51,18 @@ func (pp *Pipeline[T]) GoErr(fun func() error) Promise[T] {
 
 	pp.reserveGoroutine()
 	p := newPromInter[T](pp)
-	go runCallback[T](p, goErrCallback[T](fun), true, nil, 0, true)
+	go runCallback[T](context.Background(), p, goErrCallback[T](fun), true, nil, 0, true)
 	return p
 }
 
-func (pp *Pipeline[T]) GoRes(fun func() Result[T]) Promise[T] {
+func (pp *Pipeline[T]) GoRes(fun func(ctx context.Context) Result[T]) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
 
 	pp.reserveGoroutine()
 	p := newPromInter[T](pp)
-	go runCallback[T](p, goResCallback[T](fun), true, nil, 0, true)
+	go runCallback[T](context.Background(), p, goResCallback[T](fun), true, nil, 0, true)
 	return p
 }
 

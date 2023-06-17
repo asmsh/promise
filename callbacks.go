@@ -14,43 +14,46 @@
 
 package promise
 
+import "context"
+
 type callbackFunc[T any] interface {
-	call(res Result[T], s uint32) Result[T]
+	call(ctx context.Context, res Result[T], s uint32) Result[T]
 }
 
 type goCallback[T any] func()
 type goErrCallback[T any] func() error
-type goResCallback[T any] func() Result[T]
+type goResCallback[T any] func(ctx context.Context) Result[T]
 type thenCallback[T any] func(val T) Result[T]
 type catchCallback[T any] func(val T, err error) Result[T]
 type recoverCallback[T any] func(v any) Result[T]
 type finallyCallback[T any] func(s Status) Result[T]
 
-func (cb goCallback[T]) call(res Result[T], s uint32) Result[T] {
+func (cb goCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
 	cb()
 	return nil
 }
-func (cb goErrCallback[T]) call(res Result[T], s uint32) Result[T] {
+func (cb goErrCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
 	err := cb()
 	return Err[T](err)
 }
-func (cb goResCallback[T]) call(res Result[T], s uint32) Result[T] {
-	return cb()
+func (cb goResCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
+	return cb(ctx)
 }
-func (cb thenCallback[T]) call(res Result[T], s uint32) Result[T] {
+func (cb thenCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
 	return cb(res.Val())
 }
-func (cb catchCallback[T]) call(res Result[T], s uint32) Result[T] {
+func (cb catchCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
 	return cb(res.Val(), res.Err())
 }
-func (cb recoverCallback[T]) call(res Result[T], s uint32) Result[T] {
+func (cb recoverCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
 	return cb(res.Err().(*UncaughtPanic).v)
 }
-func (cb finallyCallback[T]) call(res Result[T], s uint32) Result[T] {
+func (cb finallyCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
 	return cb(Status(s))
 }
 
 func runCallback[T any](
+	ctx context.Context,
 	p *GenericPromise[T],
 	cb callbackFunc[T],
 	supportResult bool,
@@ -73,7 +76,7 @@ func runCallback[T any](
 	defer p.handleReturns(resP)
 
 	// run the callback and extract the result
-	res := cb.call(prevRes, prevStatus)
+	res := cb.call(ctx, prevRes, prevStatus)
 
 	// if the callback doesn't support Result returning, return early, as
 	// the rest of the logic isn't relevant anymore.
