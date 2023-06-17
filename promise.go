@@ -163,10 +163,13 @@ func (p *GenericPromise[T]) delayCall(
 
 	// mark prev as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be used.
-	// FIXME: we shouldn't
-	//  this will reject immediately if the promise was already handled.
-	res, ok := p.handleFollow(prev, true)
+	res, ok := p.handleFollow(prev, false)
 	if !ok {
+		// it's not a valid handle. it's considered a failure.
+		if onFail {
+			time.Sleep(dd)
+		}
+		p.resolveToRejectedRes(res, false)
 		return
 	}
 
