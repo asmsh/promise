@@ -190,6 +190,11 @@ func (p *GenericPromise[T]) exterWaitProc(ctx context.Context) (timeout bool, s 
 
 		return false, s
 	case <-ctx.Done():
+		// FIXME: check if this fix itself is not introducing a race condition on reading
+		//  the res value, since wait might return now while the promise is still resolving.
+		if set, s := p.status.SetResolving(); !set {
+			return true, s
+		}
 		// TODO: figure a way to pass the context.Error()
 		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout))
 		return true, s
@@ -204,6 +209,9 @@ func (p *GenericPromise[T]) interWaitProc(ctx context.Context) (timeout bool, s 
 		s = p.status.Load()
 		return false, s
 	case <-ctx.Done():
+		if set, s := p.status.SetResolving(); !set {
+			return true, s
+		}
 		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout))
 		return true, s
 	}
