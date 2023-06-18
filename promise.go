@@ -27,6 +27,8 @@ import (
 type GenericPromise[T any] struct {
 	pipeline *Pipeline[T]
 
+	ctx context.Context
+
 	// holds the result of the promise.
 	// written once, before the resChan channel is closed.
 	//
@@ -72,7 +74,7 @@ func (p *GenericPromise[T]) Status() Status {
 
 func (p *GenericPromise[T]) Wait() {
 	p.status.RegWait()
-	p.waitCall(context.Background(), false)
+	p.waitCall(false)
 }
 
 func (p *GenericPromise[T]) WaitChan() chan struct{} {
@@ -88,12 +90,12 @@ func (p *GenericPromise[T]) WaitChan() chan struct{} {
 
 func (p *GenericPromise[T]) Res() Result[T] {
 	p.status.RegRead()
-	return p.waitCall(context.Background(), true)
+	return p.waitCall(true)
 }
 
-func (p *GenericPromise[T]) waitCall(ctx context.Context, andHandle bool) Result[T] {
+func (p *GenericPromise[T]) waitCall(andHandle bool) Result[T] {
 	// wait the promise to be resolved, or until its context is Done.
-	_, s := p.wait(ctx)
+	_, s := p.wait()
 
 	// we only need to do the following special checks if it's not a 'Handle' call,
 	// since a 'Handle' call will always prevent the execution of the different
@@ -143,20 +145,19 @@ func (p *GenericPromise[T]) Delay(
 ) Promise[T] {
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, s)
-	go newProm.delayCall(context.Background(), p, d, onSuccess, onFailure)
+	newProm := newPromFollow[T](p.pipeline, context.Background(), s)
+	go newProm.delayCall(p, d, onSuccess, onFailure)
 	return newProm
 }
 
 func (p *GenericPromise[T]) delayCall(
-	ctx context.Context,
 	prev *GenericPromise[T],
 	dd time.Duration,
 	onSuccess bool,
 	onFailure bool,
 ) {
-	// wait the previous promise to be resolved, or until ctx is closed
-	_, s := prev.wait(ctx)
+	// wait the previous promise to be resolved
+	_, s := prev.wait()
 
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
@@ -198,25 +199,31 @@ func (p *GenericPromise[T]) delayCall(
 	}
 }
 
-func (p *GenericPromise[T]) Then(thenCb func(val T) Result[T]) Promise[T] {
+func (p *GenericPromise[T]) Then(
+	ctx context.Context,
+	thenCb func(ctx context.Context, val T) Result[T],
+) Promise[T] {
 	if thenCb == nil {
 		panic(nilCallbackPanicMsg)
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, s)
-	go newProm.thenCall(context.Background(), p, thenCb)
+	newProm := newPromFollow[T](p.pipeline, ctx, s)
+	go newProm.thenCall(p, ctx, thenCb)
 	return newProm
 }
 
 func (p *GenericPromise[T]) thenCall(
-	ctx context.Context,
 	prev *GenericPromise[T],
+	ctx context.Context,
 	cb thenCallback[T],
 ) {
-	// wait the previous promise to be resolved, as long as ctx is not done
-	_, s := prev.wait(ctx)
+	// wait the previous promise to be resolved
+	_, s := prev.wait()
 
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
@@ -237,50 +244,34 @@ func (p *GenericPromise[T]) thenCall(
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T](p, cb, true, res, s, false)
+	runCallback[T](ctx, p, cb, true, res, s, false)
 }
 
-// Catch waits the promise to be resolved, and calls the catchCb function,
-// if the promise is resolved to rejected.
-//
-// It returns a GenericPromise value whose result will be the AnyRes value returned
-// from the catchCb.
-//
-// The AnyRes value returned from the callback must not be modified after return.
-//
-// The catchCb is passed with three arguments, the error that caused this
-// promise to be rejected, err, this promise's result, res(including the
-// error at the end), and a boolean, ok, which will always be true.
-//
-// The result is passed here with the error, because, in Go, errors are
-// just values, so returning them is not always considered an unwanted
-// behavior(example: io.EOF error), so some logic may depend on both.
-//
-// Note that if the catchCb returned the res as-is, the returned promise
-// will be rejected also(because there's a non-nil error at its end).
-//
-// It will panic if a nil callback is passed.
-//
-// For more, see 'Callback Notes' in the package comment.
-func (p *GenericPromise[T]) Catch(catchCb func(val T, err error) Result[T]) Promise[T] {
+func (p *GenericPromise[T]) Catch(
+	ctx context.Context,
+	catchCb func(ctx context.Context, val T, err error) Result[T],
+) Promise[T] {
 	if catchCb == nil {
 		panic(nilCallbackPanicMsg)
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, s)
-	go newProm.catchCall(context.Background(), p, catchCb)
+	newProm := newPromFollow[T](p.pipeline, ctx, s)
+	go newProm.catchCall(p, ctx, catchCb)
 	return newProm
 }
 
 func (p *GenericPromise[T]) catchCall(
-	ctx context.Context,
 	prev *GenericPromise[T],
+	ctx context.Context,
 	cb catchCallback[T],
 ) {
-	// wait the previous promise to be resolved, as long as ctx is not done
-	_, s := prev.wait(ctx)
+	// wait the previous promise to be resolved
+	_, s := prev.wait()
 
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
@@ -297,43 +288,34 @@ func (p *GenericPromise[T]) catchCall(
 	res, _ := p.handleFollow(prev, false)
 
 	// run the callback with the actual promise result
-	runCallback[T](p, cb, true, res, s, false)
+	runCallback[T](ctx, p, cb, true, res, s, false)
 }
 
-// Recover waits the promise to be resolved, and calls the recoverCb function,
-// if the promise is resolved to panicked.
-//
-// It returns a GenericPromise value whose result will be the AnyRes value returned
-// from the recoverCb.
-//
-// The AnyRes value returned from the callback must not be modified after return.
-//
-// The recoverCb is passed with two arguments, the value that was passed
-// to the 'panic' call which caused this promise to be panicked, v, and a
-// boolean, ok, which will always be true.
-//
-// It will panic if a nil callback is passed.
-//
-// For more, see 'Callback Notes' in the package comment.
-func (p *GenericPromise[T]) Recover(recoverCb func(v any) Result[T]) Promise[T] {
+func (p *GenericPromise[T]) Recover(
+	ctx context.Context,
+	recoverCb func(ctx context.Context, v any) Result[T],
+) Promise[T] {
 	if recoverCb == nil {
 		panic(nilCallbackPanicMsg)
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, s)
-	go newProm.recoverCall(context.Background(), p, recoverCb)
+	newProm := newPromFollow[T](p.pipeline, ctx, s)
+	go newProm.recoverCall(p, ctx, recoverCb)
 	return newProm
 }
 
 func (p *GenericPromise[T]) recoverCall(
-	ctx context.Context,
 	prev *GenericPromise[T],
+	ctx context.Context,
 	cb recoverCallback[T],
 ) {
-	// wait the previous promise to be resolved, as long as ctx is not done
-	_, s := prev.wait(ctx)
+	// wait the previous promise to be resolved
+	_, s := prev.wait()
 
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
@@ -354,38 +336,24 @@ func (p *GenericPromise[T]) recoverCall(
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T](p, cb, true, res, s, false)
+	runCallback[T](ctx, p, cb, true, res, s, false)
 }
 
-// Finally waits the promise to be resolved, and calls the finallyCb function,
-// regardless the promise is rejected, panicked, or neither.
-//
-// If the promise has panicked, it must be handled(either sequentially, or
-// in-parallel) before calling this method, otherwise the promise will re-panic
-// before this call.
-//
-// It returns a GenericPromise value, which will be resolved to this promise's result,
-// if the finallyCb returned a nil AnyRes value.
-// If the finallyCb returned a non-nil AnyRes value, the returned promise will be
-// resolved to that returned AnyRes value.
-//
-// The AnyRes value returned from the callback must not be modified after return.
-//
-// The finallyCb is passed with one arguments, a boolean, ok, which will always
-// be true.
-//
-// It will panic if a nil callback is passed.
-//
-// For more, see 'Callback Notes' in the package comment.
-func (p *GenericPromise[T]) Finally(finallyCb func(s Status) Result[T]) Promise[T] {
+func (p *GenericPromise[T]) Finally(
+	ctx context.Context,
+	finallyCb func(ctx context.Context, s Status) Result[T],
+) Promise[T] {
 	if finallyCb == nil {
 		panic(nilCallbackPanicMsg)
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	_, s := p.status.RegWait()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, s)
-	go newProm.finallyCall(context.Background(), p, finallyCb)
+	newProm := newPromFollow[T](p.pipeline, ctx, s)
+	go newProm.finallyCall(p, ctx, finallyCb)
 	return newProm
 }
 
@@ -395,16 +363,16 @@ func (p *GenericPromise[T]) Finally(finallyCb func(s Status) Result[T]) Promise[
 // possible to call it on a panicked promise and return a fulfilled promise,
 // and the panic will be dismissed implicitly, which is something we don't want.
 func (p *GenericPromise[T]) finallyCall(
-	ctx context.Context,
 	prev *GenericPromise[T],
+	ctx context.Context,
 	cb finallyCallback[T],
 ) {
-	// wait the previous promise to be resolved, as long as ctx is not done
-	_, s := prev.wait(ctx)
+	// wait the previous promise to be resolved
+	_, s := prev.wait()
 
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
 
 	// run the callback with the actual promise result
-	runCallback[T](p, cb, true, prev.res, s, false)
+	runCallback[T](ctx, p, cb, true, prev.res, s, false)
 }

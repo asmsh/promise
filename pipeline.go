@@ -42,7 +42,7 @@ func (pp *Pipeline[T]) Go(ctx context.Context, fun func()) Promise[T] {
 	}
 
 	pp.reserveGoroutine()
-	p := newPromInter[T](pp)
+	p := newPromInter[T](pp, ctx)
 	go runCallback[T](ctx, p, goCallback[T](fun), false, nil, 0, true)
 	return p
 }
@@ -56,7 +56,7 @@ func (pp *Pipeline[T]) GoErr(ctx context.Context, fun func() error) Promise[T] {
 	}
 
 	pp.reserveGoroutine()
-	p := newPromInter[T](pp)
+	p := newPromInter[T](pp, ctx)
 	go runCallback[T](ctx, p, goErrCallback[T](fun), true, nil, 0, true)
 	return p
 }
@@ -70,7 +70,7 @@ func (pp *Pipeline[T]) GoRes(ctx context.Context, fun func(ctx context.Context) 
 	}
 
 	pp.reserveGoroutine()
-	p := newPromInter[T](pp)
+	p := newPromInter[T](pp, ctx)
 	go runCallback[T](ctx, p, goResCallback[T](fun), true, nil, 0, true)
 	return p
 }
@@ -80,7 +80,7 @@ func (pp *Pipeline[T]) New(resChan chan Result[T]) Promise[T] {
 		panic(nilResChanPanicMsg)
 	}
 
-	prom := newPromExter(pp, resChan)
+	prom := newPromExter(pp, context.Background(), resChan)
 	return prom
 }
 
@@ -93,7 +93,7 @@ func (pp *Pipeline[T]) Resolver(resolverCb func(
 	}
 
 	pp.reserveGoroutine()
-	p := newPromInter[T](pp)
+	p := newPromInter[T](pp, context.Background())
 	go resolverCall(p, resolverCb)
 	return p
 }
@@ -115,7 +115,7 @@ func resolverCall[T any](
 			return
 		}
 
-		// only one call(from fulfill or reject) will reach this point
+		// only one call (from fulfill or reject) will reach this point
 
 		if len(val) == 0 {
 			p.resolveToFulfilledRes(Empty[T](), false)
@@ -154,7 +154,7 @@ func (pp *Pipeline[T]) Delay(
 	onFailure bool,
 ) Promise[T] {
 	pp.reserveGoroutine()
-	p := newPromInter[T](pp)
+	p := newPromInter[T](pp, context.Background())
 	go delayCall(p, res, d, onSuccess, onFailure)
 	return p
 }
@@ -189,13 +189,13 @@ func delayCall[T any](
 }
 
 func (pp *Pipeline[T]) Wrap(res Result[T]) Promise[T] {
-	p := newPromSync[T](pp)
+	p := newPromSync[T](pp, context.Background())
 	p.resolveToResSync(res)
 	return p
 }
 
 func (pp *Pipeline[T]) Panic(v any) Promise[T] {
-	p := newPromSync[T](pp)
+	p := newPromSync[T](pp, context.Background())
 	p.panicSync(Err[T](newUncaughtPanic(v)))
 	return p
 }

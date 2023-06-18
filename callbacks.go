@@ -23,10 +23,10 @@ type callbackFunc[T any] interface {
 type goCallback[T any] func()
 type goErrCallback[T any] func() error
 type goResCallback[T any] func(ctx context.Context) Result[T]
-type thenCallback[T any] func(val T) Result[T]
-type catchCallback[T any] func(val T, err error) Result[T]
-type recoverCallback[T any] func(v any) Result[T]
-type finallyCallback[T any] func(s Status) Result[T]
+type thenCallback[T any] func(ctx context.Context, val T) Result[T]
+type catchCallback[T any] func(ctx context.Context, val T, err error) Result[T]
+type recoverCallback[T any] func(ctx context.Context, v any) Result[T]
+type finallyCallback[T any] func(ctx context.Context, s Status) Result[T]
 
 func (cb goCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
 	cb()
@@ -40,16 +40,16 @@ func (cb goResCallback[T]) call(ctx context.Context, res Result[T], s uint32) Re
 	return cb(ctx)
 }
 func (cb thenCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
-	return cb(res.Val())
+	return cb(ctx, res.Val())
 }
 func (cb catchCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
-	return cb(res.Val(), res.Err())
+	return cb(ctx, res.Val(), res.Err())
 }
 func (cb recoverCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
-	return cb(res.Err().(*UncaughtPanic).v)
+	return cb(ctx, res.Err().(*UncaughtPanic).v)
 }
 func (cb finallyCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
-	return cb(Status(s))
+	return cb(ctx, Status(s))
 }
 
 func runCallback[T any](

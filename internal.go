@@ -29,9 +29,10 @@ const (
 
 // newPromInter creates a new GenericPromise which is resolved internally,
 // using an internal allocated channel.
-func newPromInter[T any](pipeline *Pipeline[T], flags ...uint32) *GenericPromise[T] {
+func newPromInter[T any](pipeline *Pipeline[T], ctx context.Context, flags ...uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		pipeline: pipeline,
+		ctx:      ctx,
 		resChan:  make(chan Result[T]),
 	}
 
@@ -45,9 +46,10 @@ func newPromInter[T any](pipeline *Pipeline[T], flags ...uint32) *GenericPromise
 
 // newPromExter creates a new GenericPromise which is resolved externally,
 // using an external allocated channel, the passed resChan.
-func newPromExter[T any](pipeline *Pipeline[T], resChan chan Result[T], flags ...uint32) *GenericPromise[T] {
+func newPromExter[T any](pipeline *Pipeline[T], ctx context.Context, resChan chan Result[T], flags ...uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		pipeline: pipeline,
+		ctx:      ctx,
 		resChan:  resChan,
 		status:   status.PromStatus(status.FlagsIsExternal),
 	}
@@ -62,9 +64,10 @@ func newPromExter[T any](pipeline *Pipeline[T], resChan chan Result[T], flags ..
 
 // newPromFollow creates a new GenericPromise, for one of the follow methods,
 // which is resolved internally, using an internal allocated channel.
-func newPromFollow[T any](pipeline *Pipeline[T], prevStatus uint32) *GenericPromise[T] {
+func newPromFollow[T any](pipeline *Pipeline[T], ctx context.Context, prevStatus uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		pipeline: pipeline,
+		ctx:      ctx,
 		resChan:  make(chan Result[T]),
 		status:   status.NewFromFlags(prevStatus),
 	}
@@ -74,9 +77,10 @@ func newPromFollow[T any](pipeline *Pipeline[T], prevStatus uint32) *GenericProm
 
 // newPromSync creates a new GenericPromise which is resolved synchronously,
 // just after it's created.
-func newPromSync[T any](pipeline *Pipeline[T], flags ...uint32) *GenericPromise[T] {
+func newPromSync[T any](pipeline *Pipeline[T], ctx context.Context, flags ...uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		pipeline: pipeline,
+		ctx:      ctx,
 		// not needed, since sync promises are resolved directly after created,
 		// and before being used.
 		resChan: nil,
@@ -110,7 +114,7 @@ func newPromSync[T any](pipeline *Pipeline[T], flags ...uint32) *GenericPromise[
 // when the provided duration exceeds the wanted timeout.
 //
 // it returns true only if the wait times-out, otherwise it returns false.
-func (p *GenericPromise[T]) wait(ctx context.Context) (timeout bool, s uint32) {
+func (p *GenericPromise[T]) wait() (timeout bool, s uint32) {
 	s = p.status.Load()
 
 	// if the fate is 'Resolved' or 'Handled', don't wait, as they are guaranteed
@@ -121,9 +125,9 @@ func (p *GenericPromise[T]) wait(ctx context.Context) (timeout bool, s uint32) {
 
 	// wait with the appropriate wait procedure
 	if status.IsFlagsExternal(s) {
-		return p.exterWaitProc(ctx)
+		return p.exterWaitProc(p.ctx)
 	} else {
-		return p.interWaitProc(ctx)
+		return p.interWaitProc(p.ctx)
 	}
 }
 
@@ -186,6 +190,7 @@ func (p *GenericPromise[T]) exterWaitProc(ctx context.Context) (timeout bool, s 
 
 		return false, s
 	case <-ctx.Done():
+		// TODO: figure a way to pass the context.Error()
 		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout), false)
 		return true, s
 	}
@@ -232,6 +237,11 @@ func (p *GenericPromise[T]) handleFollow(prev *GenericPromise[T], andResolve boo
 // for any promise, this is guaranteed to be called only once, as it's called
 // with the newly created promise as a receiver.
 func (p *GenericPromise[T]) handleInvalidFollow(prevRes Result[T], prevStatus uint32) {
+	// return if the promise is resolved or being resolved by another call
+	if set, _ := p.status.SetResolving(); !set {
+		return
+	}
+
 	switch {
 	case status.IsStateFulfilled(prevStatus):
 		// the previous promise is fulfilled, fulfill with its result
@@ -291,17 +301,6 @@ func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
 	}
 }
 
-func (p *GenericPromise[T]) uncaughtPanicHandler() {
-	// TODO: make sure the Err() response is of type UncaughtPanic
-	err := p.res.Err()
-	v := err.(*UncaughtPanic).v
-	if cb := p.pipeline.config.UncaughtPanicHandler; cb != nil {
-		cb(v)
-	} else {
-		defUncaughtPanicHandler(v)
-	}
-}
-
 // if called from handleInvalidFollow, then it will be called once on the
 // same promise, by design.
 // if called from handleReturns, then it will be called once on the same
@@ -316,7 +315,7 @@ func (p *GenericPromise[T]) resolveToPanickedRes(res Result[T], andHandle bool) 
 	}
 	close(p.resChan)
 
-	// if the promise is panicked, and the chain is empty(no follow, read
+	// if the promise is panicked, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught panic to the last call
 	// in the chain.
@@ -325,15 +324,6 @@ func (p *GenericPromise[T]) resolveToPanickedRes(res Result[T], andHandle bool) 
 	}
 
 	return
-}
-
-func (p *GenericPromise[T]) uncaughtErrorHandler() {
-	err := p.res.Err()
-	if cb := p.pipeline.config.UncaughtErrHandler; cb != nil {
-		cb(err)
-	} else {
-		defUncaughtErrorHandler(err)
-	}
 }
 
 func (p *GenericPromise[T]) resolveToRejectedRes(res Result[T], andHandle bool) (s uint32) {
@@ -346,7 +336,7 @@ func (p *GenericPromise[T]) resolveToRejectedRes(res Result[T], andHandle bool) 
 	}
 	close(p.resChan)
 
-	// if the promise is rejected, and the chain is empty(no follow, read
+	// if the promise is rejected, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught error to the last call
 	// in the chain.
@@ -368,6 +358,26 @@ func (p *GenericPromise[T]) resolveToFulfilledRes(res Result[T], andHandle bool)
 	close(p.resChan)
 
 	return
+}
+
+func (p *GenericPromise[T]) uncaughtErrorHandler() {
+	err := p.res.Err()
+	if cb := p.pipeline.config.UncaughtErrHandler; cb != nil {
+		cb(err)
+	} else {
+		defUncaughtErrorHandler(err)
+	}
+}
+
+func (p *GenericPromise[T]) uncaughtPanicHandler() {
+	// TODO: make sure the Err() response is of type UncaughtPanic
+	err := p.res.Err()
+	v := err.(*UncaughtPanic).v
+	if cb := p.pipeline.config.UncaughtPanicHandler; cb != nil {
+		cb(v)
+	} else {
+		defUncaughtPanicHandler(v)
+	}
 }
 
 func (p *GenericPromise[T]) resolveToResSync(res Result[T]) (s uint32) {
@@ -413,7 +423,7 @@ func (p *GenericPromise[T]) asyncRead(cb func(res Result[T], args []any), args .
 	}
 
 	// asynchronously, wait the promise to be resolved and call cb, accordingly
-	go p.asyncReadCall(context.Background(), cb, args)
+	go p.asyncReadCall(cb, args)
 }
 
 // asyncReadCall will call the cb with an argument that corresponds to the result
@@ -426,12 +436,11 @@ func (p *GenericPromise[T]) asyncRead(cb func(res Result[T], args []any), args .
 // chain without finding a Recover call, the promise will re-broadcast the
 // panic, so there's no need to care about panics here.
 func (p *GenericPromise[T]) asyncReadCall(
-	ctx context.Context,
 	cb func(res Result[T], args []any),
 	args []any,
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
-	p.wait(ctx)
+	p.wait()
 
 	// run the callback
 	cb(p.res, args)

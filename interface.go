@@ -15,6 +15,7 @@
 package promise
 
 import (
+	"context"
 	"time"
 )
 
@@ -103,7 +104,7 @@ type Promise[T any] interface {
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Then(thenCb func(val T) Result[T]) Promise[T]
+	Then(ctx context.Context, thenCb func(ctx context.Context, val T) Result[T]) Promise[T]
 
 	// Catch waits the promise to be resolved, and calls the catchCb function,
 	// if the promise is resolved to rejected(the promise returned an error).
@@ -135,7 +136,7 @@ type Promise[T any] interface {
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Catch(catchCb func(val T, err error) Result[T]) Promise[T]
+	Catch(ctx context.Context, catchCb func(ctx context.Context, val T, err error) Result[T]) Promise[T]
 
 	// Recover waits the promise to be resolved, and calls the recoverCb function,
 	// if the promise is resolved to panicked(the promise caused a panic).
@@ -159,7 +160,7 @@ type Promise[T any] interface {
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Recover(recoverCb func(v any) Result[T]) Promise[T]
+	Recover(ctx context.Context, recoverCb func(ctx context.Context, v any) Result[T]) Promise[T]
 
 	// Finally waits the promise to be resolved, and calls the finallyCb function,
 	// regardless the promise is rejected, panicked, or neither.
@@ -188,7 +189,7 @@ type Promise[T any] interface {
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Finally(finallyCb func(s Status) Result[T]) Promise[T]
+	Finally(ctx context.Context, finallyCb func(ctx context.Context, s Status) Result[T]) Promise[T]
 
 	// this is a private interface that's specific to the different types and
 	// functions in this module, and knows about them.
