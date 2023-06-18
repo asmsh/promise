@@ -35,9 +35,6 @@ var (
 	defaultPipeline = NewPipeline[any](defaultPipelineConfig)
 )
 
-// AnyPromise is the default type
-type AnyPromise = Promise[any]
-
 // Chan returns a GoPromise that's created using the provided resChan.
 //
 // The resChan must be a bi-directional chan(buffered or unbuffered), which is
@@ -57,7 +54,7 @@ type AnyPromise = Promise[any]
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Chan(ctx context.Context, resChan chan Result[any]) AnyPromise {
+func Chan(ctx context.Context, resChan chan Result[any]) Promise[any] {
 	return defaultPipeline.Chan(ctx, resChan)
 }
 
@@ -75,11 +72,11 @@ func Chan(ctx context.Context, resChan chan Result[any]) AnyPromise {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Go(ctx context.Context, fun func()) AnyPromise {
+func Go(ctx context.Context, fun func()) Promise[any] {
 	return defaultPipeline.Go(ctx, fun)
 }
 
-func GoErr(ctx context.Context, fun func() error) AnyPromise {
+func GoErr(ctx context.Context, fun func() error) Promise[any] {
 	return defaultPipeline.GoErr(ctx, fun)
 }
 
@@ -104,7 +101,7 @@ func GoErr(ctx context.Context, fun func() error) AnyPromise {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func GoRes(ctx context.Context, fun func(ctx context.Context) Result[any]) AnyPromise {
+func GoRes(ctx context.Context, fun func(ctx context.Context) Result[any]) Promise[any] {
 	return defaultPipeline.GoRes(ctx, fun)
 }
 
@@ -157,7 +154,7 @@ func Resolver(
 		fulfill func(val ...any),
 		reject func(err error, val ...any),
 	),
-) AnyPromise {
+) Promise[any] {
 	return defaultPipeline.Resolver(ctx, resolverCb)
 }
 
@@ -180,7 +177,7 @@ func Resolver(
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Delay(res Result[any], d time.Duration, onSucceed, onFail bool) AnyPromise {
+func Delay(res Result[any], d time.Duration, onSucceed, onFail bool) Promise[any] {
 	return defaultPipeline.Delay(res, d, onSucceed, onFail)
 }
 
@@ -197,7 +194,7 @@ func Delay(res Result[any], d time.Duration, onSucceed, onFail bool) AnyPromise 
 // error, but all subsequent promises in any promise chain derived from it will,
 // until the error is caught on each of these chains(by a Catch call), or the
 // promise result is read(by a Res call).
-func Wrap(res Result[any]) AnyPromise {
+func Wrap(res Result[any]) Promise[any] {
 	return defaultPipeline.Wrap(res)
 }
 
@@ -209,6 +206,6 @@ func Wrap(res Result[any]) AnyPromise {
 // All subsequent promises in any promise chain derived from the returned
 // promise needs to call Recover, before the end of each promise's chain,
 // otherwise all these promise will re-panic(with the passed value, v).
-func Panic(v any) AnyPromise {
+func Panic(v any) Promise[any] {
 	return defaultPipeline.Panic(v)
 }
