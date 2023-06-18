@@ -129,9 +129,9 @@ func resolverCall[T any](
 		// only one call (from fulfill or reject) will reach this point
 
 		if len(val) == 0 {
-			p.resolveToFulfilledRes(Empty[T](), false)
+			p.resolveToFulfilledRes(Empty[T]())
 		} else {
-			p.resolveToFulfilledRes(Val(val[0]), false)
+			p.resolveToFulfilledRes(Val(val[0]))
 		}
 	}
 
@@ -149,9 +149,9 @@ func resolverCall[T any](
 		// only one call(from fulfill or reject) will reach this point
 
 		if len(val) == 0 {
-			p.resolveToRejectedRes(Err[T](err), false)
+			p.resolveToRejectedRes(Err[T](err))
 		} else {
-			p.resolveToRejectedRes(ValErr(val[0], err), false)
+			p.resolveToRejectedRes(ValErr(val[0], err))
 		}
 	}
 
@@ -185,17 +185,17 @@ func delayCall[T any](
 		if onFailure {
 			time.Sleep(d)
 		}
-		p.resolveToRejectedRes(Err[T](ErrPromiseNilResult), false)
+		p.resolveToRejectedRes(Err[T](ErrPromiseNilResult))
 	} else if err := res.Err(); err != nil {
 		if onFailure {
 			time.Sleep(d)
 		}
-		p.resolveToRejectedRes(res, false)
+		p.resolveToRejectedRes(res)
 	} else {
 		if onSuccess {
 			time.Sleep(d)
 		}
-		p.resolveToFulfilledRes(res, false)
+		p.resolveToFulfilledRes(res)
 	}
 }
 

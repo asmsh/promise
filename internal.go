@@ -191,7 +191,7 @@ func (p *GenericPromise[T]) exterWaitProc(ctx context.Context) (timeout bool, s 
 		return false, s
 	case <-ctx.Done():
 		// TODO: figure a way to pass the context.Error()
-		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout), false)
+		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout))
 		return true, s
 	}
 }
@@ -204,7 +204,7 @@ func (p *GenericPromise[T]) interWaitProc(ctx context.Context) (timeout bool, s 
 		s = p.status.Load()
 		return false, s
 	case <-ctx.Done():
-		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout), false)
+		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout))
 		return true, s
 	}
 }
@@ -224,7 +224,7 @@ func (p *GenericPromise[T]) handleFollow(prev *GenericPromise[T], andResolve boo
 	if !validHandle {
 		res = Err[T](ErrPromiseConsumed)
 		if andResolve {
-			p.resolveToRejectedRes(res, false)
+			p.resolveToRejectedRes(res)
 		}
 	} else {
 		res = prev.res
@@ -245,13 +245,13 @@ func (p *GenericPromise[T]) handleInvalidFollow(prevRes Result[T], prevStatus ui
 	switch {
 	case status.IsStateFulfilled(prevStatus):
 		// the previous promise is fulfilled, fulfill with its result
-		p.resolveToFulfilledRes(prevRes, false)
+		p.resolveToFulfilledRes(prevRes)
 	case status.IsStateRejected(prevStatus):
 		// the previous promise is rejected, reject with its result
-		p.resolveToRejectedRes(prevRes, false)
+		p.resolveToRejectedRes(prevRes)
 	case status.IsStatePanicked(prevStatus):
 		// the previous promise is panicked, panic with its result
-		p.resolveToPanickedRes(prevRes, false)
+		p.resolveToPanickedRes(prevRes)
 	default:
 		// TODO: investigate whether this might actually happen or not
 		panic("promise: internal: unexpected state")
@@ -274,14 +274,14 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 		// the callback returned normally, or through a call to runtime.Goexit.
 		if resP == nil {
 			// return from a callback that doesn't support Result returning.
-			p.resolveToFulfilledRes(Empty[T](), false)
+			p.resolveToFulfilledRes(Empty[T]())
 		} else {
 			// return from a callback that requires Result returning,
 			p.resolveToRes(*resP)
 		}
 	} else {
 		// a panic happened, resolve to panicked with the panic value.
-		p.resolveToPanickedRes(Err[T](newUncaughtPanic(v)), false)
+		p.resolveToPanickedRes(Err[T](newUncaughtPanic(v)))
 	}
 }
 
@@ -293,11 +293,11 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 // on the same promise, as it's protected by the Resolving fate setter.
 func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
 	if res == nil {
-		return p.resolveToRejectedRes(Err[T](ErrPromiseNilResult), false)
+		return p.resolveToRejectedRes(Err[T](ErrPromiseNilResult))
 	} else if err := res.Err(); err != nil {
-		return p.resolveToRejectedRes(res, false)
+		return p.resolveToRejectedRes(res)
 	} else {
-		return p.resolveToFulfilledRes(res, false)
+		return p.resolveToFulfilledRes(res)
 	}
 }
 
@@ -305,14 +305,11 @@ func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
 // same promise, by design.
 // if called from handleReturns, then it will be called once on the same
 // promise, as it's called on return, and that can happen once.
-func (p *GenericPromise[T]) resolveToPanickedRes(res Result[T], andHandle bool) (s uint32) {
+func (p *GenericPromise[T]) resolveToPanickedRes(res Result[T]) (s uint32) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
 	p.res = res
 	_, s = p.status.SetPanickedResolved()
-	if andHandle {
-		_, s = p.status.SetHandled() // set to Handled, if requested
-	}
 	close(p.resChan)
 
 	// if the promise is panicked, and the chain is empty (no follow, read
@@ -326,14 +323,11 @@ func (p *GenericPromise[T]) resolveToPanickedRes(res Result[T], andHandle bool) 
 	return
 }
 
-func (p *GenericPromise[T]) resolveToRejectedRes(res Result[T], andHandle bool) (s uint32) {
+func (p *GenericPromise[T]) resolveToRejectedRes(res Result[T]) (s uint32) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
 	p.res = res
 	_, s = p.status.SetRejectedResolved()
-	if andHandle {
-		_, s = p.status.SetHandled() // set to Handled, if requested
-	}
 	close(p.resChan)
 
 	// if the promise is rejected, and the chain is empty (no follow, read
@@ -347,14 +341,11 @@ func (p *GenericPromise[T]) resolveToRejectedRes(res Result[T], andHandle bool) 
 	return
 }
 
-func (p *GenericPromise[T]) resolveToFulfilledRes(res Result[T], andHandle bool) (s uint32) {
+func (p *GenericPromise[T]) resolveToFulfilledRes(res Result[T]) (s uint32) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
 	p.res = res
 	_, s = p.status.SetFulfilledResolved()
-	if andHandle {
-		_, s = p.status.SetHandled() // set to Handled, if requested
-	}
 	close(p.resChan)
 
 	return

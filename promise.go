@@ -170,7 +170,7 @@ func (p *GenericPromise[T]) delayCall(
 		if onFailure {
 			time.Sleep(dd)
 		}
-		p.resolveToRejectedRes(res, false)
+		p.resolveToRejectedRes(res)
 		return
 	}
 
@@ -180,19 +180,19 @@ func (p *GenericPromise[T]) delayCall(
 		if onSuccess {
 			time.Sleep(dd)
 		}
-		p.resolveToFulfilledRes(res, false)
+		p.resolveToFulfilledRes(res)
 	case status.IsStateRejected(s):
 		// a rejected state is considered a failure
 		if onFailure {
 			time.Sleep(dd)
 		}
-		p.resolveToRejectedRes(res, false)
+		p.resolveToRejectedRes(res)
 	case status.IsStatePanicked(s):
 		// a panicked state is considered a failure
 		if onFailure {
 			time.Sleep(dd)
 		}
-		p.resolveToPanickedRes(res, false)
+		p.resolveToPanickedRes(res)
 	default:
 		// TODO: investigate whether this might actually happen or not
 		panic("promise: internal: unexpected state")
