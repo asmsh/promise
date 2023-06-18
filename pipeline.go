@@ -33,6 +33,18 @@ func NewPipeline[T any](c PipelineConfig) Pipeline[T] {
 	}
 }
 
+func (pp *Pipeline[T]) Chan(ctx context.Context, resChan chan Result[T]) Promise[T] {
+	if resChan == nil {
+		panic(nilResChanPanicMsg)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	prom := newPromExter(pp, ctx, resChan)
+	return prom
+}
+
 func (pp *Pipeline[T]) Go(ctx context.Context, fun func()) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
@@ -73,18 +85,6 @@ func (pp *Pipeline[T]) GoRes(ctx context.Context, fun func(ctx context.Context) 
 	p := newPromInter[T](pp, ctx)
 	go runCallback[T](ctx, p, goResCallback[T](fun), true, nil, 0, true)
 	return p
-}
-
-func (pp *Pipeline[T]) New(ctx context.Context, resChan chan Result[T]) Promise[T] {
-	if resChan == nil {
-		panic(nilResChanPanicMsg)
-	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	prom := newPromExter(pp, ctx, resChan)
-	return prom
 }
 
 func (pp *Pipeline[T]) Resolver(

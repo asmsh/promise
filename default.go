@@ -38,6 +38,29 @@ var (
 // AnyPromise is the default type
 type AnyPromise = Promise[any]
 
+// Chan returns a GoPromise that's created using the provided resChan.
+//
+// The resChan must be a bi-directional chan(buffered or unbuffered), which is
+// used from the caller(creator) side to do only one of the following, either
+// send a Res value on it for one time, or just close it.
+//
+// When a Res value is sent on it, the returned promise will be resolved(and the
+// resChan is closed) to either rejected, or fulfilled, depending on whether the
+// last element in that sent Res value is a non-nil error, or not, respectively.
+// When the resChan is closed, the returned promise will be fulfilled, and its
+// result will be a nil Res value.
+//
+// If the resChan is not usd as described above, a panic will happen when it's
+// used, either on the caller side, or here, internally.
+//
+// If the returned promise is rejected, and the error is not caught(by a Catch
+// call) before the end of the promise's chain, or the promise result is not
+// read(by a Res call), a panic will happen with an error value of type
+// *UncaughtError, which has that uncaught error 'wrapped' inside it.
+func Chan(ctx context.Context, resChan chan Result[any]) AnyPromise {
+	return defaultPipeline.Chan(ctx, resChan)
+}
+
 // Go runs the provided function, fun, in a separate goroutine, and returns
 // a GoPromise whose result is a nil Res value.
 //
@@ -83,29 +106,6 @@ func GoErr(ctx context.Context, fun func() error) AnyPromise {
 // It will panic if a nil function is passed.
 func GoRes(ctx context.Context, fun func(ctx context.Context) Result[any]) AnyPromise {
 	return defaultPipeline.GoRes(ctx, fun)
-}
-
-// New returns a GoPromise that's created using the provided resChan.
-//
-// The resChan must be a bi-directional chan(buffered or unbuffered), which is
-// used from the caller(creator) side to do only one of the following, either
-// send a Res value on it for one time, or just close it.
-//
-// When a Res value is sent on it, the returned promise will be resolved(and the
-// resChan is closed) to either rejected, or fulfilled, depending on whether the
-// last element in that sent Res value is a non-nil error, or not, respectively.
-// When the resChan is closed, the returned promise will be fulfilled, and its
-// result will be a nil Res value.
-//
-// If the resChan is not usd as described above, a panic will happen when it's
-// used, either on the caller side, or here, internally.
-//
-// If the returned promise is rejected, and the error is not caught(by a Catch
-// call) before the end of the promise's chain, or the promise result is not
-// read(by a Res call), a panic will happen with an error value of type
-// *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func New(ctx context.Context, resChan chan Result[any]) AnyPromise {
-	return defaultPipeline.New(ctx, resChan)
 }
 
 // Resolver provides a JavaScript-like promise creation. It runs the provided
