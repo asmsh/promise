@@ -104,8 +104,8 @@ func GoRes(ctx context.Context, fun func(ctx context.Context) Result[any]) AnyPr
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func New(resChan chan Result[any]) AnyPromise {
-	return defaultPipeline.New(resChan)
+func New(ctx context.Context, resChan chan Result[any]) AnyPromise {
+	return defaultPipeline.New(ctx, resChan)
 }
 
 // Resolver provides a JavaScript-like promise creation. It runs the provided
@@ -150,11 +150,15 @@ func New(resChan chan Result[any]) AnyPromise {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Resolver(resolverCb func(
-	fulfill func(val ...any),
-	reject func(err error, val ...any),
-)) AnyPromise {
-	return defaultPipeline.Resolver(resolverCb)
+func Resolver(
+	ctx context.Context,
+	resolverCb func(
+		ctx context.Context,
+		fulfill func(val ...any),
+		reject func(err error, val ...any),
+	),
+) AnyPromise {
+	return defaultPipeline.Resolver(ctx, resolverCb)
 }
 
 // Delay returns a GoPromise that's resolved to the passed Res value, res,

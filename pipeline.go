@@ -75,32 +75,43 @@ func (pp *Pipeline[T]) GoRes(ctx context.Context, fun func(ctx context.Context) 
 	return p
 }
 
-func (pp *Pipeline[T]) New(resChan chan Result[T]) Promise[T] {
+func (pp *Pipeline[T]) New(ctx context.Context, resChan chan Result[T]) Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	prom := newPromExter(pp, context.Background(), resChan)
+	prom := newPromExter(pp, ctx, resChan)
 	return prom
 }
 
-func (pp *Pipeline[T]) Resolver(resolverCb func(
-	fulfill func(val ...T),
-	reject func(err error, val ...T),
-)) Promise[T] {
+func (pp *Pipeline[T]) Resolver(
+	ctx context.Context,
+	resolverCb func(
+		ctx context.Context,
+		fulfill func(val ...T),
+		reject func(err error, val ...T),
+	),
+) Promise[T] {
 	if resolverCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
 	pp.reserveGoroutine()
-	p := newPromInter[T](pp, context.Background())
-	go resolverCall(p, resolverCb)
+	p := newPromInter[T](pp, ctx)
+	go resolverCall(p, ctx, resolverCb)
 	return p
 }
 
 func resolverCall[T any](
 	p *GenericPromise[T],
-	cb func(fulfill func(...T), reject func(error, ...T)),
+	ctx context.Context,
+	cb func(ctx context.Context, fulfill func(...T), reject func(error, ...T)),
 ) {
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
@@ -144,7 +155,7 @@ func resolverCall[T any](
 		}
 	}
 
-	cb(fulfill, reject)
+	cb(ctx, fulfill, reject)
 }
 
 func (pp *Pipeline[T]) Delay(
