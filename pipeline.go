@@ -34,6 +34,10 @@ func NewPipeline[T any](c PipelineConfig) Pipeline[T] {
 }
 
 func (pp *Pipeline[T]) Chan(ctx context.Context, resChan chan Result[T]) Promise[T] {
+	return chanCall(pp, ctx, resChan)
+}
+
+func chanCall[T any](pp *Pipeline[T], ctx context.Context, resChan chan Result[T]) Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
@@ -46,6 +50,14 @@ func (pp *Pipeline[T]) Chan(ctx context.Context, resChan chan Result[T]) Promise
 }
 
 func (pp *Pipeline[T]) Go(ctx context.Context, fun func()) Promise[T] {
+	return goCall(pp, ctx, fun)
+}
+
+func goCall[T any](
+	pp *Pipeline[T],
+	ctx context.Context,
+	fun func(),
+) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -60,6 +72,14 @@ func (pp *Pipeline[T]) Go(ctx context.Context, fun func()) Promise[T] {
 }
 
 func (pp *Pipeline[T]) GoErr(ctx context.Context, fun func() error) Promise[T] {
+	return goErrCall(pp, ctx, fun)
+}
+
+func goErrCall[T any](
+	pp *Pipeline[T],
+	ctx context.Context,
+	fun func() error,
+) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -73,7 +93,18 @@ func (pp *Pipeline[T]) GoErr(ctx context.Context, fun func() error) Promise[T] {
 	return p
 }
 
-func (pp *Pipeline[T]) GoRes(ctx context.Context, fun func(ctx context.Context) Result[T]) Promise[T] {
+func (pp *Pipeline[T]) GoRes(
+	ctx context.Context,
+	fun func(ctx context.Context) Result[T],
+) Promise[T] {
+	return goResCall(pp, ctx, fun)
+}
+
+func goResCall[T any](
+	pp *Pipeline[T],
+	ctx context.Context,
+	fun func(ctx context.Context) Result[T],
+) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -88,6 +119,18 @@ func (pp *Pipeline[T]) GoRes(ctx context.Context, fun func(ctx context.Context) 
 }
 
 func (pp *Pipeline[T]) Resolver(
+	ctx context.Context,
+	fun func(
+		ctx context.Context,
+		fulfill func(val ...T),
+		reject func(err error, val ...T),
+	),
+) Promise[T] {
+	return resolverCall(pp, ctx, fun)
+}
+
+func resolverCall[T any](
+	pp *Pipeline[T],
 	ctx context.Context,
 	resolverCb func(
 		ctx context.Context,
@@ -104,11 +147,11 @@ func (pp *Pipeline[T]) Resolver(
 
 	pp.reserveGoroutine()
 	p := newPromInter[T](pp, ctx)
-	go resolverCall(p, ctx, resolverCb)
+	go resolverHandler(p, ctx, resolverCb)
 	return p
 }
 
-func resolverCall[T any](
+func resolverHandler[T any](
 	p *GenericPromise[T],
 	ctx context.Context,
 	cb func(ctx context.Context, fulfill func(...T), reject func(error, ...T)),
@@ -164,14 +207,24 @@ func (pp *Pipeline[T]) Delay(
 	onSuccess bool,
 	onFailure bool,
 ) Promise[T] {
+	return delayCall(pp, res, d, onSuccess, onFailure)
+}
+
+func delayCall[T any](
+	pp *Pipeline[T],
+	res Result[T],
+	d time.Duration,
+	onSuccess bool,
+	onFailure bool,
+) Promise[T] {
 	pp.reserveGoroutine()
 	p := newPromInter[T](pp, context.Background())
-	go delayCall(p, res, d, onSuccess, onFailure)
+	go delayHandler(p, res, d, onSuccess, onFailure)
 	return p
 }
 
 // handles rejection and fulfillment only
-func delayCall[T any](
+func delayHandler[T any](
 	p *GenericPromise[T],
 	res Result[T],
 	d time.Duration,
@@ -200,25 +253,33 @@ func delayCall[T any](
 }
 
 func (pp *Pipeline[T]) Wrap(res Result[T]) Promise[T] {
+	return wrapCall(pp, res)
+}
+
+func wrapCall[T any](pp *Pipeline[T], res Result[T]) Promise[T] {
 	p := newPromSync[T](pp, context.Background())
 	p.resolveToResSync(res)
 	return p
 }
 
 func (pp *Pipeline[T]) Panic(v any) Promise[T] {
+	return panicCall(pp, v)
+}
+
+func panicCall[T any](pp *Pipeline[T], v any) Promise[T] {
 	p := newPromSync[T](pp, context.Background())
 	p.panicSync(Err[T](newUncaughtPanic(v)))
 	return p
 }
 
 func (pp *Pipeline[T]) reserveGoroutine() {
-	if pp.reserveChan != nil {
+	if pp != nil && pp.reserveChan != nil {
 		pp.reserveChan <- struct{}{}
 	}
 }
 
 func (pp *Pipeline[T]) freeGoroutine() {
-	if pp.reserveChan != nil {
+	if pp != nil && pp.reserveChan != nil {
 		<-pp.reserveChan
 	}
 }

@@ -26,13 +26,6 @@ var (
 	defUncaughtErrorHandler = func(err error) {
 		panic(newUncaughtError(err).Error())
 	}
-
-	defaultPipelineConfig = PipelineConfig{
-		UncaughtPanicHandler: defUncaughtPanicHandler,
-		UncaughtErrHandler:   defUncaughtErrorHandler,
-	}
-
-	defaultPipeline = NewPipeline[any](defaultPipelineConfig)
 )
 
 // Chan returns a GoPromise that's created using the provided resChan.
@@ -54,8 +47,8 @@ var (
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Chan(ctx context.Context, resChan chan Result[any]) Promise[any] {
-	return defaultPipeline.Chan(ctx, resChan)
+func Chan[T any](ctx context.Context, resChan chan Result[T]) Promise[T] {
+	return chanCall[T](nil, ctx, resChan)
 }
 
 // Go runs the provided function, fun, in a separate goroutine, and returns
@@ -72,12 +65,12 @@ func Chan(ctx context.Context, resChan chan Result[any]) Promise[any] {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Go(ctx context.Context, fun func()) Promise[any] {
-	return defaultPipeline.Go(ctx, fun)
+func Go[T any](ctx context.Context, fun func()) Promise[T] {
+	return goCall[T](nil, ctx, fun)
 }
 
-func GoErr(ctx context.Context, fun func() error) Promise[any] {
-	return defaultPipeline.GoErr(ctx, fun)
+func GoErr[T any](ctx context.Context, fun func() error) Promise[T] {
+	return goErrCall[T](nil, ctx, fun)
 }
 
 // GoRes runs the provided function, fun, in a separate goroutine, and returns
@@ -101,8 +94,8 @@ func GoErr(ctx context.Context, fun func() error) Promise[any] {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func GoRes(ctx context.Context, fun func(ctx context.Context) Result[any]) Promise[any] {
-	return defaultPipeline.GoRes(ctx, fun)
+func GoRes[T any](ctx context.Context, fun func(ctx context.Context) Result[T]) Promise[T] {
+	return goResCall[T](nil, ctx, fun)
 }
 
 // Resolver provides a JavaScript-like promise creation. It runs the provided
@@ -147,15 +140,15 @@ func GoRes(ctx context.Context, fun func(ctx context.Context) Result[any]) Promi
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Resolver(
+func Resolver[T any](
 	ctx context.Context,
-	resolverCb func(
+	fun func(
 		ctx context.Context,
-		fulfill func(val ...any),
-		reject func(err error, val ...any),
+		fulfill func(val ...T),
+		reject func(err error, val ...T),
 	),
-) Promise[any] {
-	return defaultPipeline.Resolver(ctx, resolverCb)
+) Promise[T] {
+	return resolverCall[T](nil, ctx, fun)
 }
 
 // Delay returns a GoPromise that's resolved to the passed Res value, res,
@@ -177,8 +170,8 @@ func Resolver(
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Delay(res Result[any], d time.Duration, onSucceed, onFail bool) Promise[any] {
-	return defaultPipeline.Delay(res, d, onSucceed, onFail)
+func Delay[T any](res Result[T], d time.Duration, onSuccess, onFailure bool) Promise[T] {
+	return delayCall[T](nil, res, d, onSuccess, onFailure)
 }
 
 // Wrap returns a GoPromise that's resolved, synchronously, to the provided
@@ -194,8 +187,8 @@ func Delay(res Result[any], d time.Duration, onSucceed, onFail bool) Promise[any
 // error, but all subsequent promises in any promise chain derived from it will,
 // until the error is caught on each of these chains(by a Catch call), or the
 // promise result is read(by a Res call).
-func Wrap(res Result[any]) Promise[any] {
-	return defaultPipeline.Wrap(res)
+func Wrap[T any](res Result[T]) Promise[T] {
+	return wrapCall[T](nil, res)
 }
 
 // Panic returns a GoPromise that's resolved to panicked, synchronously, and
@@ -206,6 +199,6 @@ func Wrap(res Result[any]) Promise[any] {
 // All subsequent promises in any promise chain derived from the returned
 // promise needs to call Recover, before the end of each promise's chain,
 // otherwise all these promise will re-panic(with the passed value, v).
-func Panic(v any) Promise[any] {
-	return defaultPipeline.Panic(v)
+func Panic[T any](v any) Promise[T] {
+	return panicCall[T](nil, v)
 }

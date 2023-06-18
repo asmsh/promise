@@ -361,8 +361,8 @@ func (p *GenericPromise[T]) resolveToFulfilledRes(res Result[T]) (s uint32) {
 
 func (p *GenericPromise[T]) uncaughtErrorHandler() {
 	err := p.res.Err()
-	if cb := p.pipeline.config.UncaughtErrHandler; cb != nil {
-		cb(err)
+	if p.pipeline != nil && p.pipeline.config.UncaughtErrHandler != nil {
+		p.pipeline.config.UncaughtErrHandler(err)
 	} else {
 		defUncaughtErrorHandler(err)
 	}
@@ -372,8 +372,8 @@ func (p *GenericPromise[T]) uncaughtPanicHandler() {
 	// TODO: make sure the Err() response is of type UncaughtPanic
 	err := p.res.Err()
 	v := err.(*UncaughtPanic).v
-	if cb := p.pipeline.config.UncaughtPanicHandler; cb != nil {
-		cb(v)
+	if p.pipeline != nil && p.pipeline.config.UncaughtPanicHandler != nil {
+		p.pipeline.config.UncaughtPanicHandler(v)
 	} else {
 		defUncaughtPanicHandler(v)
 	}
