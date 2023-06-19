@@ -21,10 +21,10 @@ import (
 
 var (
 	defUncaughtPanicHandler = func(v any) {
-		panic(newUncaughtPanic(v).Error())
+		panic(newUncaughtPanic(v))
 	}
 	defUncaughtErrorHandler = func(err error) {
-		panic(newUncaughtError(err).Error())
+		panic(newUncaughtError(err))
 	}
 )
 
