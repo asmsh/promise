@@ -19,43 +19,32 @@ var (
 // been caught, by the end of that chain.
 // uncaughtPanic wraps a panic value that happened in a promise chain,
 // but hasn't been caught by the end of that chain.
-type UncaughtPanic struct {
-	v any
-}
+type UncaughtPanic struct{ v any }
 
 func (e *UncaughtPanic) Error() string {
 	return fmt.Sprintf("uncaught panic in the promise chain: %v", e.v)
 }
 
-func (e *UncaughtPanic) V() any {
-	return e.v
+func (e *UncaughtPanic) Unwrap() error {
+	err, _ := e.v.(error)
+	return err
 }
 
-func newUncaughtPanic(v any) *UncaughtPanic {
-	return &UncaughtPanic{v: v}
-}
+func (e *UncaughtPanic) V() any { return e.v }
+
+func newUncaughtPanic(v any) *UncaughtPanic { return &UncaughtPanic{v: v} }
 
 // UncaughtError wraps an error that happened in a promise chain, but hasn't
 // been caught, by the end of that chain.
-type UncaughtError struct {
-	err error
-}
+type UncaughtError struct{ err error }
 
 func (e *UncaughtError) Error() string {
 	return fmt.Sprintf("uncaught error in the promise chain: %s", e.err)
 }
 
-func (e *UncaughtError) Unwrap() error {
-	return e.err
-}
+func (e *UncaughtError) Unwrap() error { return e.err }
 
-func newUncaughtError(err error) *UncaughtError {
-	return &UncaughtError{err: err}
-}
-
-func newWrapErrs(errs ...error) *wrapErrors {
-	return &wrapErrors{errs: errs}
-}
+func newUncaughtError(err error) *UncaughtError { return &UncaughtError{err: err} }
 
 type wrapErrors struct{ errs []error }
 
@@ -71,3 +60,5 @@ func (e *wrapErrors) Error() string {
 }
 
 func (e *wrapErrors) Unwrap() []error { return e.errs }
+
+func newWrapErrs(errs ...error) *wrapErrors { return &wrapErrors{errs: errs} }
