@@ -195,8 +195,9 @@ func (p *GenericPromise[T]) exterWaitProc(ctx context.Context) (timeout bool, s 
 		if set, s := p.status.SetResolving(); !set {
 			return true, s
 		}
-		// TODO: figure a way to pass the context.Error()
-		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout))
+		// create an error wrapping the errors that should be reported, by order
+		err := newWrapErrs(ErrPromiseTimeout, ctx.Err())
+		s = p.resolveToRejectedRes(Err[T](err))
 		return true, s
 	}
 }
@@ -212,7 +213,9 @@ func (p *GenericPromise[T]) interWaitProc(ctx context.Context) (timeout bool, s 
 		if set, s := p.status.SetResolving(); !set {
 			return true, s
 		}
-		s = p.resolveToRejectedRes(Err[T](ErrPromiseTimeout))
+		// create an error wrapping the errors that should be reported, by order
+		err := newWrapErrs(ErrPromiseTimeout, ctx.Err())
+		s = p.resolveToRejectedRes(Err[T](err))
 		return true, s
 	}
 }

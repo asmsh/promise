@@ -3,21 +3,22 @@ package promise
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 var (
-	ErrPromiseTimeout  = errors.New("promise: timeout")
-	ErrPromiseConsumed = errors.New("promise: already handled")
+	ErrPromiseTimeout  = errors.New("promise timeout")
+	ErrPromiseConsumed = errors.New("promise already handled")
 
 	// ErrPromiseNilResult will be returned when a callback returns nil as Result value,
 	// when a callback calls panic with nil, or when a callback calls runtime.Goexit.
-	ErrPromiseNilResult = errors.New("promise: got nil as result")
+	ErrPromiseNilResult = errors.New("promise got nil as result")
 )
 
 // UncaughtPanic wraps a panic that happened in a promise chain, but hasn't
 // been caught, by the end of that chain.
 // uncaughtPanic wraps a panic value that happened in a promise chain,
-// but hasn't been caught, by the end of that chain.
+// but hasn't been caught by the end of that chain.
 type UncaughtPanic struct {
 	v any
 }
@@ -36,9 +37,6 @@ func newUncaughtPanic(v any) *UncaughtPanic {
 
 // UncaughtError wraps an error that happened in a promise chain, but hasn't
 // been caught, by the end of that chain.
-// TODO: is this really needed ?
-//	 error returns will be returning the actual error.
-//	 so far, it's only needed whenever panicking for uncaught error.
 type UncaughtError struct {
 	err error
 }
@@ -54,3 +52,22 @@ func (e *UncaughtError) Unwrap() error {
 func newUncaughtError(err error) *UncaughtError {
 	return &UncaughtError{err: err}
 }
+
+func newWrapErrs(errs ...error) *wrapErrors {
+	return &wrapErrors{errs: errs}
+}
+
+type wrapErrors struct{ errs []error }
+
+func (e *wrapErrors) Error() string {
+	b := strings.Builder{}
+	for i, err := range e.errs {
+		if i != 0 {
+			b.WriteString(": ")
+		}
+		b.WriteString(err.Error())
+	}
+	return b.String()
+}
+
+func (e *wrapErrors) Unwrap() []error { return e.errs }
