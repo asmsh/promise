@@ -177,8 +177,8 @@ func Resolver[T any](
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Delay[T any](res Result[T], d time.Duration, onSuccess, onFailure bool) Promise[T] {
-	return delayCall[T](nil, res, d, onSuccess, onFailure)
+func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) Promise[T] {
+	return delayCall[T](nil, res, d, cond...)
 }
 
 // Wrap returns a GoPromise that's resolved, synchronously, to the provided

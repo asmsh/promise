@@ -208,22 +208,21 @@ func resolverHandler[T any](
 func (pp *Pipeline[T]) Delay(
 	res Result[T],
 	d time.Duration,
-	onSuccess bool,
-	onFailure bool,
+	cond ...DelayCond,
 ) Promise[T] {
-	return delayCall[T](pp.core, res, d, onSuccess, onFailure)
+	return delayCall[T](pp.core, res, d, cond...)
 }
 
 func delayCall[T any](
 	pc *pipelineCore,
 	res Result[T],
 	d time.Duration,
-	onSuccess bool,
-	onFailure bool,
+	cond ...DelayCond,
 ) Promise[T] {
+	flags := getDelayFlags(cond)
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc, context.Background())
-	go delayHandler(p, res, d, onSuccess, onFailure)
+	go delayHandler(p, res, d, flags)
 	return p
 }
 
@@ -232,24 +231,23 @@ func delayHandler[T any](
 	p *GenericPromise[T],
 	res Result[T],
 	d time.Duration,
-	onSuccess bool,
-	onFailure bool,
+	flags delayFlags,
 ) {
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
 
 	if res == nil {
-		if onFailure {
+		if flags.onError {
 			time.Sleep(d)
 		}
 		resolveToRejectedRes[T](p, Err[T](ErrPromiseNilResult))
 	} else if err := res.Err(); err != nil {
-		if onFailure {
+		if flags.onError {
 			time.Sleep(d)
 		}
 		resolveToRejectedRes(p, res)
 	} else {
-		if onSuccess {
+		if flags.onSuccess {
 			time.Sleep(d)
 		}
 		resolveToFulfilledRes(p, res)

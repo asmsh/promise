@@ -140,13 +140,13 @@ func (p *GenericPromise[T]) waitCall(andHandle bool) Result[T] {
 
 func (p *GenericPromise[T]) Delay(
 	d time.Duration,
-	onSuccess bool,
-	onFailure bool,
+	cond ...DelayCond,
 ) Promise[T] {
 	_, s := p.status.RegFollow()
+	flags := getDelayFlags(cond)
 	p.pipeline.reserveGoroutine()
 	newProm := newPromFollow[T](p.pipeline, context.Background(), s)
-	go delayFollowCall(p, newProm, d, onSuccess, onFailure)
+	go delayFollowCall(p, newProm, d, flags)
 	return newProm
 }
 
@@ -155,8 +155,7 @@ func delayFollowCall[ResT any](
 	prevProm *GenericPromise[ResT],
 	newProm *GenericPromise[ResT],
 	dd time.Duration,
-	onSuccess bool,
-	onFailure bool,
+	flags delayFlags,
 ) {
 	// make sure we free this goroutine reservation
 	defer newProm.pipeline.freeGoroutine()
@@ -169,7 +168,7 @@ func delayFollowCall[ResT any](
 	res, ok := handleFollow(prevProm, newProm, false)
 	if !ok {
 		// it's not a valid handle. it's considered a failure.
-		if onFailure {
+		if flags.onError {
 			time.Sleep(dd)
 		}
 		resolveToRejectedRes(newProm, res)
@@ -179,19 +178,19 @@ func delayFollowCall[ResT any](
 	switch {
 	case status.IsStateFulfilled(s):
 		// a fulfilled state is considered a success
-		if onSuccess {
+		if flags.onSuccess {
 			time.Sleep(dd)
 		}
 		resolveToFulfilledRes(newProm, res)
 	case status.IsStateRejected(s):
 		// a rejected state is considered a failure
-		if onFailure {
+		if flags.onError {
 			time.Sleep(dd)
 		}
 		resolveToRejectedRes(newProm, res)
 	case status.IsStatePanicked(s):
 		// a panicked state is considered a failure
-		if onFailure {
+		if flags.onPanic {
 			time.Sleep(dd)
 		}
 		resolveToPanickedRes(newProm, res)
