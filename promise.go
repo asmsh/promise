@@ -74,7 +74,7 @@ func (p *genericPromise[T]) Status() Status {
 
 func (p *genericPromise[T]) Wait() {
 	p.status.RegWait()
-	p.waitCall(false)
+	_, _ = p.waitCall(p.ctx, false)
 }
 
 func (p *genericPromise[T]) WaitChan() chan struct{} {
@@ -88,36 +88,38 @@ func (p *genericPromise[T]) WaitChan() chan struct{} {
 	return c
 }
 
-func (p *genericPromise[T]) Res() Result[T] {
-	p.status.RegRead()
-	return p.waitCall(true)
-}
+func (p *genericPromise[T]) waitCall(
+	ctx context.Context,
+	resolveOnTimeout bool,
+) (s uint32, err error) {
+	// wait the promise to be resolved, or until the context is Done.
+	s, err = p.wait(ctx, resolveOnTimeout)
 
-func (p *genericPromise[T]) waitCall(andHandle bool) Result[T] {
-	// wait the promise to be resolved, or until its context is Done.
-	_, s := p.wait()
-
-	// we only need to do the following special checks if it's not a 'Handle' call,
-	// since a 'Handle' call will always prevent the execution of the different
-	// uncaught handlers, regardless of the promise chain or state.
-	if !andHandle {
-		if !status.IsChainAtLeastRead(s) && !status.IsFateHandled(s) {
-			if status.IsStatePanicked(s) {
-				// the promise is panicked, not handled, and there are no chained
-				// calls to handle it, run the uncaught panic handler, and continue.
-				p.uncaughtPanicHandler()
-			}
-
-			if status.IsStateRejected(s) {
-				// the promise is rejected, not handled, and there are no chained
-				// calls to handle it, run the uncaught error handler, and continue.
-				p.uncaughtErrorHandler()
-			}
+	if !status.IsChainAtLeastRead(s) && !status.IsFateHandled(s) {
+		if status.IsStatePanicked(s) {
+			// the promise is panicked, not handled, and there are no chained
+			// calls to handle it, run the uncaught panic handler, and continue.
+			p.uncaughtPanicHandler()
 		}
 
-		// return without the result, since it's not needed(not a 'Handle' call)
-		return nil
+		if status.IsStateRejected(s) {
+			// the promise is rejected, not handled, and there are no chained
+			// calls to handle it, run the uncaught error handler, and continue.
+			p.uncaughtErrorHandler()
+		}
 	}
+
+	return
+}
+
+func (p *genericPromise[T]) Res() Result[T] {
+	p.status.RegRead()
+	return p.resCall()
+}
+
+func (p *genericPromise[T]) resCall() Result[T] {
+	// wait the promise to be resolved, or until its context is Done.
+	s, _ := p.wait(p.ctx, true)
 
 	// if it's a call to handle the result, set the 'Handled' flag.
 	// also, keep track of whether this handle was valid(first) or not,
@@ -151,17 +153,17 @@ func (p *genericPromise[T]) Delay(
 }
 
 // delay creates Promise values with the same type
-func delayFollowCall[ResT any](
-	prevProm *genericPromise[ResT],
-	newProm *genericPromise[ResT],
+func delayFollowCall[T any](
+	prevProm *genericPromise[T],
+	newProm *genericPromise[T],
 	dd time.Duration,
 	flags delayFlags,
 ) {
 	// make sure we free this goroutine reservation
-	defer newProm.pipeline.freeGoroutine()
+	defer prevProm.pipeline.freeGoroutine()
 
 	// wait the previous promise to be resolved
-	_, s := prevProm.wait()
+	s, _ := prevProm.wait(prevProm.ctx, true)
 
 	// mark prevProm as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be used.
@@ -214,37 +216,38 @@ func (p *genericPromise[T]) Then(
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	newProm := newPromFollow[T](p.pipeline, ctx, s)
-	go newProm.thenCall(p, thenCb)
+	go thenFollowCall(p, newProm, thenCb)
 	return newProm
 }
 
-func (p *genericPromise[T]) thenCall(
-	prev *genericPromise[T],
+func thenFollowCall[T any](
+	prevProm *genericPromise[T],
+	newProm *genericPromise[T],
 	cb thenCallback[T, T],
 ) {
-	// wait the previous promise to be resolved
-	_, s := prev.wait()
-
 	// make sure we free this goroutine reservation
-	defer p.pipeline.freeGoroutine()
+	defer prevProm.pipeline.freeGoroutine()
+
+	// wait the previous promise to be resolved
+	s, _ := prevProm.wait(prevProm.ctx, true)
 
 	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
 	if !status.IsStateFulfilled(s) {
-		handleInvalidFollow(p, prev.res, s)
+		handleInvalidFollow(prevProm, newProm, s)
 		return
 	}
 
 	// mark prev as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be handled
 	// by the callback.
-	res, ok := handleFollow(prev, p, true)
+	res, ok := handleFollow(prevProm, newProm, true)
 	if !ok {
 		// return, since the promise is now resolved
 		return
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T, T](p, cb, true, res, s, false)
+	runCallback[T, T](newProm, cb, true, res, s, false)
 }
 
 func (p *genericPromise[T]) Catch(
@@ -261,33 +264,34 @@ func (p *genericPromise[T]) Catch(
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	newProm := newPromFollow[T](p.pipeline, ctx, s)
-	go newProm.catchCall(p, catchCb)
+	go catchFollowCall(p, newProm, catchCb)
 	return newProm
 }
 
-func (p *genericPromise[T]) catchCall(
-	prev *genericPromise[T],
+func catchFollowCall[T any](
+	prevProm *genericPromise[T],
+	newProm *genericPromise[T],
 	cb catchCallback[T, T],
 ) {
-	// wait the previous promise to be resolved
-	_, s := prev.wait()
-
 	// make sure we free this goroutine reservation
-	defer p.pipeline.freeGoroutine()
+	defer prevProm.pipeline.freeGoroutine()
+
+	// wait the previous promise to be resolved
+	s, _ := prevProm.wait(prevProm.ctx, true)
 
 	// 'Catch' can handle only the 'Rejected' state, so return otherwise
 	if !status.IsStateRejected(s) {
-		handleInvalidFollow(p, prev.res, s)
+		handleInvalidFollow(prevProm, newProm, s)
 		return
 	}
 
 	// mark prev as 'Handled'.
 	// the res value returned will hold the correct value that should be handled
 	// by the callback.
-	res, _ := handleFollow(prev, p, false)
+	res, _ := handleFollow(prevProm, newProm, false)
 
 	// run the callback with the actual promise result
-	runCallback[T, T](p, cb, true, res, s, false)
+	runCallback[T, T](newProm, cb, true, res, s, false)
 }
 
 func (p *genericPromise[T]) Recover(
@@ -304,38 +308,38 @@ func (p *genericPromise[T]) Recover(
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	newProm := newPromFollow[T](p.pipeline, ctx, s)
-	go newProm.recoverCall(p, ctx, recoverCb)
+	go recoverFollowCall(p, newProm, recoverCb)
 	return newProm
 }
 
-func (p *genericPromise[T]) recoverCall(
-	prev *genericPromise[T],
-	ctx context.Context,
+func recoverFollowCall[T any](
+	prevProm *genericPromise[T],
+	newProm *genericPromise[T],
 	cb recoverCallback[T, T],
 ) {
-	// wait the previous promise to be resolved
-	_, s := prev.wait()
-
 	// make sure we free this goroutine reservation
-	defer p.pipeline.freeGoroutine()
+	defer prevProm.pipeline.freeGoroutine()
+
+	// wait the previous promise to be resolved
+	s, _ := prevProm.wait(prevProm.ctx, true)
 
 	// 'Recover' can handle only the 'Panicked' state, so return otherwise
 	if !status.IsStatePanicked(s) {
-		handleInvalidFollow(p, prev.res, s)
+		handleInvalidFollow(prevProm, newProm, s)
 		return
 	}
 
 	// mark prev as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be handled
 	// by the callback.
-	res, ok := handleFollow(prev, p, true)
+	res, ok := handleFollow(prevProm, newProm, true)
 	if !ok {
 		// return, since the promise is now resolved
 		return
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T, T](p, cb, true, res, s, false)
+	runCallback[T, T](newProm, cb, true, res, s, false)
 }
 
 func (p *genericPromise[T]) Finally(
@@ -352,7 +356,7 @@ func (p *genericPromise[T]) Finally(
 	_, s := p.status.RegWait()
 	p.pipeline.reserveGoroutine()
 	newProm := newPromFollow[T](p.pipeline, ctx, s)
-	go newProm.finallyCall(p, ctx, finallyCb)
+	go newProm.finallyCall(p, finallyCb)
 	return newProm
 }
 
@@ -363,11 +367,10 @@ func (p *genericPromise[T]) Finally(
 // and the panic will be dismissed implicitly, which is something we don't want.
 func (p *genericPromise[T]) finallyCall(
 	prev *genericPromise[T],
-	ctx context.Context,
 	cb finallyCallback[T, T],
 ) {
 	// wait the previous promise to be resolved
-	_, s := prev.wait()
+	s, _ := prev.wait(p.ctx, true)
 
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()

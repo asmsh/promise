@@ -195,6 +195,8 @@ type Promise[T any] interface {
 	// functions in this module, and knows about them.
 	privateImplementation()
 
+	impl() *genericPromise[T]
+
 	// the following method are/will be used internally to implement extension
 	// functions in this module, which are functions that accepts promises and
 	// extends their functionality or provide new functionality.
