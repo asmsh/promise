@@ -21,10 +21,10 @@ import (
 	"github.com/asmsh/promise/internal/status"
 )
 
-// GenericPromise is the default implementation of the Promise interface
+// genericPromise is the default implementation of the Promise interface
 //
 // The zero value will block forever on any calls.
-type GenericPromise[T any] struct {
+type genericPromise[T any] struct {
 	pipeline *pipelineCore
 
 	ctx context.Context
@@ -67,17 +67,17 @@ type GenericPromise[T any] struct {
 	status status.PromStatus
 }
 
-func (p *GenericPromise[T]) Status() Status {
+func (p *genericPromise[T]) Status() Status {
 	s := p.status.Load()
 	return Status(s)
 }
 
-func (p *GenericPromise[T]) Wait() {
+func (p *genericPromise[T]) Wait() {
 	p.status.RegWait()
 	p.waitCall(false)
 }
 
-func (p *GenericPromise[T]) WaitChan() chan struct{} {
+func (p *genericPromise[T]) WaitChan() chan struct{} {
 	c := make(chan struct{})
 
 	go func(c chan struct{}) {
@@ -88,12 +88,12 @@ func (p *GenericPromise[T]) WaitChan() chan struct{} {
 	return c
 }
 
-func (p *GenericPromise[T]) Res() Result[T] {
+func (p *genericPromise[T]) Res() Result[T] {
 	p.status.RegRead()
 	return p.waitCall(true)
 }
 
-func (p *GenericPromise[T]) waitCall(andHandle bool) Result[T] {
+func (p *genericPromise[T]) waitCall(andHandle bool) Result[T] {
 	// wait the promise to be resolved, or until its context is Done.
 	_, s := p.wait()
 
@@ -138,7 +138,7 @@ func (p *GenericPromise[T]) waitCall(andHandle bool) Result[T] {
 	}
 }
 
-func (p *GenericPromise[T]) Delay(
+func (p *genericPromise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) Promise[T] {
@@ -152,8 +152,8 @@ func (p *GenericPromise[T]) Delay(
 
 // delay creates Promise values with the same type
 func delayFollowCall[ResT any](
-	prevProm *GenericPromise[ResT],
-	newProm *GenericPromise[ResT],
+	prevProm *genericPromise[ResT],
+	newProm *genericPromise[ResT],
 	dd time.Duration,
 	flags delayFlags,
 ) {
@@ -200,7 +200,7 @@ func delayFollowCall[ResT any](
 	}
 }
 
-func (p *GenericPromise[T]) Then(
+func (p *genericPromise[T]) Then(
 	ctx context.Context,
 	thenCb func(ctx context.Context, val T) Result[T],
 ) Promise[T] {
@@ -218,8 +218,8 @@ func (p *GenericPromise[T]) Then(
 	return newProm
 }
 
-func (p *GenericPromise[T]) thenCall(
-	prev *GenericPromise[T],
+func (p *genericPromise[T]) thenCall(
+	prev *genericPromise[T],
 	cb thenCallback[T, T],
 ) {
 	// wait the previous promise to be resolved
@@ -247,7 +247,7 @@ func (p *GenericPromise[T]) thenCall(
 	runCallback[T, T](p, cb, true, res, s, false)
 }
 
-func (p *GenericPromise[T]) Catch(
+func (p *genericPromise[T]) Catch(
 	ctx context.Context,
 	catchCb func(ctx context.Context, val T, err error) Result[T],
 ) Promise[T] {
@@ -265,8 +265,8 @@ func (p *GenericPromise[T]) Catch(
 	return newProm
 }
 
-func (p *GenericPromise[T]) catchCall(
-	prev *GenericPromise[T],
+func (p *genericPromise[T]) catchCall(
+	prev *genericPromise[T],
 	cb catchCallback[T, T],
 ) {
 	// wait the previous promise to be resolved
@@ -290,7 +290,7 @@ func (p *GenericPromise[T]) catchCall(
 	runCallback[T, T](p, cb, true, res, s, false)
 }
 
-func (p *GenericPromise[T]) Recover(
+func (p *genericPromise[T]) Recover(
 	ctx context.Context,
 	recoverCb func(ctx context.Context, v any) Result[T],
 ) Promise[T] {
@@ -308,8 +308,8 @@ func (p *GenericPromise[T]) Recover(
 	return newProm
 }
 
-func (p *GenericPromise[T]) recoverCall(
-	prev *GenericPromise[T],
+func (p *genericPromise[T]) recoverCall(
+	prev *genericPromise[T],
 	ctx context.Context,
 	cb recoverCallback[T, T],
 ) {
@@ -338,7 +338,7 @@ func (p *GenericPromise[T]) recoverCall(
 	runCallback[T, T](p, cb, true, res, s, false)
 }
 
-func (p *GenericPromise[T]) Finally(
+func (p *genericPromise[T]) Finally(
 	ctx context.Context,
 	finallyCb func(ctx context.Context, s Status) Result[T],
 ) Promise[T] {
@@ -361,8 +361,8 @@ func (p *GenericPromise[T]) Finally(
 // if we made the finally a normal 'follow' method(like then,..), it will be
 // possible to call it on a panicked promise and return a fulfilled promise,
 // and the panic will be dismissed implicitly, which is something we don't want.
-func (p *GenericPromise[T]) finallyCall(
-	prev *GenericPromise[T],
+func (p *genericPromise[T]) finallyCall(
+	prev *genericPromise[T],
 	ctx context.Context,
 	cb finallyCallback[T, T],
 ) {

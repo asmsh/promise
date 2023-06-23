@@ -156,7 +156,7 @@ func resolverCall[T any](
 }
 
 func resolverHandler[T any](
-	p *GenericPromise[T],
+	p *genericPromise[T],
 	ctx context.Context,
 	cb func(ctx context.Context, fulfill func(...T), reject func(error, ...T)),
 ) {
@@ -228,7 +228,7 @@ func delayCall[T any](
 
 // handles rejection and fulfillment only
 func delayHandler[T any](
-	p *GenericPromise[T],
+	p *genericPromise[T],
 	res Result[T],
 	d time.Duration,
 	flags delayFlags,

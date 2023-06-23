@@ -37,7 +37,7 @@ type Promise[T any] interface {
 	// has panicked, otherwise it follows the rules of the underlying Promise
 	// implementation.
 	//
-	// If the underlying Promise implementation is the GenericPromise, and it's not
+	// If the underlying Promise implementation is the genericPromise, and it's not
 	// panicked, then ok will always = true.
 	Wait()
 
@@ -55,7 +55,7 @@ type Promise[T any] interface {
 	// The res value will be invalid(ok = false), if the promise has panicked,
 	// otherwise it follows the rules of the underlying Promise implementation.
 	//
-	// If the underlying Promise implementation is the GenericPromise, and it's not
+	// If the underlying Promise implementation is the genericPromise, and it's not
 	// panicked, then the res value will always be valid(ok = true).
 	Res() Result[T]
 
@@ -95,11 +95,11 @@ type Promise[T any] interface {
 	// a boolean, ok, which will be true, only if res is valid.
 	//
 	// The res parameter will always be valid(and ok = true), if the underlying
-	// Promise implementation is the GenericPromise.
+	// Promise implementation is the genericPromise.
 	//
 	// The ok parameter's value(and the validity of other parameter) will
 	// follow the rules of each of the other Promise implementations(other
-	// than GenericPromise), which are described at their methods.
+	// than genericPromise), which are described at their methods.
 	//
 	// It will panic if a nil callback is passed.
 	//
@@ -120,11 +120,11 @@ type Promise[T any] interface {
 	// and res, are valid.
 	//
 	// The err, and the res parameters will always be valid(and ok = true), if
-	// the underlying Promise implementation is the GenericPromise.
+	// the underlying Promise implementation is the genericPromise.
 	//
 	// The ok parameter's value(and the validity of other parameters) will
 	// follow the rules of each of the other Promise implementations(other
-	// than GenericPromise), which are described at their methods.
+	// than genericPromise), which are described at their methods.
 	//
 	// The result is passed here with the error, because, in Go, errors are
 	// just values, so returning them is not always considered an unwanted
@@ -151,11 +151,11 @@ type Promise[T any] interface {
 	// boolean, ok, which will be true, only if v is valid.
 	//
 	// The v parameter will always be valid(and ok = true), if the underlying
-	// Promise implementation is the GenericPromise.
+	// Promise implementation is the genericPromise.
 	//
 	// The ok parameter's value(and the validity of other parameter) will
 	// follow the rules of each of the other Promise implementations(other
-	// than GenericPromise), which are described at their methods.
+	// than genericPromise), which are described at their methods.
 	//
 	// It will panic if a nil callback is passed.
 	//
@@ -177,13 +177,13 @@ type Promise[T any] interface {
 	// The Res value returned from the callback must not be modified after return.
 	//
 	// The finallyCb is passed with one arguments, a boolean, ok, which will
-	// always be true, if the underlying Promise implementation is the GenericPromise,
+	// always be true, if the underlying Promise implementation is the genericPromise,
 	// and the promise hasn't panicked.
-	// But, if the underlying Promise implementation is the GenericPromise, and the
+	// But, if the underlying Promise implementation is the genericPromise, and the
 	// promise has panicked, ok will be false.
 	//
 	// The ok parameter's value will follow the rules of each of the other
-	// Promise implementations(other than GenericPromise), which are described
+	// Promise implementations(other than genericPromise), which are described
 	// at their methods.
 	//
 	// It will panic if a nil callback is passed.

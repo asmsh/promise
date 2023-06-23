@@ -53,7 +53,7 @@ func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, res Resul
 }
 
 func runCallback[PrevResT, NewResT any](
-	p *GenericPromise[NewResT],
+	p *genericPromise[NewResT],
 	cb callbackFunc[PrevResT, NewResT],
 	supportResult bool,
 	prevRes Result[PrevResT],
