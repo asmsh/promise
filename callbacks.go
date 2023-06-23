@@ -16,55 +16,54 @@ package promise
 
 import "context"
 
-type callbackFunc[T any] interface {
-	call(ctx context.Context, res Result[T], s uint32) Result[T]
+type callbackFunc[PrevResT, NewResT any] interface {
+	call(ctx context.Context, res Result[PrevResT], s uint32) Result[NewResT]
 }
 
-type goCallback[T any] func()
-type goErrCallback[T any] func() error
-type goResCallback[T any] func(ctx context.Context) Result[T]
-type thenCallback[T any] func(ctx context.Context, val T) Result[T]
-type catchCallback[T any] func(ctx context.Context, val T, err error) Result[T]
-type recoverCallback[T any] func(ctx context.Context, v any) Result[T]
-type finallyCallback[T any] func(ctx context.Context, s Status) Result[T]
+type goCallback[PrevResT, NewResT any] func()
+type goErrCallback[PrevResT, NewResT any] func() error
+type goResCallback[PrevResT, NewResT any] func(ctx context.Context) Result[NewResT]
+type thenCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT) Result[NewResT]
+type catchCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT, err error) Result[NewResT]
+type recoverCallback[PrevResT, NewResT any] func(ctx context.Context, v any) Result[NewResT]
+type finallyCallback[PrevResT, NewResT any] func(ctx context.Context, s Status) Result[NewResT]
 
-func (cb goCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
+func (cb goCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT], s uint32) Result[NewResT] {
 	cb()
 	return nil
 }
-func (cb goErrCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
+func (cb goErrCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT], s uint32) Result[NewResT] {
 	err := cb()
-	return Err[T](err)
+	return Err[NewResT](err)
 }
-func (cb goResCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
+func (cb goResCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT], s uint32) Result[NewResT] {
 	return cb(ctx)
 }
-func (cb thenCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
+func (cb thenCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT], s uint32) Result[NewResT] {
 	return cb(ctx, res.Val())
 }
-func (cb catchCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
+func (cb catchCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT], s uint32) Result[NewResT] {
 	return cb(ctx, res.Val(), res.Err())
 }
-func (cb recoverCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
+func (cb recoverCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT], s uint32) Result[NewResT] {
 	return cb(ctx, res.Err().(*UncaughtPanic).v)
 }
-func (cb finallyCallback[T]) call(ctx context.Context, res Result[T], s uint32) Result[T] {
+func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT], s uint32) Result[NewResT] {
 	return cb(ctx, Status(s))
 }
 
-func runCallback[T any](
-	ctx context.Context,
-	p *GenericPromise[T],
-	cb callbackFunc[T],
+func runCallback[PrevResT, NewResT any](
+	p *GenericPromise[NewResT],
+	cb callbackFunc[PrevResT, NewResT],
 	supportResult bool,
-	prevRes Result[T],
+	prevRes Result[PrevResT],
 	prevStatus uint32,
 	freeAfterDone bool,
 ) {
 	// create the Result pointer, to keep track of any result returned
-	var resP *Result[T]
+	var resP *Result[NewResT]
 	if supportResult {
-		resP = new(Result[T])
+		resP = new(Result[NewResT])
 	}
 
 	// make sure we free this goroutine reservation if it's required
@@ -73,10 +72,10 @@ func runCallback[T any](
 	}
 
 	// defer the return handler to handle panics and runtime.Goexit calls
-	defer p.handleReturns(resP)
+	defer handleReturns(p, resP)
 
 	// run the callback and extract the result
-	res := cb.call(ctx, prevRes, prevStatus)
+	res := cb.call(p.ctx, prevRes, prevStatus)
 
 	// if the callback doesn't support Result returning, return early, as
 	// the rest of the logic isn't relevant anymore.
@@ -87,7 +86,7 @@ func runCallback[T any](
 	// if the callback returned invalid result, set the promise result to
 	// the appropriate error result, otherwise set it to the value returned.
 	if res == nil {
-		*resP = Err[T](ErrPromiseNilResult)
+		*resP = Err[NewResT](ErrPromiseNilResult)
 	} else {
 		*resP = res
 	}

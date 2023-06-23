@@ -29,7 +29,7 @@ const (
 
 // newPromInter creates a new GenericPromise which is resolved internally,
 // using an internal allocated channel.
-func newPromInter[T any](pipeline *Pipeline[T], ctx context.Context, flags ...uint32) *GenericPromise[T] {
+func newPromInter[T any](pipeline *pipelineCore, ctx context.Context, flags ...uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		pipeline: pipeline,
 		ctx:      ctx,
@@ -46,7 +46,7 @@ func newPromInter[T any](pipeline *Pipeline[T], ctx context.Context, flags ...ui
 
 // newPromExter creates a new GenericPromise which is resolved externally,
 // using an external allocated channel, the passed resChan.
-func newPromExter[T any](pipeline *Pipeline[T], ctx context.Context, resChan chan Result[T], flags ...uint32) *GenericPromise[T] {
+func newPromExter[T any](pipeline *pipelineCore, ctx context.Context, resChan chan Result[T], flags ...uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		pipeline: pipeline,
 		ctx:      ctx,
@@ -64,7 +64,7 @@ func newPromExter[T any](pipeline *Pipeline[T], ctx context.Context, resChan cha
 
 // newPromFollow creates a new GenericPromise, for one of the follow methods,
 // which is resolved internally, using an internal allocated channel.
-func newPromFollow[T any](pipeline *Pipeline[T], ctx context.Context, prevStatus uint32) *GenericPromise[T] {
+func newPromFollow[T any](pipeline *pipelineCore, ctx context.Context, prevStatus uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		pipeline: pipeline,
 		ctx:      ctx,
@@ -77,7 +77,7 @@ func newPromFollow[T any](pipeline *Pipeline[T], ctx context.Context, prevStatus
 
 // newPromSync creates a new GenericPromise which is resolved synchronously,
 // just after it's created.
-func newPromSync[T any](pipeline *Pipeline[T], ctx context.Context, flags ...uint32) *GenericPromise[T] {
+func newPromSync[T any](pipeline *pipelineCore, ctx context.Context, flags ...uint32) *GenericPromise[T] {
 	p := &GenericPromise[T]{
 		pipeline: pipeline,
 		ctx:      ctx,
@@ -156,7 +156,7 @@ func (p *GenericPromise[T]) exterWaitProc(ctx context.Context) (timeout bool, s 
 				// operation(either a close operation or sending a single value),
 				// it's allowed and considered a result for bad usage of the chan.
 				// TODO: make sure the value received isn't nil, otherwise reject
-				s = p.resolveToRes(res)
+				s = resolveToRes(p, res)
 
 				// FIXME: check if this is introducing a race condition
 				// only one value should be sent, but more is sent, panic
@@ -197,7 +197,7 @@ func (p *GenericPromise[T]) exterWaitProc(ctx context.Context) (timeout bool, s 
 		}
 		// create an error wrapping the errors that should be reported, by order
 		err := newWrapErrs(ErrPromiseTimeout, ctx.Err())
-		s = p.resolveToRejectedRes(Err[T](err))
+		s = resolveToRejectedRes[T](p, Err[T](err))
 		return true, s
 	}
 }
@@ -215,54 +215,61 @@ func (p *GenericPromise[T]) interWaitProc(ctx context.Context) (timeout bool, s 
 		}
 		// create an error wrapping the errors that should be reported, by order
 		err := newWrapErrs(ErrPromiseTimeout, ctx.Err())
-		s = p.resolveToRejectedRes(Err[T](err))
+		s = resolveToRejectedRes[T](p, Err[T](err))
 		return true, s
 	}
 }
 
-func (p *GenericPromise[T]) handleFollow(prev *GenericPromise[T], andResolve bool) (res Result[T], ok bool) {
+func handleFollow[PrevResT, NewResT any](
+	prevProm *GenericPromise[PrevResT],
+	newProm *GenericPromise[NewResT],
+	andResolve bool,
+) (Result[PrevResT], bool) {
 	// set the 'Handled' flag, and keep track of whether this handle is
 	// valid(first) or not, to decide whether we should move forward and
 	// use the actual result of the promise or reject with an erroneous one.
-	validHandle, s := prev.status.SetHandled()
+	validHandle, s := prevProm.status.SetHandled()
 
 	// if the promise isn't a one-time promise, all handle calls will be valid
 	if !status.IsFlagsOnce(s) {
 		validHandle = true
 	}
 
-	// and if this handle call isn't valid, return and/or reject appropriate error
-	if !validHandle {
-		res = Err[T](ErrPromiseConsumed)
-		if andResolve {
-			p.resolveToRejectedRes(res)
-		}
-	} else {
-		res = prev.res
+	// if this is a valid handle, return the previous promise's result
+	if validHandle {
+		return prevProm.res, true
 	}
 
-	return res, validHandle
+	// otherwise, check if it's not request to resolve the new promise,
+	// and return the appropriate error.
+	if !andResolve {
+		return Err[PrevResT](ErrPromiseConsumed), false
+	}
+
+	// otherwise, resolve the promise to the appropriate error and return
+	resolveToRejectedRes[NewResT](newProm, Err[NewResT](ErrPromiseConsumed))
+	return nil, false
 }
 
 // this handles invalid follow from then, catch, and recover calls.
 // for any promise, this is guaranteed to be called only once, as it's called
 // with the newly created promise as a receiver.
-func (p *GenericPromise[T]) handleInvalidFollow(prevRes Result[T], prevStatus uint32) {
+func handleInvalidFollow[ResT any](newProm *GenericPromise[ResT], prevRes Result[ResT], prevStatus uint32) {
 	// return if the promise is resolved or being resolved by another call
-	if set, _ := p.status.SetResolving(); !set {
+	if set, _ := newProm.status.SetResolving(); !set {
 		return
 	}
 
 	switch {
 	case status.IsStateFulfilled(prevStatus):
 		// the previous promise is fulfilled, fulfill with its result
-		p.resolveToFulfilledRes(prevRes)
+		resolveToFulfilledRes(newProm, prevRes)
 	case status.IsStateRejected(prevStatus):
 		// the previous promise is rejected, reject with its result
-		p.resolveToRejectedRes(prevRes)
+		resolveToRejectedRes(newProm, prevRes)
 	case status.IsStatePanicked(prevStatus):
 		// the previous promise is panicked, panic with its result
-		p.resolveToPanickedRes(prevRes)
+		resolveToPanickedRes(newProm, prevRes)
 	default:
 		// TODO: investigate whether this might actually happen or not
 		panic("promise: internal: unexpected state")
@@ -272,11 +279,11 @@ func (p *GenericPromise[T]) handleInvalidFollow(prevRes Result[T], prevStatus ui
 // handleReturns must be deferred.
 // the callback function is called after a deferred call to this method.
 // no internal call that may cause a panic should be called after this method.
-func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
+func handleReturns[T any](newProm *GenericPromise[T], resP *Result[T]) {
 	// make sure that only one call will resolve the promise, or return if
 	// the promise is already resolved, so that we don't recover panics when
 	// we don't need to.
-	if set, _ := p.status.SetResolving(); !set {
+	if set, _ := newProm.status.SetResolving(); !set {
 		return
 	}
 
@@ -285,14 +292,14 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 		// the callback returned normally, or through a call to runtime.Goexit.
 		if resP == nil {
 			// return from a callback that doesn't support Result returning.
-			p.resolveToFulfilledRes(Empty[T]())
+			resolveToFulfilledRes[T](newProm, Empty[T]())
 		} else {
 			// return from a callback that requires Result returning,
-			p.resolveToRes(*resP)
+			resolveToRes(newProm, *resP)
 		}
 	} else {
 		// a panic happened, resolve to panicked with the panic value.
-		p.resolveToPanickedRes(Err[T](newUncaughtPanic(v)))
+		resolveToPanickedRes[T](newProm, Err[T](newUncaughtPanic(v)))
 	}
 }
 
@@ -302,13 +309,13 @@ func (p *GenericPromise[T]) handleReturns(resP *Result[T]) {
 //
 // if called from exterWaitProc or handleReturns, then it will be called once
 // on the same promise, as it's protected by the Resolving fate setter.
-func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
+func resolveToRes[T any](newProm *GenericPromise[T], res Result[T]) (s uint32) {
 	if res == nil {
-		return p.resolveToRejectedRes(Err[T](ErrPromiseNilResult))
+		return resolveToRejectedRes[T](newProm, Err[T](ErrPromiseNilResult))
 	} else if err := res.Err(); err != nil {
-		return p.resolveToRejectedRes(res)
+		return resolveToRejectedRes(newProm, res)
 	} else {
-		return p.resolveToFulfilledRes(res)
+		return resolveToFulfilledRes(newProm, res)
 	}
 }
 
@@ -316,48 +323,48 @@ func (p *GenericPromise[T]) resolveToRes(res Result[T]) (s uint32) {
 // same promise, by design.
 // if called from handleReturns, then it will be called once on the same
 // promise, as it's called on return, and that can happen once.
-func (p *GenericPromise[T]) resolveToPanickedRes(res Result[T]) (s uint32) {
+func resolveToPanickedRes[ResT any](newProm *GenericPromise[ResT], res Result[ResT]) (s uint32) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
-	p.res = res
-	_, s = p.status.SetPanickedResolved()
-	close(p.resChan)
+	newProm.res = res
+	_, s = newProm.status.SetPanickedResolved()
+	close(newProm.resChan)
 
 	// if the promise is panicked, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught panic to the last call
 	// in the chain.
 	if status.IsChainEmpty(s) {
-		p.uncaughtPanicHandler()
+		newProm.uncaughtPanicHandler()
 	}
 
 	return
 }
 
-func (p *GenericPromise[T]) resolveToRejectedRes(res Result[T]) (s uint32) {
+func resolveToRejectedRes[ResT any](newProm *GenericPromise[ResT], res Result[ResT]) (s uint32) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
-	p.res = res
-	_, s = p.status.SetRejectedResolved()
-	close(p.resChan)
+	newProm.res = res
+	_, s = newProm.status.SetRejectedResolved()
+	close(newProm.resChan)
 
 	// if the promise is rejected, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught error to the last call
 	// in the chain.
 	if status.IsChainEmpty(s) {
-		p.uncaughtErrorHandler()
+		newProm.uncaughtErrorHandler()
 	}
 
 	return
 }
 
-func (p *GenericPromise[T]) resolveToFulfilledRes(res Result[T]) (s uint32) {
+func resolveToFulfilledRes[ResT any](newProm *GenericPromise[ResT], res Result[ResT]) (s uint32) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
-	p.res = res
-	_, s = p.status.SetFulfilledResolved()
-	close(p.resChan)
+	newProm.res = res
+	_, s = newProm.status.SetFulfilledResolved()
+	close(newProm.resChan)
 
 	return
 }

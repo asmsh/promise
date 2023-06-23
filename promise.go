@@ -25,7 +25,7 @@ import (
 //
 // The zero value will block forever on any calls.
 type GenericPromise[T any] struct {
-	pipeline *Pipeline[T]
+	pipeline *pipelineCore
 
 	ctx context.Context
 
@@ -146,31 +146,33 @@ func (p *GenericPromise[T]) Delay(
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	newProm := newPromFollow[T](p.pipeline, context.Background(), s)
-	go newProm.delayCall(p, d, onSuccess, onFailure)
+	go delayFollowCall(p, newProm, d, onSuccess, onFailure)
 	return newProm
 }
 
-func (p *GenericPromise[T]) delayCall(
-	prev *GenericPromise[T],
+// delay creates Promise values with the same type
+func delayFollowCall[ResT any](
+	prevProm *GenericPromise[ResT],
+	newProm *GenericPromise[ResT],
 	dd time.Duration,
 	onSuccess bool,
 	onFailure bool,
 ) {
-	// wait the previous promise to be resolved
-	_, s := prev.wait()
-
 	// make sure we free this goroutine reservation
-	defer p.pipeline.freeGoroutine()
+	defer newProm.pipeline.freeGoroutine()
 
-	// mark prev as 'Handled', and check whether we should continue or not.
+	// wait the previous promise to be resolved
+	_, s := prevProm.wait()
+
+	// mark prevProm as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be used.
-	res, ok := p.handleFollow(prev, false)
+	res, ok := handleFollow(prevProm, newProm, false)
 	if !ok {
 		// it's not a valid handle. it's considered a failure.
 		if onFailure {
 			time.Sleep(dd)
 		}
-		p.resolveToRejectedRes(res)
+		resolveToRejectedRes(newProm, res)
 		return
 	}
 
@@ -180,19 +182,19 @@ func (p *GenericPromise[T]) delayCall(
 		if onSuccess {
 			time.Sleep(dd)
 		}
-		p.resolveToFulfilledRes(res)
+		resolveToFulfilledRes(newProm, res)
 	case status.IsStateRejected(s):
 		// a rejected state is considered a failure
 		if onFailure {
 			time.Sleep(dd)
 		}
-		p.resolveToRejectedRes(res)
+		resolveToRejectedRes(newProm, res)
 	case status.IsStatePanicked(s):
 		// a panicked state is considered a failure
 		if onFailure {
 			time.Sleep(dd)
 		}
-		p.resolveToPanickedRes(res)
+		resolveToPanickedRes(newProm, res)
 	default:
 		// TODO: investigate whether this might actually happen or not
 		panic("promise: internal: unexpected state")
@@ -213,14 +215,13 @@ func (p *GenericPromise[T]) Then(
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	newProm := newPromFollow[T](p.pipeline, ctx, s)
-	go newProm.thenCall(p, ctx, thenCb)
+	go newProm.thenCall(p, thenCb)
 	return newProm
 }
 
 func (p *GenericPromise[T]) thenCall(
 	prev *GenericPromise[T],
-	ctx context.Context,
-	cb thenCallback[T],
+	cb thenCallback[T, T],
 ) {
 	// wait the previous promise to be resolved
 	_, s := prev.wait()
@@ -230,21 +231,21 @@ func (p *GenericPromise[T]) thenCall(
 
 	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
 	if !status.IsStateFulfilled(s) {
-		p.handleInvalidFollow(prev.res, s)
+		handleInvalidFollow(p, prev.res, s)
 		return
 	}
 
 	// mark prev as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be handled
 	// by the callback.
-	res, ok := p.handleFollow(prev, true)
+	res, ok := handleFollow(prev, p, true)
 	if !ok {
 		// return, since the promise is now resolved
 		return
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T](ctx, p, cb, true, res, s, false)
+	runCallback[T, T](p, cb, true, res, s, false)
 }
 
 func (p *GenericPromise[T]) Catch(
@@ -261,14 +262,13 @@ func (p *GenericPromise[T]) Catch(
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	newProm := newPromFollow[T](p.pipeline, ctx, s)
-	go newProm.catchCall(p, ctx, catchCb)
+	go newProm.catchCall(p, catchCb)
 	return newProm
 }
 
 func (p *GenericPromise[T]) catchCall(
 	prev *GenericPromise[T],
-	ctx context.Context,
-	cb catchCallback[T],
+	cb catchCallback[T, T],
 ) {
 	// wait the previous promise to be resolved
 	_, s := prev.wait()
@@ -278,17 +278,17 @@ func (p *GenericPromise[T]) catchCall(
 
 	// 'Catch' can handle only the 'Rejected' state, so return otherwise
 	if !status.IsStateRejected(s) {
-		p.handleInvalidFollow(prev.res, s)
+		handleInvalidFollow(p, prev.res, s)
 		return
 	}
 
 	// mark prev as 'Handled'.
 	// the res value returned will hold the correct value that should be handled
 	// by the callback.
-	res, _ := p.handleFollow(prev, false)
+	res, _ := handleFollow(prev, p, false)
 
 	// run the callback with the actual promise result
-	runCallback[T](ctx, p, cb, true, res, s, false)
+	runCallback[T, T](p, cb, true, res, s, false)
 }
 
 func (p *GenericPromise[T]) Recover(
@@ -312,7 +312,7 @@ func (p *GenericPromise[T]) Recover(
 func (p *GenericPromise[T]) recoverCall(
 	prev *GenericPromise[T],
 	ctx context.Context,
-	cb recoverCallback[T],
+	cb recoverCallback[T, T],
 ) {
 	// wait the previous promise to be resolved
 	_, s := prev.wait()
@@ -322,21 +322,21 @@ func (p *GenericPromise[T]) recoverCall(
 
 	// 'Recover' can handle only the 'Panicked' state, so return otherwise
 	if !status.IsStatePanicked(s) {
-		p.handleInvalidFollow(prev.res, s)
+		handleInvalidFollow(p, prev.res, s)
 		return
 	}
 
 	// mark prev as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be handled
 	// by the callback.
-	res, ok := p.handleFollow(prev, true)
+	res, ok := handleFollow(prev, p, true)
 	if !ok {
 		// return, since the promise is now resolved
 		return
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T](ctx, p, cb, true, res, s, false)
+	runCallback[T, T](p, cb, true, res, s, false)
 }
 
 func (p *GenericPromise[T]) Finally(
@@ -365,7 +365,7 @@ func (p *GenericPromise[T]) Finally(
 func (p *GenericPromise[T]) finallyCall(
 	prev *GenericPromise[T],
 	ctx context.Context,
-	cb finallyCallback[T],
+	cb finallyCallback[T, T],
 ) {
 	// wait the previous promise to be resolved
 	_, s := prev.wait()
@@ -374,5 +374,5 @@ func (p *GenericPromise[T]) finallyCall(
 	defer p.pipeline.freeGoroutine()
 
 	// run the callback with the actual promise result
-	runCallback[T](ctx, p, cb, true, prev.res, s, false)
+	runCallback[T, T](p, cb, true, prev.res, s, false)
 }
