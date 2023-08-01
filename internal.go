@@ -279,13 +279,13 @@ func resolveToFulfilledRes[ResT any](
 func (p *genericPromise[T]) wait(
 	ctx context.Context,
 	resolveOnTimeout bool,
-) (s uint32, err error) {
+) (s uint32) {
 	s = p.status.Load()
 
 	// if the fate is 'Resolved' or 'Handled', don't wait, as they are guaranteed
 	// to happen after the result is saved, and after the resChan is closed.
 	if status.IsFateResolved(s) || status.IsFateHandled(s) {
-		return s, nil
+		return s
 	}
 
 	// wait with the appropriate wait procedure
@@ -305,7 +305,7 @@ func (p *genericPromise[T]) wait(
 func (p *genericPromise[T]) exterWaitProc(
 	ctx context.Context,
 	resolveOnTimeout bool,
-) (s uint32, err error) {
+) (s uint32) {
 	select {
 	case res, ok := <-p.resChan: // the chan is closed or a value is received
 		if ok {
@@ -356,7 +356,7 @@ func (p *genericPromise[T]) exterWaitProc(
 			_, s = p.status.SetFulfilledResolved()
 		}
 
-		return s, nil
+		return s
 	case <-ctx.Done():
 		if resolveOnTimeout {
 			// FIXME: check if this fix itself is not introducing a race condition on reading
@@ -365,15 +365,15 @@ func (p *genericPromise[T]) exterWaitProc(
 			// and writing it by the handleReturns of the prev promise(callback).
 			// A potential fix would be by blocking on receiving from p.resChan
 			if set, s := p.status.SetResolving(); !set {
-				return s, nil
+				return s
 			}
 
 			// create an error wrapping the errors that should be reported, by order
 			werr := newWrapErrs(ErrPromiseTimeout, ctx.Err())
 			s = resolveToRejectedRes[T](p, Err[T](werr))
-			return s, ctx.Err()
+			return s
 		} else {
-			return s, ctx.Err()
+			return s
 		}
 	}
 }
@@ -381,25 +381,25 @@ func (p *genericPromise[T]) exterWaitProc(
 func (p *genericPromise[T]) interWaitProc(
 	ctx context.Context,
 	resolveOnTimeout bool,
-) (s uint32, err error) {
+) (s uint32) {
 	select {
 	case <-p.resChan:
 		// internally created res chan will always be closed by the previous
 		// promise, after setting the res and status fields as expected.
 		s = p.status.Load()
-		return s, nil
+		return s
 	case <-ctx.Done():
 		if resolveOnTimeout {
 			if set, s := p.status.SetResolving(); !set {
-				return s, ctx.Err()
+				return s
 			}
 
 			// create an error wrapping the errors that should be reported, by order
 			werr := newWrapErrs(ErrPromiseTimeout, ctx.Err())
 			s = resolveToRejectedRes[T](p, Err[T](werr))
-			return s, ctx.Err()
+			return s
 		} else {
-			return s, ctx.Err()
+			return s
 		}
 	}
 }
@@ -486,7 +486,7 @@ func (p *genericPromise[T]) asyncReadCall(
 	args []any,
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
-	_, _ = p.wait(p.ctx, true)
+	_ = p.wait(p.ctx, true)
 
 	// run the callback
 	cb(p.res, args)
