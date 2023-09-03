@@ -20,16 +20,22 @@ type Pipeline[T any] struct {
 	core *pipelineCore
 }
 
-func NewPipeline[T any](c PipelineConfig) Pipeline[T] {
-	var reserveChan chan struct{}
-	if c.Size > 0 {
-		reserveChan = make(chan struct{}, c.Size)
+func NewPipeline[T any](c ...*PipelineConfig) Pipeline[T] {
+	var core = &pipelineCore{}
+	if len(c) != 0 && c[0] != nil {
+		if cb := c[0].UncaughtPanicHandler; cb != nil {
+			core.uncaughtPanicHandler = cb
+		}
+		if cb := c[0].UncaughtErrHandler; cb != nil {
+			core.uncaughtErrHandler = cb
+		}
+		if size := c[0].Size; size > 0 {
+			core.reserveChan = make(chan struct{}, size)
+		}
 	}
+
 	return Pipeline[T]{
-		core: &pipelineCore{
-			config:      &c,
-			reserveChan: reserveChan,
-		},
+		core: core,
 	}
 }
 
@@ -125,10 +131,10 @@ func goResCall[T any](
 func (pp *Pipeline[T]) Resolver(
 	ctx context.Context,
 	fun func(
-		ctx context.Context,
-		fulfill func(val ...T),
-		reject func(err error, val ...T),
-	),
+	ctx context.Context,
+	fulfill func(val ...T),
+	reject func(err error, val ...T),
+),
 ) Promise[T] {
 	return resolverCall[T](pp.core, ctx, fun)
 }
@@ -137,10 +143,10 @@ func resolverCall[T any](
 	pc *pipelineCore,
 	ctx context.Context,
 	resolverCb func(
-		ctx context.Context,
-		fulfill func(val ...T),
-		reject func(err error, val ...T),
-	),
+	ctx context.Context,
+	fulfill func(val ...T),
+	reject func(err error, val ...T),
+),
 ) Promise[T] {
 	if resolverCb == nil {
 		panic(nilCallbackPanicMsg)
@@ -275,7 +281,9 @@ func panicCall[T any](pc *pipelineCore, v any) Promise[T] {
 }
 
 type pipelineCore struct {
-	config      *PipelineConfig
+	uncaughtPanicHandler func(v any)
+	uncaughtErrHandler   func(err error)
+
 	reserveChan chan struct{}
 }
 

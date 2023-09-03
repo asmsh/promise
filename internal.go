@@ -406,8 +406,8 @@ func (p *genericPromise[T]) interWaitProc(
 
 func (p *genericPromise[T]) uncaughtErrorHandler() {
 	err := p.res.Err()
-	if p.pipeline != nil && p.pipeline.config.UncaughtErrHandler != nil {
-		p.pipeline.config.UncaughtErrHandler(err)
+	if p.pipeline != nil && p.pipeline.uncaughtErrHandler != nil {
+		p.pipeline.uncaughtErrHandler(err)
 	} else {
 		defUncaughtErrorHandler(err)
 	}
@@ -417,8 +417,8 @@ func (p *genericPromise[T]) uncaughtPanicHandler() {
 	// TODO: make sure the Err() response is of type UncaughtPanic
 	err := p.res.Err()
 	v := err.(*UncaughtPanic).v
-	if p.pipeline != nil && p.pipeline.config.UncaughtPanicHandler != nil {
-		p.pipeline.config.UncaughtPanicHandler(v)
+	if p.pipeline != nil && p.pipeline.uncaughtPanicHandler != nil {
+		p.pipeline.uncaughtPanicHandler(v)
 	} else {
 		defUncaughtPanicHandler(v)
 	}
