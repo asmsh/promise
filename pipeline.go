@@ -17,30 +17,29 @@ type PipelineConfig struct {
 }
 
 type Pipeline[T any] struct {
-	core *pipelineCore
+	core pipelineCore
 }
 
-func NewPipeline[T any](c ...*PipelineConfig) Pipeline[T] {
-	var core = &pipelineCore{}
+func NewPipeline[T any](c ...*PipelineConfig) *Pipeline[T] {
+	pp := &Pipeline[T]{}
+
 	if len(c) != 0 && c[0] != nil {
 		if cb := c[0].UncaughtPanicHandler; cb != nil {
-			core.uncaughtPanicHandler = cb
+			pp.core.uncaughtPanicHandler = cb
 		}
 		if cb := c[0].UncaughtErrHandler; cb != nil {
-			core.uncaughtErrHandler = cb
+			pp.core.uncaughtErrHandler = cb
 		}
 		if size := c[0].Size; size > 0 {
-			core.reserveChan = make(chan struct{}, size)
+			pp.core.reserveChan = make(chan struct{}, size)
 		}
 	}
 
-	return Pipeline[T]{
-		core: core,
-	}
+	return pp
 }
 
 func (pp *Pipeline[T]) Chan(ctx context.Context, resChan chan Result[T]) Promise[T] {
-	return chanCall[T](pp.core, ctx, resChan)
+	return chanCall[T](&pp.core, ctx, resChan)
 }
 
 func chanCall[T any](
@@ -60,7 +59,7 @@ func chanCall[T any](
 }
 
 func (pp *Pipeline[T]) Go(ctx context.Context, fun func()) Promise[T] {
-	return goCall[T](pp.core, ctx, fun)
+	return goCall[T](&pp.core, ctx, fun)
 }
 
 func goCall[T any](
@@ -82,7 +81,7 @@ func goCall[T any](
 }
 
 func (pp *Pipeline[T]) GoErr(ctx context.Context, fun func() error) Promise[T] {
-	return goErrCall[T](pp.core, ctx, fun)
+	return goErrCall[T](&pp.core, ctx, fun)
 }
 
 func goErrCall[T any](
@@ -107,7 +106,7 @@ func (pp *Pipeline[T]) GoRes(
 	ctx context.Context,
 	fun func(ctx context.Context) Result[T],
 ) Promise[T] {
-	return goResCall[T](pp.core, ctx, fun)
+	return goResCall[T](&pp.core, ctx, fun)
 }
 
 func goResCall[T any](
@@ -136,7 +135,7 @@ func (pp *Pipeline[T]) Resolver(
 	reject func(err error, val ...T),
 ),
 ) Promise[T] {
-	return resolverCall[T](pp.core, ctx, fun)
+	return resolverCall[T](&pp.core, ctx, fun)
 }
 
 func resolverCall[T any](
@@ -216,7 +215,7 @@ func (pp *Pipeline[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) Promise[T] {
-	return delayCall[T](pp.core, res, d, cond...)
+	return delayCall[T](&pp.core, res, d, cond...)
 }
 
 func delayCall[T any](
@@ -261,7 +260,7 @@ func delayHandler[T any](
 }
 
 func (pp *Pipeline[T]) Wrap(res Result[T]) Promise[T] {
-	return wrapCall[T](pp.core, res)
+	return wrapCall[T](&pp.core, res)
 }
 
 func wrapCall[T any](pc *pipelineCore, res Result[T]) Promise[T] {
@@ -271,7 +270,7 @@ func wrapCall[T any](pc *pipelineCore, res Result[T]) Promise[T] {
 }
 
 func (pp *Pipeline[T]) Panic(v any) Promise[T] {
-	return panicCall[T](pp.core, v)
+	return panicCall[T](&pp.core, v)
 }
 
 func panicCall[T any](pc *pipelineCore, v any) Promise[T] {
@@ -288,13 +287,17 @@ type pipelineCore struct {
 }
 
 func (pc *pipelineCore) reserveGoroutine() {
-	if pc != nil && pc.reserveChan != nil {
-		pc.reserveChan <- struct{}{}
+	if pc != nil {
+		if pc.reserveChan != nil {
+			pc.reserveChan <- struct{}{}
+		}
 	}
 }
 
 func (pc *pipelineCore) freeGoroutine() {
-	if pc != nil && pc.reserveChan != nil {
-		<-pc.reserveChan
+	if pc != nil {
+		if pc.reserveChan != nil {
+			<-pc.reserveChan
+		}
 	}
 }

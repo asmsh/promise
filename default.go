@@ -30,7 +30,7 @@ var (
 
 func New[T any](ctx context.Context, resChan chan Result[T], pipeline *Pipeline[T]) Promise[T] {
 	if pipeline != nil {
-		return chanCall[T](pipeline.core, ctx, resChan)
+		return chanCall[T](&pipeline.core, ctx, resChan)
 	}
 	return chanCall[T](nil, ctx, resChan)
 }
