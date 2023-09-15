@@ -235,7 +235,7 @@ func delayCall[T any](
 func delayHandler[T any](
 	p *genericPromise[T],
 	res Result[T],
-	d time.Duration,
+	dd time.Duration,
 	flags delayFlags,
 ) {
 	// make sure we free this goroutine reservation
@@ -243,17 +243,17 @@ func delayHandler[T any](
 
 	if res == nil {
 		if flags.onError {
-			time.Sleep(d)
+			time.Sleep(dd)
 		}
 		resolveToRejectedRes[T](p, Err[T](ErrPromiseNilResult))
 	} else if err := res.Err(); err != nil {
 		if flags.onError {
-			time.Sleep(d)
+			time.Sleep(dd)
 		}
 		resolveToRejectedRes(p, res)
 	} else {
 		if flags.onSuccess {
-			time.Sleep(d)
+			time.Sleep(dd)
 		}
 		resolveToFulfilledRes(p, res)
 	}
