@@ -52,10 +52,10 @@ const (
 	chainModeFollow uint32 = iota << 4
 
 	// chain flags, and calls flags, using 4 bits
-	chainCalledFinally uint32 = 1 << 6
-	_                         = 1 << 7 // reserved
-	_                         = 1 << 8 // reserved
-	_                         = 1 << 9 // reserved
+	_ = 1 << 6 // reserved
+	_ = 1 << 7 // reserved
+	_ = 1 << 8 // reserved
+	_ = 1 << 9 // reserved
 
 	// chainModeBitsSetMask and chainModeBitsClrMask are &-ed with the status
 	// to get the chain value and clear the chain value, respectively.
@@ -158,7 +158,7 @@ func (s *PromStatus) Load() (currentStatus uint32) {
 }
 
 // RegRead declares that there's a read call registered on this promise,
-// like a 'Finally', 'Res', or 'asyncRead' calls.
+// like a 'Finally', 'Wait', or 'asyncRead' calls.
 func (s *PromStatus) RegRead() (firstRead bool, status uint32) {
 	// read the current status value, and acquire the update lock
 	cs := s.readAndAcquireLock()
@@ -215,27 +215,6 @@ func (s *PromStatus) RegFollow() (firstFollow bool, status uint32) {
 	// save the new status value, and release the update lock
 	s.saveAndReleaseLock(ns)
 	return firstFollow, ns
-}
-
-// SetCalledFinally declares that 'Finally' has been called on this promise.
-// 'Finally' got its own flag, cause it can't set the fate to 'Handled', so
-// it need another approach to detect calls, for the once implementation.
-// Deprecated:
-func (s *PromStatus) SetCalledFinally() (firstCall bool, status uint32) {
-	// read the current status value, and acquire the update lock
-	cs := s.readAndAcquireLock()
-	// create a new status value from the current one
-	ns := cs
-
-	// set the chain calls flags at any state & fate
-	if ns&chainCalledFinally != chainCalledFinally {
-		ns |= chainCalledFinally // set the corresponding flag
-		firstCall = true         // this is the first time it's set
-	}
-
-	// save the new status value, and release the update lock
-	s.saveAndReleaseLock(ns)
-	return firstCall, ns
 }
 
 // SetResolving set the fate to Resolving, only if it's Unresolved.
@@ -466,7 +445,6 @@ func IsFateHandled(status uint32) bool {
 	return status&fateBitsSetMask == fateHandled
 }
 
-// Deprecated:
 func IsStatePending(status uint32) bool {
 	return status&stateBitsSetMask == statePending
 }

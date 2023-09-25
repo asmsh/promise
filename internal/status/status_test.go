@@ -87,6 +87,20 @@ func isChainOnlyChanged(s uint32) bool {
 	return sOtherBits == 0
 }
 
+// isFateOnlyChanged returns true if all other bits, other than fate's,
+// are 0, otherwise it returns false.
+func isFateOnlyChanged(s uint32) bool {
+	sOtherBits := s & fateBitsCLrMask
+	return sOtherBits == 0
+}
+
+// isFateAndStateOnlyChanged returns true if all other bits, other than fate's,
+// and state's are 0, otherwise it returns false.
+func isFateAndStateOnlyChanged(s uint32) bool {
+	sOtherBits := s & fateBitsCLrMask & stateBitsCLrMask
+	return sOtherBits == 0
+}
+
 func TestPromStatus_Chain(t *testing.T) {
 	s := PromStatus(0)
 
@@ -185,13 +199,6 @@ func TestPromStatus_Chain(t *testing.T) {
 	}
 }
 
-// isFateOnlyChanged returns true if all other bits, other than fate's,
-// are 0, otherwise it returns false.
-func isFateOnlyChanged(s uint32) bool {
-	sOtherBits := s & fateBitsCLrMask
-	return sOtherBits == 0
-}
-
 func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	s := PromStatus(0)
 
@@ -281,7 +288,7 @@ func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	}
 
 	// first set to Resolved should succeed
-	set, ns = s.SetPendingResolved()
+	set, ns = s.SetFulfilledResolved()
 	if !set {
 		t.Errorf("PromStatus.Fate value 'resolved' not set, unexpectedly")
 	}
@@ -291,15 +298,15 @@ func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	if !IsFateResolved(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: resolved")
 	}
-	if !IsStatePending(ns) {
+	if !IsStateFulfilled(ns) {
 		t.Errorf("unexpected PromStatus.State value, expected: pending")
 	}
-	if !isFateOnlyChanged(uint32(s)) {
-		t.Errorf("PromStatus bits, other than fate's, have changed, unexpectedly")
+	if !isFateAndStateOnlyChanged(uint32(s)) {
+		t.Errorf("PromStatus bits, other than fate's and state's, have changed, unexpectedly")
 	}
 
 	// second set to Resolved should fail
-	set, ns = s.SetPendingResolved()
+	set, ns = s.SetFulfilledResolved()
 	if set {
 		t.Errorf("PromStatus.Fate value 'resolved' set, unexpectedly")
 	}
@@ -309,11 +316,11 @@ func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	if !IsFateResolved(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: resolved")
 	}
-	if !IsStatePending(ns) {
+	if !IsStateFulfilled(ns) {
 		t.Errorf("unexpected PromStatus.State value, expected: pending")
 	}
-	if !isFateOnlyChanged(uint32(s)) {
-		t.Errorf("PromStatus bits, other than fate's, have changed, unexpectedly")
+	if !isFateAndStateOnlyChanged(uint32(s)) {
+		t.Errorf("PromStatus bits, other than fate's and state's, have changed, unexpectedly")
 	}
 
 	// any set to Resolving after Resolved should fail
@@ -327,11 +334,11 @@ func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	if !IsFateResolved(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: resolved")
 	}
-	if !IsStatePending(ns) {
+	if !IsStateFulfilled(ns) {
 		t.Errorf("unexpected PromStatus.State value, expected: pending")
 	}
-	if !isFateOnlyChanged(uint32(s)) {
-		t.Errorf("PromStatus bits, other than fate's, have changed, unexpectedly")
+	if !isFateAndStateOnlyChanged(uint32(s)) {
+		t.Errorf("PromStatus bits, other than fate's and state's, have changed, unexpectedly")
 	}
 
 	// any Resolving clear after Resolved should fail
@@ -345,19 +352,12 @@ func TestPromStatus_Fate_State_Resolving(t *testing.T) {
 	if !IsFateResolved(ns) {
 		t.Errorf("unexpected PromStatus.Fate value, expected: resolved")
 	}
-	if !IsStatePending(ns) {
+	if !IsStateFulfilled(ns) {
 		t.Errorf("unexpected PromStatus.State value, expected: pending")
 	}
-	if !isFateOnlyChanged(uint32(s)) {
-		t.Errorf("PromStatus bits, other than fate's, have changed, unexpectedly")
+	if !isFateAndStateOnlyChanged(uint32(s)) {
+		t.Errorf("PromStatus bits, other than fate's and state's, have changed, unexpectedly")
 	}
-}
-
-// isFateAndStateOnlyChanged returns true if all other bits, other than fate's,
-// and state's are 0, otherwise it returns false.
-func isFateAndStateOnlyChanged(s uint32) bool {
-	sOtherBits := s & fateBitsCLrMask & stateBitsCLrMask
-	return sOtherBits == 0
 }
 
 func TestPromStatus_Fate_State_Fulfilled(t *testing.T) {
@@ -736,7 +736,6 @@ func TestPromStatus_Flags(t *testing.T) {
 		s.RegRead()
 		s.RegWait()
 		s.RegFollow()
-		s.SetCalledFinally()
 		s.SetResolving()
 		s.ClearResolving()
 		s.SetFulfilledResolved()
