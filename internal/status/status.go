@@ -40,7 +40,7 @@ const (
 	_                   // reserved
 )
 
-// the chain's related values and constants, using 6 bits(the [5th : 10th] bits)
+// the chain's related values and constants, using 2 bits(the [5th : 6th] bits)
 const (
 	// starting with a shift amount of 4, which is the number of bits used by
 	// previous sections.
@@ -51,71 +51,71 @@ const (
 	chainModeRead   uint32 = iota << 4
 	chainModeFollow uint32 = iota << 4
 
-	// chain flags, and calls flags, using 4 bits
-	_ = 1 << 6 // reserved
-	_ = 1 << 7 // reserved
-	_ = 1 << 8 // reserved
-	_ = 1 << 9 // reserved
-
 	// chainModeBitsSetMask and chainModeBitsClrMask are &-ed with the status
 	// to get the chain value and clear the chain value, respectively.
-	chainModeBitsSetMask = chainModeFollow
-	chainModeBitsClrMask = ^chainModeBitsSetMask
+	chainModeBitsSetMask uint32 = 0b11 << 4
+	chainModeBitsClrMask uint32 = ^chainModeBitsSetMask
 )
 
-// the fate's related values and constants, using 2 bits(the [11th : 12th] bits)
+// the fate's related values and constants, using 2 bits(the [7th : 8th] bits)
+const (
+	// starting with a shift amount of 6, which is the number of bits used by
+	// previous sections.
+
+	// fate modes, using 2 bits
+	fateUnresolved uint32 = iota << 6
+	fateResolving  uint32 = iota << 6
+	fateResolved   uint32 = iota << 6
+	fateHandled    uint32 = iota << 6
+
+	// fateBitsSetMask and fateBitsCLrMask are &-ed with the status to get
+	// the fate value and clear the fate value, respectively.
+	fateBitsSetMask uint32 = 0b11 << 6
+	fateBitsCLrMask uint32 = ^fateBitsSetMask
+)
+
+// the state's related values and constants, using 2 bits(the [9th : 10th] bits)
+const (
+	// starting with a shift amount of 8, which is the number of bits used by
+	// previous sections.
+
+	// state modes, using 2 bits
+	statePending   uint32 = iota << 8
+	stateFulfilled uint32 = iota << 8
+	stateRejected  uint32 = iota << 8
+	statePanicked  uint32 = iota << 8
+
+	// stateBitsSetMask and stateBitsCLrMask are &-ed with the status to get
+	// the state value and clear the state value, respectively.
+	stateBitsSetMask uint32 = 0b11 << 8
+	stateBitsCLrMask uint32 = ^stateBitsSetMask
+)
+
+// the flags' related values and constants, using 12 bits(the [11th : 22th] bits)
 const (
 	// starting with a shift amount of 10, which is the number of bits used by
 	// previous sections.
 
-	// fate modes, using 2 bits
-	fateUnresolved uint32 = iota << 10
-	fateResolving  uint32 = iota << 10
-	fateResolved   uint32 = iota << 10
-	fateHandled    uint32 = iota << 10
-
-	// fateBitsSetMask and fateBitsCLrMask are &-ed with the status to get
-	// the fate value and clear the fate value, respectively.
-	fateBitsSetMask = fateHandled
-	fateBitsCLrMask = ^fateBitsSetMask
-)
-
-// the state's related values and constants, using 2 bits(the [13th : 14th] bits)
-const (
-	// starting with a shift amount of 12, which is the number of bits used by
-	// previous sections.
-
-	// state modes, using 2 bits
-	statePending   uint32 = iota << 12
-	stateFulfilled uint32 = iota << 12
-	stateRejected  uint32 = iota << 12
-	statePanicked  uint32 = iota << 12
-
-	// stateBitsSetMask and stateBitsCLrMask are &-ed with the status to get
-	// the state value and clear the state value, respectively.
-	stateBitsSetMask = statePanicked
-	stateBitsCLrMask = ^stateBitsSetMask
-)
-
-// the flags' related values and constants, using 6 bits(the [15th : 20th] bits)
-const (
-	// starting with a shift amount of 14, which is the number of bits used by
-	// previous sections.
+	// chain flags, and calls flags
+	_ = 1 << (iota + 10) // reserved
+	_ = 1 << (iota + 10) // reserved
+	_ = 1 << (iota + 10) // reserved
+	_ = 1 << (iota + 10) // reserved
 
 	// promise chain types...
-	FlagsTypeOnce  uint32 = 1 << (iota + 14)
-	FlagsTypeTimed uint32 = 1 << (iota + 14)
-	_                     = 1 << (iota + 14) // reserved
-	_                     = 1 << (iota + 14) // reserved
+	_                     = 1 << (iota + 10) // reserved
+	_                     = 1 << (iota + 10) // reserved
+	FlagsTypeOnce  uint32 = 1 << (iota + 10)
+	FlagsTypeTimed uint32 = 1 << (iota + 10)
 
 	// promise features...
-	FlagsIsNotSafe  uint32 = 1 << (iota + 14)
-	FlagsIsExternal uint32 = 1 << (iota + 14)
-	_                      = 1 << (iota + 14) // reserved
-	_                      = 1 << (iota + 14) // reserved
+	_                      = 1 << (iota + 10) // reserved
+	_                      = 1 << (iota + 10) // reserved
+	FlagsIsNotSafe  uint32 = 1 << (iota + 10)
+	FlagsIsExternal uint32 = 1 << (iota + 10)
 
-	// 255 = 1111_1111 (the 8 flags above)
-	flagsBitsSetMask uint32 = 255 << 14
+	// 4095 = 1111_1111_1111 (the 12 flags above)
+	flagsBitsSetMask uint32 = 4095 << 10
 	flagsBitsClrMask        = ^flagsBitsSetMask
 )
 
@@ -302,18 +302,6 @@ func (s *PromStatus) SetFulfilledResolved() (set bool, status uint32) {
 	return set, ns
 }
 
-// SetFulfilledResolvedSync should be used only from the 'fulfillSync' method.
-// it updates the status value directly, as in the 'fulfillSync' method it's
-// guaranteed that the promise will be accessible from this goroutine only,
-// because the promise hasn't been returned to the caller yet.
-func (s *PromStatus) SetFulfilledResolvedSync() (status uint32) {
-	ns := uint32(0)
-	ns |= stateFulfilled // set the state to fulfilled
-	ns |= fateResolved   // set the fate to resolved
-	*s = PromStatus(ns)  // update the status value
-	return ns
-}
-
 func (s *PromStatus) SetRejectedResolved() (set bool, status uint32) {
 	// read the current status value, and acquire the update lock
 	cs := s.readAndAcquireLock()
@@ -335,18 +323,6 @@ func (s *PromStatus) SetRejectedResolved() (set bool, status uint32) {
 	return set, ns
 }
 
-// SetRejectedResolvedSync should be used only from the 'rejectSync' method.
-// it updates the status value directly, as in the 'rejectSync' method it's
-// guaranteed that the promise will be accessible from this goroutine only,
-// because the promise hasn't been returned to the caller yet.
-func (s *PromStatus) SetRejectedResolvedSync() (status uint32) {
-	ns := uint32(0)
-	ns |= stateRejected // set the state to rejected
-	ns |= fateResolved  // set the fate to resolved
-	*s = PromStatus(ns) // update the status value
-	return ns
-}
-
 func (s *PromStatus) SetPanickedResolved() (set bool, status uint32) {
 	// read the current status value, and acquire the update lock
 	cs := s.readAndAcquireLock()
@@ -366,18 +342,6 @@ func (s *PromStatus) SetPanickedResolved() (set bool, status uint32) {
 	// save the new status value, and release the update lock
 	s.saveAndReleaseLock(ns)
 	return set, ns
-}
-
-// SetPanickedResolvedSync should be used only from the 'panicSync' method.
-// it updates the status value directly, as in the 'panicSync' method it's
-// guaranteed that the promise will be accessible from this goroutine only,
-// because the promise hasn't been returned to the caller yet.
-func (s *PromStatus) SetPanickedResolvedSync() (status uint32) {
-	ns := uint32(0)
-	ns |= statePanicked // set the state to panicked
-	ns |= fateResolved  // set the fate to resolved
-	*s = PromStatus(ns) // update the status value
-	return ns
 }
 
 func (s *PromStatus) SetHandled() (set bool, status uint32) {
@@ -406,77 +370,38 @@ func (s *PromStatus) SetHandled() (set bool, status uint32) {
 	return set, ns
 }
 
-// IsChainEmpty returns true if the chain mode is 'chainModeNone'
-func IsChainEmpty(status uint32) bool {
-	return status&chainModeBitsSetMask == chainModeNone
+// SetFulfilledResolvedSync should be used only from the 'fulfillSync' method.
+// it updates the status value directly, as in the 'fulfillSync' method it's
+// guaranteed that the promise will be accessible from this goroutine only,
+// because the promise hasn't been returned to the caller yet.
+func (s *PromStatus) SetFulfilledResolvedSync() (status uint32) {
+	ns := uint32(0)
+	ns |= stateFulfilled // set the state to fulfilled
+	ns |= fateResolved   // set the fate to resolved
+	*s = PromStatus(ns)  // update the status value
+	return ns
 }
 
-// IsChainAtLeastRead returns true if the chain mode is either 'chainModeRead'
-// or 'chainModeFollow'.
-func IsChainAtLeastRead(status uint32) bool {
-	return status&chainModeBitsSetMask >= chainModeRead
+// SetRejectedResolvedSync should be used only from the 'rejectSync' method.
+// it updates the status value directly, as in the 'rejectSync' method it's
+// guaranteed that the promise will be accessible from this goroutine only,
+// because the promise hasn't been returned to the caller yet.
+func (s *PromStatus) SetRejectedResolvedSync() (status uint32) {
+	ns := uint32(0)
+	ns |= stateRejected // set the state to rejected
+	ns |= fateResolved  // set the fate to resolved
+	*s = PromStatus(ns) // update the status value
+	return ns
 }
 
-func IsChainModeWait(status uint32) bool {
-	return status&chainModeBitsSetMask == chainModeWait
-}
-
-func IsChainModeRead(status uint32) bool {
-	return status&chainModeBitsSetMask == chainModeRead
-}
-
-func IsChainModeFollow(status uint32) bool {
-	return status&chainModeBitsSetMask == chainModeFollow
-}
-
-func IsFateUnresolved(status uint32) bool {
-	return status&fateBitsSetMask == fateUnresolved
-}
-
-func IsFateResolving(status uint32) bool {
-	return status&fateBitsSetMask == fateResolving
-}
-
-func IsFateResolved(status uint32) bool {
-	return status&fateBitsSetMask == fateResolved
-}
-
-func IsFateHandled(status uint32) bool {
-	return status&fateBitsSetMask == fateHandled
-}
-
-func IsStatePending(status uint32) bool {
-	return status&stateBitsSetMask == statePending
-}
-
-func IsStateFulfilled(status uint32) bool {
-	return status&stateBitsSetMask == stateFulfilled
-}
-
-func IsStateRejected(status uint32) bool {
-	return status&stateBitsSetMask == stateRejected
-}
-
-func IsStatePanicked(status uint32) bool {
-	return status&stateBitsSetMask == statePanicked
-}
-
-func IsFlagsOnce(status uint32) bool {
-	return status&FlagsTypeOnce == FlagsTypeOnce
-}
-
-func IsFlagsTimed(status uint32) bool {
-	return status&FlagsTypeTimed == FlagsTypeTimed
-}
-
-func IsFlagsNotSafe(status uint32) bool {
-	return status&FlagsIsNotSafe == FlagsIsNotSafe
-}
-
-func IsFlagsExternal(status uint32) bool {
-	return status&FlagsIsExternal == FlagsIsExternal
-}
-
-func NewFromFlags(status uint32) PromStatus {
-	return PromStatus(status & flagsBitsSetMask)
+// SetPanickedResolvedSync should be used only from the 'panicSync' method.
+// it updates the status value directly, as in the 'panicSync' method it's
+// guaranteed that the promise will be accessible from this goroutine only,
+// because the promise hasn't been returned to the caller yet.
+func (s *PromStatus) SetPanickedResolvedSync() (status uint32) {
+	ns := uint32(0)
+	ns |= statePanicked // set the state to panicked
+	ns |= fateResolved  // set the fate to resolved
+	*s = PromStatus(ns) // update the status value
+	return ns
 }
