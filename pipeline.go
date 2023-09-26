@@ -77,7 +77,7 @@ func goCall[T any](
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc, ctx)
-	go runCallback[T, T](p, goCallback[T, T](fun), false, nil, 0, true)
+	go runCallback[T, T](p, goCallback[T, T](fun), nil, false, true)
 	return p
 }
 
@@ -99,7 +99,7 @@ func goErrCall[T any](
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc, ctx)
-	go runCallback[T, T](p, goErrCallback[T, T](fun), true, nil, 0, true)
+	go runCallback[T, T](p, goErrCallback[T, T](fun), nil, true, true)
 	return p
 }
 
@@ -124,7 +124,7 @@ func goResCall[T any](
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc, ctx)
-	go runCallback[T, T](p, goResCallback[T, T](fun), true, nil, 0, true)
+	go runCallback[T, T](p, goResCallback[T, T](fun), nil, true, true)
 	return p
 }
 
@@ -169,7 +169,8 @@ func resolverHandler[T any](
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
 
-	// defer the return handler to handle panics and runtime.Goexit calls
+	// defer the return handler to handle panics and runtime.Goexit calls,
+	// or returns that didn't call neither fulfill nor reject.
 	defer handleReturns(p, nil)
 
 	// create the resolver functions and pass them to the callback

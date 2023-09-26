@@ -207,19 +207,15 @@ func delayFollowCall[T any](
 }
 
 func (p *genericPromise[T]) Then(
-	ctx context.Context,
 	thenCb func(ctx context.Context, val T) Result[T],
 ) Promise[T] {
 	if thenCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, ctx, s)
+	newProm := newPromFollow[T](p.pipeline, p.ctx, s)
 	go thenFollowCall(p, newProm, thenCb)
 	return newProm
 }
@@ -251,23 +247,19 @@ func thenFollowCall[T any](
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T, T](newProm, cb, true, res, s, false)
+	runCallback[T, T](newProm, cb, res, true, false)
 }
 
 func (p *genericPromise[T]) Catch(
-	ctx context.Context,
 	catchCb func(ctx context.Context, val T, err error) Result[T],
 ) Promise[T] {
 	if catchCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, ctx, s)
+	newProm := newPromFollow[T](p.pipeline, p.ctx, s)
 	go catchFollowCall(p, newProm, catchCb)
 	return newProm
 }
@@ -295,23 +287,19 @@ func catchFollowCall[T any](
 	res, _ := handleFollow(prevProm, newProm, false)
 
 	// run the callback with the actual promise result
-	runCallback[T, T](newProm, cb, true, res, s, false)
+	runCallback[T, T](newProm, cb, res, true, false)
 }
 
 func (p *genericPromise[T]) Recover(
-	ctx context.Context,
 	recoverCb func(ctx context.Context, v any) Result[T],
 ) Promise[T] {
 	if recoverCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, ctx, s)
+	newProm := newPromFollow[T](p.pipeline, p.ctx, s)
 	go recoverFollowCall(p, newProm, recoverCb)
 	return newProm
 }
@@ -343,23 +331,19 @@ func recoverFollowCall[T any](
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T, T](newProm, cb, true, res, s, false)
+	runCallback[T, T](newProm, cb, res, true, false)
 }
 
 func (p *genericPromise[T]) Finally(
-	ctx context.Context,
-	finallyCb func(ctx context.Context, s Status) Result[T],
+	finallyCb func(ctx context.Context) Result[T],
 ) Promise[T] {
 	if finallyCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	_, s := p.status.RegWait()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, ctx, s)
+	newProm := newPromFollow[T](p.pipeline, p.ctx, s)
 	go newProm.finallyCall(p, finallyCb)
 	return newProm
 }
@@ -374,11 +358,11 @@ func (p *genericPromise[T]) finallyCall(
 	cb finallyCallback[T, T],
 ) {
 	// wait the previous promise to be resolved
-	s := prev.wait(p.ctx)
+	prev.wait(p.ctx)
 
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
 
 	// run the callback with the actual promise result
-	runCallback[T, T](p, cb, true, prev.res, s, false)
+	runCallback[T, T](p, cb, prev.res, true, false)
 }

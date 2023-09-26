@@ -213,7 +213,7 @@ func handleInvalidFollow[ResT any](
 // no internal call that may cause a panic should be called after this method.
 // TODO: pass a new value, paniced (similar to valid from the sync.OnceFunc implementaiton),
 // and make the handleReturns function uses this value to tell whether the nil value is valid or not.
-func handleReturns[T any](newProm *genericPromise[T], resP *Result[T]) {
+func handleReturns[T any](newProm *genericPromise[T], newResP *Result[T]) {
 	// make sure that only one call will resolve the promise, or return if
 	// the promise is already resolved, so that we don't recover panics when
 	// we don't need to.
@@ -225,13 +225,13 @@ func handleReturns[T any](newProm *genericPromise[T], resP *Result[T]) {
 	if v := recover(); v == nil {
 		// the callback returned normally, through a call to runtime.Goexit,
 		// or with a nil panic value.
-		if resP == nil {
+		if newResP == nil {
 			// return from a callback that doesn't support Result returning.
 			// this is equivalent to setting the result to Empty[T] explicitly.
 			resolveToFulfilledRes[T](newProm, nil)
 		} else {
 			// return from a callback that requires Result returning
-			resolveToRes[T](newProm, *resP)
+			resolveToRes[T](newProm, *newResP)
 		}
 	} else {
 		// a panic happened, resolve to panicked with the panic value.
