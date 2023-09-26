@@ -32,6 +32,8 @@ func getCtxBenchmarkPromise() Promise[any] {
 }
 
 func getErrorBenchmarkPromise() Promise[any] {
+	setNoPanicsPipelineCore()
+
 	prom := GoRes(nil, func(ctx context.Context) Result[any] {
 		time.Sleep(1 * time.Millisecond)
 		return Err[any](newStrError())
@@ -40,8 +42,6 @@ func getErrorBenchmarkPromise() Promise[any] {
 }
 
 func getSuccessBenchmarkPromise(res ...any) Promise[any] {
-	setNoPanicsPipelineCore()
-
 	var resVal any
 	if len(res) > 0 {
 		resVal = res[0]
@@ -165,20 +165,20 @@ type promiseBench struct {
 	// it's special for the parallel benchmarks only.
 	stressed bool
 
-	// callWait and callRes chooses whether to call Wait, Res, or none
-	callWait bool
-	callRes  bool
+	callFollow bool
+	callWait   bool
+	callRes    bool
 
 	name string
 }
 
 var promiseBenchs = []promiseBench{
-	{stressed: false, callWait: false, callRes: false, name: "normal_no-wait-call_no-res-call"},
-	{stressed: false, callWait: true, callRes: true, name: "normal_wait-call_no-res-call"},
-	{stressed: false, callWait: false, callRes: true, name: "normal_no-wait-call_res-call"},
-	{stressed: true, callWait: false, callRes: false, name: "stressed_no-wait-call_no-res-call"},
-	{stressed: true, callWait: true, callRes: false, name: "stressed_wait-call_no-res-call"},
-	{stressed: true, callWait: false, callRes: true, name: "stressed_no-wait-call_res-call"},
+	{stressed: false, callFollow: true, callWait: false, callRes: false, name: "normal_follow-only"},
+	{stressed: false, callFollow: false, callWait: true, callRes: false, name: "normal_wait-only"},
+	{stressed: false, callFollow: false, callWait: false, callRes: true, name: "normal_res-only"},
+	{stressed: true, callFollow: true, callWait: true, callRes: false, name: "stressed_follow-only"},
+	{stressed: true, callFollow: false, callWait: true, callRes: false, name: "stressed_wait-only"},
+	{stressed: true, callFollow: false, callWait: false, callRes: true, name: "stressed_res-only"},
 }
 
 func BenchmarkPromise_Then(b *testing.B) {
@@ -194,15 +194,16 @@ func BenchmarkPromise_Then(b *testing.B) {
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					p := prom.Then(func(ctx context.Context, val any) Result[any] {
-						return nil
-					})
-
+					if bc.callFollow {
+						prom.Then(func(ctx context.Context, val any) Result[any] {
+							return nil
+						})
+					}
 					if bc.callWait {
-						p.Wait()
+						prom.Wait()
 					}
 					if bc.callRes {
-						p.Res()
+						prom.Res()
 					}
 				}
 			})
@@ -221,15 +222,16 @@ func BenchmarkPromise_Then(b *testing.B) {
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					p := prom.Then(func(ctx context.Context, val any) Result[any] {
-						return Val[any]("golang")
-					})
-
+					if bc.callFollow {
+						prom.Then(func(ctx context.Context, val any) Result[any] {
+							return Val[any]("golang")
+						})
+					}
 					if bc.callWait {
-						p.Wait()
+						prom.Wait()
 					}
 					if bc.callRes {
-						p.Res()
+						prom.Res()
 					}
 				}
 			})
@@ -245,20 +247,21 @@ func BenchmarkPromise_Catch(b *testing.B) {
 			}
 
 			b.Run(bc.name, func(b *testing.B) {
-				prom := getCtxBenchmarkPromise()
+				prom := getErrorBenchmarkPromise()
 				b.ReportAllocs()
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					p := prom.Catch(func(ctx context.Context, val any, err error) Result[any] {
-						return nil
-					})
-
+					if bc.callFollow {
+						prom.Catch(func(ctx context.Context, val any, err error) Result[any] {
+							return nil
+						})
+					}
 					if bc.callWait {
-						p.Wait()
+						prom.Wait()
 					}
 					if bc.callRes {
-						p.Res()
+						prom.Res()
 					}
 				}
 			})
@@ -277,15 +280,16 @@ func BenchmarkPromise_Catch(b *testing.B) {
 				b.ResetTimer()
 
 				for i := 0; i < b.N; i++ {
-					p := prom.Catch(func(ctx context.Context, val any, err error) Result[any] {
-						return Val[any]("golang")
-					})
-
+					if bc.callFollow {
+						prom.Catch(func(ctx context.Context, val any, err error) Result[any] {
+							return Val[any]("golang")
+						})
+					}
 					if bc.callWait {
-						p.Wait()
+						prom.Wait()
 					}
 					if bc.callRes {
-						p.Res()
+						prom.Res()
 					}
 				}
 			})
@@ -308,15 +312,16 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 
 				b.RunParallel(func(pb *testing.PB) {
 					for pb.Next() {
-						p := prom.Then(func(ctx context.Context, val any) Result[any] {
-							return nil
-						})
-
+						if bc.callFollow {
+							prom.Then(func(ctx context.Context, val any) Result[any] {
+								return nil
+							})
+						}
 						if bc.callWait {
-							p.Wait()
+							prom.Wait()
 						}
 						if bc.callRes {
-							p.Res()
+							prom.Res()
 						}
 					}
 				})
@@ -338,15 +343,16 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 
 				b.RunParallel(func(pb *testing.PB) {
 					for pb.Next() {
-						p := prom.Then(func(ctx context.Context, val any) Result[any] {
-							return Val[any]("golang")
-						})
-
+						if bc.callFollow {
+							prom.Then(func(ctx context.Context, val any) Result[any] {
+								return Val[any]("golang")
+							})
+						}
 						if bc.callWait {
-							p.Wait()
+							prom.Wait()
 						}
 						if bc.callRes {
-							p.Res()
+							prom.Res()
 						}
 					}
 				})
