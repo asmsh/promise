@@ -18,7 +18,7 @@ import (
 	"sync"
 )
 
-// setNoPanicsPipelineCore should be called at the beggining of every benchmark/test
+// setNoPanicsPipelineCore should be called at the beginning of every benchmark/test
 // function where it's expected to return errors.
 // it's required so that the Promise doesn't panic according to the default handlers' logic.
 var setNoPanicsPipelineCore = sync.OnceFunc(func() {
