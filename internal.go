@@ -48,7 +48,7 @@ const (
 // when the provided duration exceeds the wanted timeout.
 //
 // it returns true only if the wait times-out, otherwise it returns false.
-func (p *genericPromise[T]) wait(ctx context.Context) (s uint32) {
+func (p *genericPromise[T]) wait() (s uint32) {
 	s = p.status.Load()
 
 	// if the fate is 'Resolved' or 'Handled', don't wait, as they are guaranteed
@@ -59,9 +59,9 @@ func (p *genericPromise[T]) wait(ctx context.Context) (s uint32) {
 
 	// wait with the appropriate wait procedure
 	if status.IsFlagsExternal(s) {
-		p.exterWaitProc(ctx)
+		p.exterWaitProc()
 	} else {
-		p.interWaitProc(ctx)
+		p.interWaitProc()
 	}
 
 	// return the up-to-date status value
@@ -74,7 +74,7 @@ func (p *genericPromise[T]) wait(ctx context.Context) (s uint32) {
 // is created with the external flag set.
 // it returns true only if the provided timerChan is received from, otherwise
 // it returns false.
-func (p *genericPromise[T]) exterWaitProc(ctx context.Context) {
+func (p *genericPromise[T]) exterWaitProc() {
 	select {
 	case res, ok := <-p.resChan: // the chan is closed or a value is received
 		if ok {
@@ -115,10 +115,10 @@ func (p *genericPromise[T]) exterWaitProc(ctx context.Context) {
 			// TODO: this whole 'else' branch could be deleted and we can only rely on checking whether 'res' is 'nil' or not.
 			p.status.SetFulfilledResolved()
 		}
-	case <-ctx.Done():
+	case <-p.ctx.Done():
 		if set, _ := p.status.SetResolving(); set {
 			// create an error wrapping the errors that should be reported, by order
-			werr := newWrapErrs(ErrPromiseTimeout, ctx.Err())
+			werr := newWrapErrs(ErrPromiseTimeout, p.ctx.Err())
 			resolveToRejectedRes[T](p, Err[T](werr))
 		} else {
 			// since it was resolving or already resolved, wait for the resChan to be closed
@@ -127,15 +127,15 @@ func (p *genericPromise[T]) exterWaitProc(ctx context.Context) {
 	}
 }
 
-func (p *genericPromise[T]) interWaitProc(ctx context.Context) {
+func (p *genericPromise[T]) interWaitProc() {
 	select {
 	case <-p.resChan:
 		// internally created res chan will always be closed by the previous
 		// promise, after setting the res and status fields as expected.
-	case <-ctx.Done():
+	case <-p.ctx.Done():
 		if set, _ := p.status.SetResolving(); set {
 			// create an error wrapping the errors that should be reported, by order
-			werr := newWrapErrs(ErrPromiseTimeout, ctx.Err())
+			werr := newWrapErrs(ErrPromiseTimeout, p.ctx.Err())
 			resolveToRejectedRes[T](p, Err[T](werr))
 		} else {
 			// since it was resolving or already resolved, wait for the resChan to be closed
@@ -389,7 +389,7 @@ func (p *genericPromise[T]) asyncReadCall(
 	args []any,
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
-	_ = p.wait(p.ctx)
+	_ = p.wait()
 
 	// run the callback
 	cb(p.res, args)

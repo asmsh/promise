@@ -93,7 +93,7 @@ func (p *genericPromise[T]) waitCall(
 	resolveOnTimeout bool,
 ) (s uint32) {
 	// wait the promise to be resolved, or until the context is Done.
-	s = p.wait(ctx)
+	s = p.wait()
 
 	if !status.IsChainAtLeastRead(s) && !status.IsFateHandled(s) {
 		if status.IsStatePanicked(s) {
@@ -119,7 +119,7 @@ func (p *genericPromise[T]) Res() Result[T] {
 
 func (p *genericPromise[T]) resCall() Result[T] {
 	// wait the promise to be resolved, or until its context is Done.
-	p.wait(p.ctx)
+	p.wait()
 
 	// if it's a call to handle the result, set the 'Handled' flag.
 	// also, keep track of whether this handle was valid(first) or not,
@@ -167,7 +167,7 @@ func delayFollowCall[T any](
 	defer prevProm.pipeline.freeGoroutine()
 
 	// wait the previous promise to be resolved
-	s := prevProm.wait(prevProm.ctx)
+	s := prevProm.wait()
 
 	// mark prevProm as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be used.
@@ -229,7 +229,7 @@ func thenFollowCall[T any](
 	defer prevProm.pipeline.freeGoroutine()
 
 	// wait the previous promise to be resolved
-	s := prevProm.wait(prevProm.ctx)
+	s := prevProm.wait()
 
 	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
 	if !status.IsStateFulfilled(s) {
@@ -273,7 +273,7 @@ func catchFollowCall[T any](
 	defer prevProm.pipeline.freeGoroutine()
 
 	// wait the previous promise to be resolved
-	s := prevProm.wait(prevProm.ctx)
+	s := prevProm.wait()
 
 	// 'Catch' can handle only the 'Rejected' state, so return otherwise
 	if !status.IsStateRejected(s) {
@@ -313,7 +313,7 @@ func recoverFollowCall[T any](
 	defer prevProm.pipeline.freeGoroutine()
 
 	// wait the previous promise to be resolved
-	s := prevProm.wait(prevProm.ctx)
+	s := prevProm.wait()
 
 	// 'Recover' can handle only the 'Panicked' state, so return otherwise
 	if !status.IsStatePanicked(s) {
@@ -358,7 +358,7 @@ func (p *genericPromise[T]) finallyCall(
 	cb finallyCallback[T, T],
 ) {
 	// wait the previous promise to be resolved
-	prev.wait(p.ctx)
+	prev.wait()
 
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
