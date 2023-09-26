@@ -171,11 +171,11 @@ func handleFollow[PrevResT, NewResT any](
 	// otherwise, check if it's not request to resolve the new promise,
 	// and return the appropriate error.
 	if !andResolve {
-		return Err[PrevResT](ErrPromiseConsumed), false
+		return errPromiseConsumedResult[PrevResT]{}, false
 	}
 
 	// otherwise, resolve the promise to the appropriate error and return
-	resolveToRejectedRes[NewResT](newProm, Err[NewResT](ErrPromiseConsumed))
+	resolveToRejectedRes[NewResT](newProm, errPromiseConsumedResult[NewResT]{})
 	return nil, false
 }
 

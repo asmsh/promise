@@ -53,3 +53,12 @@ func (r emptyResult[T]) Err() error  { return nil }
 func (r valResult[T]) Err() error    { return nil }
 func (r errResult[T]) Err() error    { return r.err }
 func (r valErrResult[T]) Err() error { return r.err }
+
+// common error results
+
+// errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
+// it's used instead of saving the ErrPromiseConsumed error in a generic errResult value.
+type errPromiseConsumedResult[T any] struct{}
+
+func (r errPromiseConsumedResult[T]) Val() (v T) { return v }
+func (r errPromiseConsumedResult[T]) Err() error { return ErrPromiseConsumed }

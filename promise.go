@@ -140,7 +140,7 @@ func (p *genericPromise[T]) resCall() Result[T] {
 		}
 		return p.res
 	} else {
-		return Err[T](ErrPromiseConsumed)
+		return errPromiseConsumedResult[T]{}
 	}
 }
 
