@@ -359,13 +359,11 @@ func (p *genericPromise[T]) exterWaitProc(
 		return s
 	case <-ctx.Done():
 		if resolveOnTimeout {
-			// FIXME: check if this fix itself is not introducing a race condition on reading
-			//  the res value, since wait might return now while the promise is still resolving.
-			// Update: it did introduce a race condition on reading the prev.res value by the thenCall,
-			// and writing it by the handleReturns of the prev promise(callback).
-			// A potential fix would be by blocking on receiving from p.resChan
-			if set, s := p.status.SetResolving(); !set {
-				return s
+			if set, _ := p.status.SetResolving(); !set {
+				// since it was resolving or already resolved, wait for the resChan to be closed.
+				<-p.resChan
+				// make sure we return the up-to-date status value.
+				return p.status.Load()
 			}
 
 			// create an error wrapping the errors that should be reported, by order
@@ -390,8 +388,11 @@ func (p *genericPromise[T]) interWaitProc(
 		return s
 	case <-ctx.Done():
 		if resolveOnTimeout {
-			if set, s := p.status.SetResolving(); !set {
-				return s
+			if set, _ := p.status.SetResolving(); !set {
+				// since it was resolving or already resolved, wait for the resChan to be closed.
+				<-p.resChan
+				// make sure we return the up-to-date status value.
+				return p.status.Load()
 			}
 
 			// create an error wrapping the errors that should be reported, by order
