@@ -116,14 +116,7 @@ func (p *genericPromise[T]) exterWaitProc() {
 			p.status.SetFulfilledResolved()
 		}
 	case <-p.ctx.Done():
-		if set, _ := p.status.SetResolving(); set {
-			// create an error wrapping the errors that should be reported, by order
-			werr := newWrapErrs(ErrPromiseTimeout, p.ctx.Err())
-			resolveToRejectedRes[T](p, Err[T](werr))
-		} else {
-			// since it was resolving or already resolved, wait for the resChan to be closed
-			<-p.resChan
-		}
+		p.resolveTimeout()
 	}
 }
 
@@ -133,14 +126,18 @@ func (p *genericPromise[T]) interWaitProc() {
 		// internally created res chan will always be closed by the previous
 		// promise, after setting the res and status fields as expected.
 	case <-p.ctx.Done():
-		if set, _ := p.status.SetResolving(); set {
-			// create an error wrapping the errors that should be reported, by order
-			werr := newWrapErrs(ErrPromiseTimeout, p.ctx.Err())
-			resolveToRejectedRes[T](p, Err[T](werr))
-		} else {
-			// since it was resolving or already resolved, wait for the resChan to be closed
-			<-p.resChan
-		}
+		p.resolveTimeout()
+	}
+}
+
+func (p *genericPromise[T]) resolveTimeout() {
+	if set, _ := p.status.SetResolving(); set {
+		// create an error wrapping the errors that should be reported, by order
+		werr := newWrapErrs(ErrPromiseTimeout, p.ctx.Err())
+		resolveToRejectedRes[T](p, Err[T](werr))
+	} else {
+		// since it was resolving or already resolved, wait for the resChan to be closed
+		<-p.resChan
 	}
 }
 
