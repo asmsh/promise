@@ -76,12 +76,12 @@ func Chan[T any](ctx context.Context, resChan chan Result[T]) Promise[T] {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Go[T any](ctx context.Context, fun func()) Promise[T] {
-	return goCall[T](defPipelineCore, ctx, fun)
+func Go(ctx context.Context, fun func()) Promise[any] {
+	return goCall[any](defPipelineCore, ctx, fun)
 }
 
-func GoErr[T any](ctx context.Context, fun func() error) Promise[T] {
-	return goErrCall[T](defPipelineCore, ctx, fun)
+func GoErr(ctx context.Context, fun func() error) Promise[any] {
+	return goErrCall[any](defPipelineCore, ctx, fun)
 }
 
 // GoRes runs the provided function, fun, in a separate goroutine, and returns

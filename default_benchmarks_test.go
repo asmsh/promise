@@ -96,7 +96,7 @@ func BenchmarkGo(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Go[any](nil, func() {})
+			p = Go(nil, func() {})
 		}
 		_ = p
 	})
@@ -106,7 +106,7 @@ func BenchmarkGo(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Go[any](context.Background(), func() {})
+			p = Go(context.Background(), func() {})
 		}
 		_ = p
 	})
@@ -120,7 +120,7 @@ func BenchmarkGoErr(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = GoErr[any](nil, func() error {
+			p = GoErr(nil, func() error {
 				return nil
 			})
 		}
@@ -132,7 +132,7 @@ func BenchmarkGoErr(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = GoErr[any](context.Background(), func() error {
+			p = GoErr(context.Background(), func() error {
 				return nil
 			})
 		}
@@ -144,7 +144,7 @@ func BenchmarkGoErr(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = GoErr[any](context.Background(), func() error {
+			_ = GoErr(context.Background(), func() error {
 				return newStrError()
 			})
 		}
@@ -156,7 +156,7 @@ func BenchmarkGoErr(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = GoErr[any](context.Background(), func() error {
+			_ = GoErr(context.Background(), func() error {
 				return newPtrError()
 			})
 		}

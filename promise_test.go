@@ -69,7 +69,7 @@ func TestPanicking(t *testing.T) {
 			}
 		}()
 
-		p := Go[any](nil, func() {
+		p := Go(nil, func() {
 			panic(panicValue)
 		}).Recover(func(ctx context.Context, v any) (res Result[any]) {
 			return nil
@@ -85,7 +85,7 @@ func TestPanicking(t *testing.T) {
 			}
 		}()
 
-		p := Go[any](nil, func() {
+		p := Go(nil, func() {
 			panic(panicValue)
 		})
 		res := p.Res()
@@ -108,7 +108,7 @@ func TestPanicking(t *testing.T) {
 			}
 		}()
 
-		p := Go[any](nil, func() {
+		p := Go(nil, func() {
 			panic(panicValue)
 		})
 		p.Wait()
@@ -125,7 +125,7 @@ func TestPanicking(t *testing.T) {
 			}
 		}()
 
-		p := Go[any](nil, func() {
+		p := Go(nil, func() {
 			panic(panicValue)
 		}).Then(func(ctx context.Context, val any) Result[any] {
 			return nil
