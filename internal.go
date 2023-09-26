@@ -161,7 +161,11 @@ func handleFollow[PrevResT, NewResT any](
 
 	// if this is a valid handle, return the previous promise's result
 	if validHandle {
-		return prevProm.res, true
+		res := prevProm.res
+		if res == nil {
+			res = emptyResult[PrevResT]{}
+		}
+		return res, true
 	}
 
 	// otherwise, check if it's not request to resolve the new promise,
@@ -219,12 +223,14 @@ func handleReturns[T any](newProm *genericPromise[T], resP *Result[T]) {
 
 	// FIXME: double check that this will work with runtime.Goexit(), prevent the goroutine from terminating
 	if v := recover(); v == nil {
-		// the callback returned normally, or through a call to runtime.Goexit.
+		// the callback returned normally, through a call to runtime.Goexit,
+		// or with a nil panic value.
 		if resP == nil {
 			// return from a callback that doesn't support Result returning.
-			resolveToFulfilledRes[T](newProm, Empty[T]())
+			// this is equivalent to setting the result to Empty[T] explicitly.
+			resolveToFulfilledRes[T](newProm, nil)
 		} else {
-			// return from a callback that requires Result returning,
+			// return from a callback that requires Result returning
 			resolveToRes[T](newProm, *resP)
 		}
 	} else {
@@ -240,9 +246,7 @@ func handleReturns[T any](newProm *genericPromise[T], resP *Result[T]) {
 // if called from exterWaitProc or handleReturns, then it will be called once
 // on the same promise, as it's protected by the Resolving fate setter.
 func resolveToRes[T any](newProm *genericPromise[T], res Result[T]) (s uint32) {
-	if res == nil {
-		return resolveToRejectedRes[T](newProm, Err[T](ErrPromiseNilResult))
-	} else if err := res.Err(); err != nil {
+	if res != nil && res.Err() != nil {
 		return resolveToRejectedRes(newProm, res)
 	} else {
 		return resolveToFulfilledRes(newProm, res)
@@ -326,9 +330,7 @@ func (p *genericPromise[T]) uncaughtPanicHandler() {
 }
 
 func (p *genericPromise[T]) resolveToResSync(res Result[T]) (s uint32) {
-	if res == nil {
-		return p.rejectSync(Err[T](ErrPromiseNilResult))
-	} else if err := res.Err(); err != nil {
+	if res != nil && res.Err() != nil {
 		return p.rejectSync(res)
 	} else {
 		return p.fulfillSync(res)

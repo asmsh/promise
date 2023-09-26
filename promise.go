@@ -119,7 +119,7 @@ func (p *genericPromise[T]) Res() Result[T] {
 
 func (p *genericPromise[T]) resCall() Result[T] {
 	// wait the promise to be resolved, or until its context is Done.
-	s := p.wait(p.ctx)
+	p.wait(p.ctx)
 
 	// if it's a call to handle the result, set the 'Handled' flag.
 	// also, keep track of whether this handle was valid(first) or not,
@@ -134,6 +134,10 @@ func (p *genericPromise[T]) resCall() Result[T] {
 
 	// return the actual result of the promise, or an erroneous one
 	if validHandle {
+		res := p.res
+		if res == nil {
+			res = emptyResult[T]{}
+		}
 		return p.res
 	} else {
 		return Err[T](ErrPromiseConsumed)

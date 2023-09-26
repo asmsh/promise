@@ -83,11 +83,6 @@ func runCallback[PrevResT, NewResT any](
 		return
 	}
 
-	// if the callback returned invalid result, set the promise result to
-	// the appropriate error result, otherwise set it to the value returned.
-	if res == nil {
-		*resP = Err[NewResT](ErrPromiseNilResult)
-	} else {
-		*resP = res
-	}
+	// set the promise result to the returned value
+	*resP = res
 }

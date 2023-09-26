@@ -42,6 +42,7 @@ func (pp *Pipeline[T]) Chan(ctx context.Context, resChan chan Result[T]) Promise
 	return chanCall[T](&pp.core, ctx, resChan)
 }
 
+// TODO: panic if the resChan's capacity is 0
 func chanCall[T any](
 	pc *pipelineCore,
 	ctx context.Context,
@@ -130,10 +131,10 @@ func goResCall[T any](
 func (pp *Pipeline[T]) Resolver(
 	ctx context.Context,
 	fun func(
-	ctx context.Context,
-	fulfill func(val ...T),
-	reject func(err error, val ...T),
-),
+		ctx context.Context,
+		fulfill func(val ...T),
+		reject func(err error, val ...T),
+	),
 ) Promise[T] {
 	return resolverCall[T](&pp.core, ctx, fun)
 }
@@ -142,10 +143,10 @@ func resolverCall[T any](
 	pc *pipelineCore,
 	ctx context.Context,
 	resolverCb func(
-	ctx context.Context,
-	fulfill func(val ...T),
-	reject func(err error, val ...T),
-),
+		ctx context.Context,
+		fulfill func(val ...T),
+		reject func(err error, val ...T),
+	),
 ) Promise[T] {
 	if resolverCb == nil {
 		panic(nilCallbackPanicMsg)
@@ -181,7 +182,7 @@ func resolverHandler[T any](
 		// only one call (from fulfill or reject) will reach this point
 
 		if len(val) == 0 {
-			resolveToFulfilledRes[T](p, Empty[T]())
+			resolveToFulfilledRes[T](p, nil)
 		} else {
 			resolveToFulfilledRes[T](p, Val(val[0]))
 		}
@@ -241,12 +242,7 @@ func delayHandler[T any](
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
 
-	if res == nil {
-		if flags.onError {
-			time.Sleep(dd)
-		}
-		resolveToRejectedRes[T](p, Err[T](ErrPromiseNilResult))
-	} else if err := res.Err(); err != nil {
+	if res != nil && res.Err() != nil {
 		if flags.onError {
 			time.Sleep(dd)
 		}

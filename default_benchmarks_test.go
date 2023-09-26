@@ -289,7 +289,7 @@ func BenchmarkDelay(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Delay(EmptyAny(), time.Microsecond)
+			p = Delay(Empty[any](), time.Microsecond)
 		}
 		_ = p
 	})
@@ -299,7 +299,7 @@ func BenchmarkDelay(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Delay(EmptyAny(), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
+			p = Delay[any](nil, time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
 		}
 		_ = p
 	})
@@ -332,7 +332,7 @@ func BenchmarkWrap(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Wrap(EmptyAny())
+			p = Wrap[any](nil)
 		}
 		_ = p
 	})

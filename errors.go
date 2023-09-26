@@ -12,7 +12,9 @@ var (
 
 	// ErrPromiseNilResult will be returned when a callback returns nil as Result value,
 	// when a callback calls panic with nil, or when a callback calls runtime.Goexit.
-	ErrPromiseNilResult = errors.New("promise got nil as result")
+	// TODO: check if we should introduce a new error to report returns via runtime.Goexit or nil panic
+	// quick way of returning typed Empty.
+	//	ErrPromiseNilResult = errors.New("promise got nil as result")
 )
 
 // UncaughtPanic wraps a panic that happened in a promise chain, but hasn't

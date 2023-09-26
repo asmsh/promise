@@ -20,10 +20,6 @@ type Result[T any] interface {
 	Err() error
 }
 
-func EmptyAny() Result[any] {
-	return emptyResult[any]{}
-}
-
 func Empty[T any]() Result[T] {
 	return emptyResult[T]{}
 }
