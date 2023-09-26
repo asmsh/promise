@@ -16,6 +16,7 @@ package promise
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/asmsh/promise/internal/status"
 )
@@ -150,13 +151,15 @@ func handleInvalidFollow[ResT any](
 		resolveToPanickedRes(newProm, prevProm.res)
 	default:
 		// TODO: investigate whether this might actually happen or not
-		panic("promise: internal: unexpected state")
+		panic(fmt.Sprintf("promise: internal: unexpected state: '%b'", prevStatus))
 	}
 }
 
 // handleReturns must be deferred.
 // the callback function is called after a deferred call to this method.
 // no internal call that may cause a panic should be called after this method.
+// TODO: pass a new value, paniced (similar to valid from the sync.OnceFunc implementaiton),
+// and make the handleReturns function uses this value to tell whether the nil value is valid or not.
 func handleReturns[T any](newProm *genericPromise[T], resP *Result[T]) {
 	// make sure that only one call will resolve the promise, or return if
 	// the promise is already resolved, so that we don't recover panics when
@@ -173,7 +176,7 @@ func handleReturns[T any](newProm *genericPromise[T], resP *Result[T]) {
 			resolveToFulfilledRes[T](newProm, Empty[T]())
 		} else {
 			// return from a callback that requires Result returning,
-			resolveToRes(newProm, *resP)
+			resolveToRes[T](newProm, *resP)
 		}
 	} else {
 		// a panic happened, resolve to panicked with the panic value.
@@ -247,12 +250,9 @@ func resolveToFulfilledRes[ResT any](
 	newProm *genericPromise[ResT],
 	res Result[ResT],
 ) (s uint32) {
-	// save the result, update the status, and close the resChan to unblock
-	// all waiting calls.
 	newProm.res = res
 	_, s = newProm.status.SetFulfilledResolved()
 	close(newProm.resChan)
-
 	return
 }
 
