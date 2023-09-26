@@ -48,10 +48,7 @@ const (
 // when the provided duration exceeds the wanted timeout.
 //
 // it returns true only if the wait times-out, otherwise it returns false.
-func (p *genericPromise[T]) wait(
-	ctx context.Context,
-	resolveOnTimeout bool,
-) (s uint32) {
+func (p *genericPromise[T]) wait(ctx context.Context) (s uint32) {
 	s = p.status.Load()
 
 	// if the fate is 'Resolved' or 'Handled', don't wait, as they are guaranteed
@@ -62,10 +59,13 @@ func (p *genericPromise[T]) wait(
 
 	// wait with the appropriate wait procedure
 	if status.IsFlagsExternal(s) {
-		return p.exterWaitProc(ctx, resolveOnTimeout)
+		p.exterWaitProc(ctx)
 	} else {
-		return p.interWaitProc(ctx, resolveOnTimeout)
+		p.interWaitProc(ctx)
 	}
+
+	// return the up-to-date status value
+	return p.status.Load()
 }
 
 // exterWaitProc executes the wait procedure responsible for promises with
@@ -74,32 +74,21 @@ func (p *genericPromise[T]) wait(
 // is created with the external flag set.
 // it returns true only if the provided timerChan is received from, otherwise
 // it returns false.
-func (p *genericPromise[T]) exterWaitProc(
-	ctx context.Context,
-	resolveOnTimeout bool,
-) (s uint32) {
+func (p *genericPromise[T]) exterWaitProc(ctx context.Context) {
 	select {
 	case res, ok := <-p.resChan: // the chan is closed or a value is received
 		if ok {
 			// a value is received.
 			// set the status to 'Resolving', and handle the result, only if it's
 			// been just set, otherwise panic, accordingly.
-			ok, s = p.status.SetResolving()
+			ok, _ = p.status.SetResolving()
 			if ok {
-				// this is the first and only result received on this channel,
-				// so handle it, accordingly.
-				//
-				// this will close the chan, regardless it's already closed or
-				// not.
-				// it might panic if a second result value is sent on it, but
-				// since it's required that the chan be used only once for one
-				// operation(either a close operation or sending a single value),
-				// it's allowed and considered a result for bad usage of the chan.
-				// TODO: make sure the value received isn't nil, otherwise reject
-				s = resolveToRes(p, res)
+				// this is the first result received on this channel.
+				// this will set the result value and close the chan.
+				resolveToRes(p, res)
 
 				// FIXME: check if this is introducing a race condition
-				// only one value should be sent, but more is sent, panic
+				// only one value should be sent, but more is sent, panic.
 				if len(p.resChan) != 0 {
 					panic(multipleSendsPanicMsg)
 				}
@@ -114,8 +103,7 @@ func (p *genericPromise[T]) exterWaitProc(
 			// set the status to 'Fulfilled' and 'Resolved'.
 			//
 			// if we closed the chan, then the res and status fields are now set
-			// as expected, and attempting to set them again will not succeed,
-			// and that's acceptable.
+			// as expected, and this call is a no-op, and that's acceptable.
 			//
 			// if the user closed the chan, which is considered acceptable, only
 			// if the user didn't send any values and just closed the chan, the
@@ -125,54 +113,33 @@ func (p *genericPromise[T]) exterWaitProc(
 			// TODO: in this scenario, the res value will be nil.
 			// TODO: maybe, disallow users from closing the chan, or figure a way to detect it first.
 			// TODO: this whole 'else' branch could be deleted and we can only rely on checking whether 'res' is 'nil' or not.
-			_, s = p.status.SetFulfilledResolved()
+			p.status.SetFulfilledResolved()
 		}
-
-		return s
 	case <-ctx.Done():
-		if resolveOnTimeout {
-			if set, _ := p.status.SetResolving(); !set {
-				// since it was resolving or already resolved, wait for the resChan to be closed.
-				<-p.resChan
-				// make sure we return the up-to-date status value.
-				return p.status.Load()
-			}
-
+		if set, _ := p.status.SetResolving(); set {
 			// create an error wrapping the errors that should be reported, by order
 			werr := newWrapErrs(ErrPromiseTimeout, ctx.Err())
-			s = resolveToRejectedRes[T](p, Err[T](werr))
-			return s
+			resolveToRejectedRes[T](p, Err[T](werr))
 		} else {
-			return s
+			// since it was resolving or already resolved, wait for the resChan to be closed
+			<-p.resChan
 		}
 	}
 }
 
-func (p *genericPromise[T]) interWaitProc(
-	ctx context.Context,
-	resolveOnTimeout bool,
-) (s uint32) {
+func (p *genericPromise[T]) interWaitProc(ctx context.Context) {
 	select {
 	case <-p.resChan:
 		// internally created res chan will always be closed by the previous
 		// promise, after setting the res and status fields as expected.
-		s = p.status.Load()
-		return s
 	case <-ctx.Done():
-		if resolveOnTimeout {
-			if set, _ := p.status.SetResolving(); !set {
-				// since it was resolving or already resolved, wait for the resChan to be closed.
-				<-p.resChan
-				// make sure we return the up-to-date status value.
-				return p.status.Load()
-			}
-
+		if set, _ := p.status.SetResolving(); set {
 			// create an error wrapping the errors that should be reported, by order
 			werr := newWrapErrs(ErrPromiseTimeout, ctx.Err())
-			s = resolveToRejectedRes[T](p, Err[T](werr))
-			return s
+			resolveToRejectedRes[T](p, Err[T](werr))
 		} else {
-			return s
+			// since it was resolving or already resolved, wait for the resChan to be closed
+			<-p.resChan
 		}
 	}
 }
@@ -420,7 +387,7 @@ func (p *genericPromise[T]) asyncReadCall(
 	args []any,
 ) {
 	// wait the previous promise to be resolved, as long as ctx is not done
-	_ = p.wait(p.ctx, true)
+	_ = p.wait(p.ctx)
 
 	// run the callback
 	cb(p.res, args)
