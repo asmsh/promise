@@ -132,20 +132,19 @@ func (p *genericPromise[T]) interWaitProc() {
 
 func (p *genericPromise[T]) resolveTimeout() {
 	if set, _ := p.status.SetResolving(); set {
-		// create an error wrapping the errors that should be reported, by order
-		werr := newWrapErrs(ErrPromiseTimeout, p.ctx.Err())
-		resolveToRejectedRes[T](p, Err[T](werr))
+		// resolve to an error result container that includes the cause error
+		resolveToRejectedRes[T](p, &errPromiseTimeoutResult[T]{cause: p.ctx.Err()})
 	} else {
 		// since it was resolving or already resolved, wait for the resChan to be closed
 		<-p.resChan
 	}
 }
 
-func handleFollow[PrevResT, NewResT any](
-	prevProm *genericPromise[PrevResT],
-	newProm *genericPromise[NewResT],
-	andResolve bool,
-) (Result[PrevResT], bool) {
+func handleFollow[PrevT, NextT any](
+	prevProm *genericPromise[PrevT],
+	nextProm *genericPromise[NextT],
+	resolveOnErr bool,
+) (resToBeHandled Result[PrevT], valid bool) {
 	// set the 'Handled' flag, and keep track of whether this handle is
 	// valid(first) or not, to decide whether we should move forward and
 	// use the actual result of the promise or reject with an erroneous one.
@@ -156,49 +155,47 @@ func handleFollow[PrevResT, NewResT any](
 		validHandle = true
 	}
 
-	// if this is a valid handle, return the previous promise's result
-	if validHandle {
-		res := prevProm.res
-		if res == nil {
-			res = emptyResult[PrevResT]{}
+	// if the promise result has been used, either return or resolve with the expected error
+	if !validHandle {
+		if resolveOnErr {
+			resolveToRejectedRes[NextT](nextProm, errPromiseConsumedResult[NextT]{})
+			return nil, false
 		}
-		return res, true
+		return errPromiseConsumedResult[PrevT]{}, false
 	}
 
-	// otherwise, check if it's not request to resolve the new promise,
-	// and return the appropriate error.
-	if !andResolve {
-		return errPromiseConsumedResult[PrevResT]{}, false
+	// the promise result can be accessed multiple times...
+	// if no result was set, then it's implicitly the empty result
+	if prevProm.res == nil {
+		return emptyResult[PrevT]{}, true
 	}
 
-	// otherwise, resolve the promise to the appropriate error and return
-	resolveToRejectedRes[NewResT](newProm, errPromiseConsumedResult[NewResT]{})
-	return nil, false
+	return prevProm.res, true
 }
 
 // this handles invalid follow from then, catch, and recover calls.
 // for any promise, this is guaranteed to be called only once, as it's called
 // with the newly created promise as a receiver.
-func handleInvalidFollow[ResT any](
-	prevProm *genericPromise[ResT],
-	newProm *genericPromise[ResT],
+func handleInvalidFollow[T any](
+	prevProm *genericPromise[T],
+	nextProm *genericPromise[T],
 	prevStatus uint32,
 ) {
 	// return if the promise is resolved or being resolved by another call
-	if set, _ := newProm.status.SetResolving(); !set {
+	if set, _ := nextProm.status.SetResolving(); !set {
 		return
 	}
 
 	switch {
 	case status.IsStateFulfilled(prevStatus):
 		// the previous promise is fulfilled, fulfill with its result
-		resolveToFulfilledRes(newProm, prevProm.res)
+		resolveToFulfilledRes(nextProm, prevProm.res)
 	case status.IsStateRejected(prevStatus):
 		// the previous promise is rejected, reject with its result
-		resolveToRejectedRes(newProm, prevProm.res)
+		resolveToRejectedRes(nextProm, prevProm.res)
 	case status.IsStatePanicked(prevStatus):
 		// the previous promise is panicked, panic with its result
-		resolveToPanickedRes(newProm, prevProm.res)
+		resolveToPanickedRes(nextProm, prevProm.res)
 	default:
 		// TODO: investigate whether this might actually happen or not
 		panic(fmt.Sprintf("promise: internal: unexpected state: '%b'", prevStatus))
@@ -210,11 +207,11 @@ func handleInvalidFollow[ResT any](
 // no internal call that may cause a panic should be called after this method.
 // TODO: pass a new value, paniced (similar to valid from the sync.OnceFunc implementaiton),
 // and make the handleReturns function uses this value to tell whether the nil value is valid or not.
-func handleReturns[T any](newProm *genericPromise[T], newResP *Result[T]) {
+func handleReturns[T any](prom *genericPromise[T], resP *Result[T]) {
 	// make sure that only one call will resolve the promise, or return if
 	// the promise is already resolved, so that we don't recover panics when
 	// we don't need to.
-	if set, _ := newProm.status.SetResolving(); !set {
+	if set, _ := prom.status.SetResolving(); !set {
 		return
 	}
 
@@ -222,17 +219,17 @@ func handleReturns[T any](newProm *genericPromise[T], newResP *Result[T]) {
 	if v := recover(); v == nil {
 		// the callback returned normally, through a call to runtime.Goexit,
 		// or with a nil panic value.
-		if newResP == nil {
+		if resP != nil {
+			// return from a callback that requires Result returning
+			resolveToRes[T](prom, *resP)
+		} else {
 			// return from a callback that doesn't support Result returning.
 			// this is equivalent to setting the result to Empty[T] explicitly.
-			resolveToFulfilledRes[T](newProm, nil)
-		} else {
-			// return from a callback that requires Result returning
-			resolveToRes[T](newProm, *newResP)
+			resolveToFulfilledRes[T](prom, nil)
 		}
 	} else {
 		// a panic happened, resolve to panicked with the panic value.
-		resolveToPanickedRes[T](newProm, Err[T](newUncaughtPanic(v)))
+		resolveToPanickedRes[T](prom, errPromisePanickedResult[T]{v: v})
 	}
 }
 
@@ -242,11 +239,11 @@ func handleReturns[T any](newProm *genericPromise[T], newResP *Result[T]) {
 //
 // if called from exterWaitProc or handleReturns, then it will be called once
 // on the same promise, as it's protected by the Resolving fate setter.
-func resolveToRes[T any](newProm *genericPromise[T], res Result[T]) (s uint32) {
+func resolveToRes[T any](prom *genericPromise[T], res Result[T]) (s uint32) {
 	if res != nil && res.Err() != nil {
-		return resolveToRejectedRes(newProm, res)
+		return resolveToRejectedRes(prom, res)
 	} else {
-		return resolveToFulfilledRes(newProm, res)
+		return resolveToFulfilledRes(prom, res)
 	}
 }
 
@@ -254,75 +251,75 @@ func resolveToRes[T any](newProm *genericPromise[T], res Result[T]) (s uint32) {
 // same promise, by design.
 // if called from handleReturns, then it will be called once on the same
 // promise, as it's called on return, and that can happen once.
-func resolveToPanickedRes[ResT any](
-	newProm *genericPromise[ResT],
-	res Result[ResT],
+func resolveToPanickedRes[T any](
+	prom *genericPromise[T],
+	res Result[T],
 ) (s uint32) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
-	newProm.res = res
-	_, s = newProm.status.SetPanickedResolved()
-	close(newProm.resChan)
+	prom.res = res
+	_, s = prom.status.SetPanickedResolved()
+	close(prom.resChan)
 
 	// if the promise is panicked, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught panic to the last call
 	// in the chain.
 	if status.IsChainEmpty(s) {
-		newProm.uncaughtPanicHandler()
+		prom.uncaughtPanicHandler()
 	}
 
 	return
 }
 
-func resolveToRejectedRes[ResT any](
-	newProm *genericPromise[ResT],
-	res Result[ResT],
+func resolveToRejectedRes[T any](
+	prom *genericPromise[T],
+	res Result[T],
 ) (s uint32) {
 	// save the result, update the status, and close the resChan to unblock
 	// all waiting calls.
-	newProm.res = res
-	_, s = newProm.status.SetRejectedResolved()
-	close(newProm.resChan)
+	prom.res = res
+	_, s = prom.status.SetRejectedResolved()
+	close(prom.resChan)
 
 	// if the promise is rejected, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught error to the last call
 	// in the chain.
 	if status.IsChainEmpty(s) {
-		newProm.uncaughtErrorHandler()
+		prom.uncaughtErrorHandler()
 	}
 
 	return
 }
 
-func resolveToFulfilledRes[ResT any](
-	newProm *genericPromise[ResT],
-	res Result[ResT],
+func resolveToFulfilledRes[T any](
+	prom *genericPromise[T],
+	res Result[T],
 ) (s uint32) {
-	newProm.res = res
-	_, s = newProm.status.SetFulfilledResolved()
-	close(newProm.resChan)
+	prom.res = res
+	_, s = prom.status.SetFulfilledResolved()
+	close(prom.resChan)
 	return
-}
-
-func (p *genericPromise[T]) uncaughtErrorHandler() {
-	err := p.res.Err()
-	if p.pipeline != nil && p.pipeline.uncaughtErrHandler != nil {
-		p.pipeline.uncaughtErrHandler(err)
-	} else {
-		defUncaughtErrorHandler(err)
-	}
 }
 
 func (p *genericPromise[T]) uncaughtPanicHandler() {
-	// TODO: make sure the Err() response is of type UncaughtPanic
-	err := p.res.Err()
-	v := err.(*UncaughtPanic).v
+	err := p.res.(errPromisePanickedResult[T])
+	v := UncaughtPanic{v: err.v}
 	if p.pipeline != nil && p.pipeline.uncaughtPanicHandler != nil {
 		p.pipeline.uncaughtPanicHandler(v)
 	} else {
 		defUncaughtPanicHandler(v)
+	}
+}
+
+func (p *genericPromise[T]) uncaughtErrorHandler() {
+	err := p.res.Err()
+	v := UncaughtError{err: err}
+	if p.pipeline != nil && p.pipeline.uncaughtErrHandler != nil {
+		p.pipeline.uncaughtErrHandler(v)
+	} else {
+		defUncaughtErrorHandler(v)
 	}
 }
 

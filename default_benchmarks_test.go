@@ -144,7 +144,7 @@ func BenchmarkGoErr(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = GoErr(context.Background(), func() error {
+			p = GoErr(context.Background(), func() error {
 				return newStrError()
 			})
 		}
@@ -156,7 +156,7 @@ func BenchmarkGoErr(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			_ = GoErr(context.Background(), func() error {
+			p = GoErr(context.Background(), func() error {
 				return newPtrError()
 			})
 		}

@@ -74,7 +74,7 @@ func (p *genericPromise[T]) Status() Status {
 
 func (p *genericPromise[T]) Wait() {
 	p.status.RegWait()
-	_ = p.waitCall(p.ctx, false)
+	_ = p.waitCall()
 }
 
 func (p *genericPromise[T]) WaitChan() chan struct{} {
@@ -88,10 +88,7 @@ func (p *genericPromise[T]) WaitChan() chan struct{} {
 	return c
 }
 
-func (p *genericPromise[T]) waitCall(
-	ctx context.Context,
-	resolveOnTimeout bool,
-) (s uint32) {
+func (p *genericPromise[T]) waitCall() (s uint32) {
 	// wait the promise to be resolved, or until the context is Done.
 	s = p.wait()
 
@@ -132,16 +129,18 @@ func (p *genericPromise[T]) resCall() Result[T] {
 		validHandle = true
 	}
 
-	// return the actual result of the promise, or an erroneous one
-	if validHandle {
-		res := p.res
-		if res == nil {
-			res = emptyResult[T]{}
-		}
-		return p.res
-	} else {
+	// if the promise result has been used, return the expected error
+	if !validHandle {
 		return errPromiseConsumedResult[T]{}
 	}
+
+	// the promise result can be accessed multiple times...
+	// if no result was set, then it's implicitly the empty result
+	if p.res == nil {
+		return emptyResult[T]{}
+	}
+
+	return p.res
 }
 
 func (p *genericPromise[T]) Delay(
@@ -151,15 +150,15 @@ func (p *genericPromise[T]) Delay(
 	_, s := p.status.RegFollow()
 	flags := getDelayFlags(cond)
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, context.Background(), s)
-	go delayFollowCall(p, newProm, d, flags)
-	return newProm
+	nextProm := newPromFollow[T](p.pipeline, context.Background(), s)
+	go delayFollowCall(p, nextProm, d, flags)
+	return nextProm
 }
 
 // delay creates Promise values with the same type
 func delayFollowCall[T any](
 	prevProm *genericPromise[T],
-	newProm *genericPromise[T],
+	nextProm *genericPromise[T],
 	dd time.Duration,
 	flags delayFlags,
 ) {
@@ -171,13 +170,13 @@ func delayFollowCall[T any](
 
 	// mark prevProm as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be used.
-	res, ok := handleFollow(prevProm, newProm, false)
+	res, ok := handleFollow(prevProm, nextProm, false)
 	if !ok {
 		// it's not a valid handle. it's considered a failure.
 		if flags.onError {
 			time.Sleep(dd)
 		}
-		resolveToRejectedRes(newProm, res)
+		resolveToRejectedRes(nextProm, res)
 		return
 	}
 
@@ -187,19 +186,19 @@ func delayFollowCall[T any](
 		if flags.onSuccess {
 			time.Sleep(dd)
 		}
-		resolveToFulfilledRes(newProm, res)
+		resolveToFulfilledRes(nextProm, res)
 	case status.IsStateRejected(s):
 		// a rejected state is considered a failure
 		if flags.onError {
 			time.Sleep(dd)
 		}
-		resolveToRejectedRes(newProm, res)
+		resolveToRejectedRes(nextProm, res)
 	case status.IsStatePanicked(s):
 		// a panicked state is considered a failure
 		if flags.onPanic {
 			time.Sleep(dd)
 		}
-		resolveToPanickedRes(newProm, res)
+		resolveToPanickedRes(nextProm, res)
 	default:
 		// TODO: investigate whether this might actually happen or not
 		panic("promise: internal: unexpected state")
@@ -215,9 +214,9 @@ func (p *genericPromise[T]) Then(
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, p.ctx, s)
-	go thenFollowCall(p, newProm, thenCb)
-	return newProm
+	nextProm := newPromFollow[T](p.pipeline, p.ctx, s)
+	go thenFollowCall(p, nextProm, thenCb)
+	return nextProm
 }
 
 func thenFollowCall[T any](
@@ -259,9 +258,9 @@ func (p *genericPromise[T]) Catch(
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, p.ctx, s)
-	go catchFollowCall(p, newProm, catchCb)
-	return newProm
+	nextProm := newPromFollow[T](p.pipeline, p.ctx, s)
+	go catchFollowCall(p, nextProm, catchCb)
+	return nextProm
 }
 
 func catchFollowCall[T any](
@@ -299,9 +298,9 @@ func (p *genericPromise[T]) Recover(
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, p.ctx, s)
-	go recoverFollowCall(p, newProm, recoverCb)
-	return newProm
+	nextProm := newPromFollow[T](p.pipeline, p.ctx, s)
+	go recoverFollowCall(p, nextProm, recoverCb)
+	return nextProm
 }
 
 func recoverFollowCall[T any](
@@ -343,9 +342,9 @@ func (p *genericPromise[T]) Finally(
 
 	_, s := p.status.RegWait()
 	p.pipeline.reserveGoroutine()
-	newProm := newPromFollow[T](p.pipeline, p.ctx, s)
-	go newProm.finallyCall(p, finallyCb)
-	return newProm
+	nextProm := newPromFollow[T](p.pipeline, p.ctx, s)
+	go nextProm.finallyCall(p, finallyCb)
+	return nextProm
 }
 
 // finallyCall is like an asyncReadCall, except that it can't set the 'Handled'

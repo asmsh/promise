@@ -272,7 +272,7 @@ func (pp *Pipeline[T]) Panic(v any) Promise[T] {
 
 func panicCall[T any](pc *pipelineCore, v any) Promise[T] {
 	p := newPromSync[T](pc, context.Background())
-	p.panicSync(Err[T](newUncaughtPanic(v)))
+	p.panicSync(errPromisePanickedResult[T]{v: v})
 	return p
 }
 
