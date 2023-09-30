@@ -6,8 +6,8 @@ import (
 )
 
 type PipelineConfig struct {
-	UncaughtPanicHandler func(v any)
-	UncaughtErrHandler   func(err error)
+	UncaughtPanicHandler func(v UncaughtPanic)
+	UncaughtErrHandler   func(v UncaughtError)
 
 	// Size is the allowed number of goroutines which this pipeline can run.
 	// This includes goroutines created for both, constructor calls(Go, GoRes, etc.)
@@ -277,8 +277,8 @@ func panicCall[T any](pc *pipelineCore, v any) Promise[T] {
 }
 
 type pipelineCore struct {
-	uncaughtPanicHandler func(v any)
-	uncaughtErrHandler   func(err error)
+	uncaughtPanicHandler func(v UncaughtPanic)
+	uncaughtErrHandler   func(v UncaughtError)
 
 	reserveChan chan struct{}
 }

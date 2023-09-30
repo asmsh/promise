@@ -20,12 +20,8 @@ import (
 )
 
 var (
-	defUncaughtPanicHandler = func(v any) {
-		panic(newUncaughtPanic(v))
-	}
-	defUncaughtErrorHandler = func(err error) {
-		panic(newUncaughtError(err))
-	}
+	defUncaughtPanicHandler = func(v UncaughtPanic) { panic(v) }
+	defUncaughtErrorHandler = func(v UncaughtError) { panic(v) }
 )
 
 // defPipelineCore is used for overriding the value passed to all constructors
