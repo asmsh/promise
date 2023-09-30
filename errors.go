@@ -26,11 +26,6 @@ func (e UncaughtPanic) Error() string {
 	return fmt.Sprintf("uncaught panic in the promise chain: %v", e.v)
 }
 
-func (e UncaughtPanic) Unwrap() error {
-	err, _ := e.v.(error)
-	return err
-}
-
 func (e UncaughtPanic) V() any { return e.v }
 
 // UncaughtError wraps an error that happened in a promise chain, but hasn't
