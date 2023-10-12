@@ -69,7 +69,7 @@ func TestPanicking(t *testing.T) {
 			}
 		}()
 
-		p := Go(nil, func() {
+		p := Go(func() {
 			panic(panicValue)
 		}).Recover(func(ctx context.Context, v any) (res Result[any]) {
 			return nil
@@ -85,7 +85,7 @@ func TestPanicking(t *testing.T) {
 			}
 		}()
 
-		p := Go(nil, func() {
+		p := Go(func() {
 			panic(panicValue)
 		})
 		res := p.Res()
@@ -108,7 +108,7 @@ func TestPanicking(t *testing.T) {
 			}
 		}()
 
-		p := Go(nil, func() {
+		p := Go(func() {
 			panic(panicValue)
 		})
 		p.Wait()
@@ -125,7 +125,7 @@ func TestPanicking(t *testing.T) {
 			}
 		}()
 
-		p := Go(nil, func() {
+		p := Go(func() {
 			panic(panicValue)
 		}).Then(func(ctx context.Context, val any) Result[any] {
 			return nil
@@ -143,7 +143,7 @@ func TestRejection(t *testing.T) {
 			}
 		}()
 
-		p := GoRes(nil, func(ctx context.Context) Result[any] {
+		p := GoRes(func(ctx context.Context) Result[any] {
 			return Err[any](newStrError())
 		}).Catch(func(ctx context.Context, val any, err error) Result[any] {
 			// handle the error...
@@ -160,7 +160,7 @@ func TestRejection(t *testing.T) {
 			}
 		}()
 
-		p := GoRes(nil, func(ctx context.Context) Result[any] {
+		p := GoRes(func(ctx context.Context) Result[any] {
 			return Err[any](newStrError())
 		})
 		res := p.Res()
@@ -178,7 +178,7 @@ func TestRejection(t *testing.T) {
 	//			}
 	//		}()
 	//
-	//		p := GoRes(nil, func(ctx context.Context) Result[any] {
+	//		p := GoRes( func(ctx context.Context) Result[any] {
 	//			return Err[any](newStrError())
 	//		})
 	//		res := p.Res()
@@ -207,7 +207,7 @@ func TestRejection(t *testing.T) {
 			}
 		}()
 
-		p := GoRes(nil, func(ctx context.Context) Result[any] {
+		p := GoRes(func(ctx context.Context) Result[any] {
 			return Err[any](newStrError())
 		})
 		p.Wait()
@@ -228,7 +228,7 @@ func TestRejection(t *testing.T) {
 			}
 		}()
 
-		p := GoRes(nil, func(ctx context.Context) Result[any] {
+		p := GoRes(func(ctx context.Context) Result[any] {
 			return Err[any](newStrError())
 		}).Then(func(ctx context.Context, val any) Result[any] {
 			return nil

@@ -27,8 +27,6 @@ import (
 type genericPromise[T any] struct {
 	pipeline *pipelineCore
 
-	ctx context.Context
-
 	// holds the result of the promise.
 	// written once, before the resChan channel is closed.
 	//
@@ -89,7 +87,7 @@ func (p *genericPromise[T]) WaitChan() chan struct{} {
 }
 
 func (p *genericPromise[T]) waitCall() (s uint32) {
-	// wait the promise to be resolved, or until the context is Done.
+	// wait the promise to be resolved
 	s = p.wait()
 
 	if !status.IsChainAtLeastRead(s) && !status.IsFateHandled(s) {
@@ -115,7 +113,7 @@ func (p *genericPromise[T]) Res() Result[T] {
 }
 
 func (p *genericPromise[T]) resCall() Result[T] {
-	// wait the promise to be resolved, or until its context is Done.
+	// wait the promise to be resolved
 	p.wait()
 
 	// if it's a call to handle the result, set the 'Handled' flag.
@@ -150,7 +148,7 @@ func (p *genericPromise[T]) Delay(
 	_, s := p.status.RegFollow()
 	flags := getDelayFlags(cond)
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, context.Background(), s)
+	nextProm := newPromFollow[T](p.pipeline, s)
 	go delayFollowCall(p, nextProm, d, flags)
 	return nextProm
 }
@@ -214,7 +212,7 @@ func (p *genericPromise[T]) Then(
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, p.ctx, s)
+	nextProm := newPromFollow[T](p.pipeline, s)
 	go thenFollowCall(p, nextProm, thenCb)
 	return nextProm
 }
@@ -258,7 +256,7 @@ func (p *genericPromise[T]) Catch(
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, p.ctx, s)
+	nextProm := newPromFollow[T](p.pipeline, s)
 	go catchFollowCall(p, nextProm, catchCb)
 	return nextProm
 }
@@ -298,7 +296,7 @@ func (p *genericPromise[T]) Recover(
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, p.ctx, s)
+	nextProm := newPromFollow[T](p.pipeline, s)
 	go recoverFollowCall(p, nextProm, recoverCb)
 	return nextProm
 }
@@ -342,7 +340,7 @@ func (p *genericPromise[T]) Finally(
 
 	_, s := p.status.RegWait()
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, p.ctx, s)
+	nextProm := newPromFollow[T](p.pipeline, s)
 	go nextProm.finallyCall(p, finallyCb)
 	return nextProm
 }

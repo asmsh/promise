@@ -20,21 +20,10 @@ import (
 	"time"
 )
 
-func getCtxBenchmarkPromise() Promise[any] {
-	setNoPanicsPipelineCore()
-
-	ctx, _ := context.WithTimeout(context.Background(), 1*time.Millisecond)
-	prom := GoRes(ctx, func(ctx context.Context) Result[any] {
-		time.Sleep(1 * time.Millisecond)
-		return nil
-	})
-	return prom
-}
-
 func getErrorBenchmarkPromise() Promise[any] {
 	setNoPanicsPipelineCore()
 
-	prom := GoRes(nil, func(ctx context.Context) Result[any] {
+	prom := GoRes(func(ctx context.Context) Result[any] {
 		time.Sleep(1 * time.Millisecond)
 		return Err[any](newStrError())
 	})
@@ -47,7 +36,7 @@ func getSuccessBenchmarkPromise(res ...any) Promise[any] {
 		resVal = res[0]
 	}
 
-	prom := GoRes(nil, func(ctx context.Context) Result[any] {
+	prom := GoRes(func(ctx context.Context) Result[any] {
 		time.Sleep(1 * time.Millisecond)
 		return Val(resVal)
 	})
@@ -66,7 +55,7 @@ func BenchmarkPromise_Wait(b *testing.B) {
 	})
 
 	b.Run("resolved-async", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		prom.Wait()
 
 		b.ReportAllocs()
@@ -189,7 +178,7 @@ func BenchmarkPromise_Then(b *testing.B) {
 			}
 
 			b.Run(bc.name, func(b *testing.B) {
-				prom := getCtxBenchmarkPromise()
+				prom := getSuccessBenchmarkPromise()
 				b.ReportAllocs()
 				b.ResetTimer()
 
@@ -217,7 +206,7 @@ func BenchmarkPromise_Then(b *testing.B) {
 			}
 
 			b.Run(bc.name, func(b *testing.B) {
-				prom := getCtxBenchmarkPromise()
+				prom := getSuccessBenchmarkPromise()
 				b.ReportAllocs()
 				b.ResetTimer()
 
@@ -275,7 +264,7 @@ func BenchmarkPromise_Catch(b *testing.B) {
 			}
 
 			b.Run(bc.name, func(b *testing.B) {
-				prom := getCtxBenchmarkPromise()
+				prom := getSuccessBenchmarkPromise()
 				b.ReportAllocs()
 				b.ResetTimer()
 
@@ -301,7 +290,7 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 	b.Run("no-res", func(b *testing.B) {
 		for _, bc := range promiseBenchs {
 			b.Run(bc.name, func(b *testing.B) {
-				prom := getCtxBenchmarkPromise()
+				prom := getSuccessBenchmarkPromise()
 
 				if bc.stressed {
 					b.SetParallelism(100)
@@ -332,7 +321,7 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 	b.Run("with-res", func(b *testing.B) {
 		for _, bc := range promiseBenchs {
 			b.Run(bc.name, func(b *testing.B) {
-				prom := getCtxBenchmarkPromise()
+				prom := getSuccessBenchmarkPromise()
 
 				if bc.stressed {
 					b.SetParallelism(100)
@@ -363,8 +352,10 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 
 // create a fulfilled promise, chain 1 callback, and callWait on the final promise
 func BenchmarkPromise_Chain_Short(b *testing.B) {
+	setNoPanicsPipelineCore()
+
 	b.Run("no-res_wait-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -377,7 +368,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 	})
 
 	b.Run("no-res_res-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		var res Result[any]
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -392,40 +383,206 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		_ = res
 	})
 
-	b.Run("with-res_wait-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+	b.Run("no-res_res-call-err", func(b *testing.B) {
+		prom := getSuccessBenchmarkPromise()
+		var res Result[any]
+		var err error
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			p := prom.Then(func(ctx context.Context, val any) Result[any] {
-				return Val[any]("golang")
+				return nil
+			})
+			res = p.Res()
+			err = res.Err()
+			if err != nil {
+				b.Fatalf("unexpected error: %v, from res: %v", err, res)
+			}
+		}
+
+		_ = res
+		_ = err
+	})
+
+	b.Run("no-res_res-call-val", func(b *testing.B) {
+		prom := getSuccessBenchmarkPromise()
+		var res Result[any]
+		var val any
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p := prom.Then(func(ctx context.Context, val any) Result[any] {
+				return nil
+			})
+			res = p.Res()
+			val = res.Val()
+			if val != nil {
+				b.Fatalf("unexpected val: %v, from res: %v", val, res)
+			}
+		}
+
+		_ = res
+		_ = val
+	})
+
+	b.Run("with-res_wait-call", func(b *testing.B) {
+		prom := getSuccessBenchmarkPromise()
+		valOrigPtr := newPtrError()
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p := prom.Then(func(ctx context.Context, val any) Result[any] {
+				return Val[any](valOrigPtr)
 			})
 			p.Wait()
 		}
 	})
 
 	b.Run("with-res_res-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
+		var res Result[any]
+		valOrigPtr := newPtrError()
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p := prom.Then(func(ctx context.Context, val any) Result[any] {
+				return Val[any](valOrigPtr)
+			})
+			res = p.Res()
+		}
+
+		_ = res
+	})
+
+	b.Run("with-res_res-call-err", func(b *testing.B) {
+		prom := getSuccessBenchmarkPromise()
+		var res Result[any]
+		var err error
+		valOrigPtr := newPtrError()
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p := prom.Then(func(ctx context.Context, val any) Result[any] {
+				return Val[any](valOrigPtr)
+			})
+			res = p.Res()
+			err = res.Err()
+			if err != nil {
+				b.Fatalf("unexpected error: %v, from res: %v", err, res)
+			}
+		}
+
+		_ = res
+		_ = err
+	})
+
+	b.Run("with-res_res-call-val", func(b *testing.B) {
+		prom := getSuccessBenchmarkPromise()
+		var res Result[any]
+		var val any
+		valOrigPtr := newPtrError()
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p := prom.Then(func(ctx context.Context, val any) Result[any] {
+				return Val[any](valOrigPtr)
+			})
+			res = p.Res()
+			val = res.Val()
+			if val != valOrigPtr {
+				b.Fatalf("unexpected val: %v, from res: %v", val, res)
+			}
+		}
+
+		_ = res
+		_ = val
+	})
+
+	b.Run("panic_wait-call", func(b *testing.B) {
+		prom := getSuccessBenchmarkPromise()
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p := prom.Then(func(ctx context.Context, val any) Result[any] {
+				panic("test panic")
+			})
+			p.Wait()
+		}
+	})
+
+	b.Run("panic_res-call", func(b *testing.B) {
+		prom := getSuccessBenchmarkPromise()
 		var res Result[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
 			p := prom.Then(func(ctx context.Context, val any) Result[any] {
-				return Val[any]("golang")
+				panic("test panic")
 			})
 			res = p.Res()
 		}
 
 		_ = res
+	})
+
+	b.Run("panic_res-call-err", func(b *testing.B) {
+		prom := getSuccessBenchmarkPromise()
+		var res Result[any]
+		var err error
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p := prom.Then(func(ctx context.Context, val any) Result[any] {
+				panic("test panic")
+			})
+			res = p.Res()
+			err = res.Err()
+			upErr := err.(UncaughtPanic)
+			if upErr.v != "test panic" {
+				b.Fatalf("unexpected error: %v, from: %v", upErr, err)
+			}
+		}
+
+		_ = res
+		_ = err
+	})
+
+	b.Run("panic_res-call-val", func(b *testing.B) {
+		prom := getSuccessBenchmarkPromise()
+		var res Result[any]
+		var val any
+		b.ReportAllocs()
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			p := prom.Then(func(ctx context.Context, val any) Result[any] {
+				panic("test panic")
+			})
+			res = p.Res()
+			val = res.Val()
+			if val != nil {
+				b.Fatalf("unexpected val: %v, from res: %v", val, res)
+			}
+		}
+
+		_ = res
+		_ = val
 	})
 }
 
 // create a fulfilled promise, chain 3 callbacks, and callWait on the final promise
 func BenchmarkPromise_Chain_Medium(b *testing.B) {
 	b.Run("no-res_wait-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -442,7 +599,7 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 	})
 
 	b.Run("no-res_res-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		var res Result[any]
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -462,7 +619,7 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 	})
 
 	b.Run("with-res_wait-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -479,7 +636,7 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 	})
 
 	b.Run("with-res_res-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		var res Result[any]
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -502,7 +659,7 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 // create a fulfilled promise, chain 5 callbacks, and callWait on the final promise
 func BenchmarkPromise_Chain_Long(b *testing.B) {
 	b.Run("no-res_wait-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -523,7 +680,7 @@ func BenchmarkPromise_Chain_Long(b *testing.B) {
 	})
 
 	b.Run("no-res_res-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		var res Result[any]
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -547,7 +704,7 @@ func BenchmarkPromise_Chain_Long(b *testing.B) {
 	})
 
 	b.Run("with-res_wait-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		b.ReportAllocs()
 		b.ResetTimer()
 
@@ -568,7 +725,7 @@ func BenchmarkPromise_Chain_Long(b *testing.B) {
 	})
 
 	b.Run("with-res_res-call", func(b *testing.B) {
-		prom := getCtxBenchmarkPromise()
+		prom := getSuccessBenchmarkPromise()
 		var res Result[any]
 		b.ReportAllocs()
 		b.ResetTimer()

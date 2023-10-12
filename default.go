@@ -28,11 +28,11 @@ var (
 // below, for the purpose of testing.
 var defPipelineCore *pipelineCore
 
-func New[T any](ctx context.Context, resChan chan Result[T], pipeline *Pipeline[T]) Promise[T] {
+func New[T any](resChan chan Result[T], pipeline *Pipeline[T]) Promise[T] {
 	if pipeline != nil {
-		return chanCall[T](&pipeline.core, ctx, resChan)
+		return chanCall[T](&pipeline.core, resChan)
 	}
-	return chanCall[T](defPipelineCore, ctx, resChan)
+	return chanCall[T](defPipelineCore, resChan)
 }
 
 // Chan returns a GoPromise that's created using the provided resChan.
@@ -54,8 +54,8 @@ func New[T any](ctx context.Context, resChan chan Result[T], pipeline *Pipeline[
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Chan[T any](ctx context.Context, resChan chan Result[T]) Promise[T] {
-	return chanCall[T](defPipelineCore, ctx, resChan)
+func Chan[T any](resChan chan Result[T]) Promise[T] {
+	return chanCall[T](defPipelineCore, resChan)
 }
 
 // Go runs the provided function, fun, in a separate goroutine, and returns
@@ -72,12 +72,12 @@ func Chan[T any](ctx context.Context, resChan chan Result[T]) Promise[T] {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Go(ctx context.Context, fun func()) Promise[any] {
-	return goCall[any](defPipelineCore, ctx, fun)
+func Go(fun func()) Promise[any] {
+	return goCall[any](defPipelineCore, fun)
 }
 
-func GoErr(ctx context.Context, fun func() error) Promise[any] {
-	return goErrCall[any](defPipelineCore, ctx, fun)
+func GoErr(fun func() error) Promise[any] {
+	return goErrCall[any](defPipelineCore, fun)
 }
 
 // GoRes runs the provided function, fun, in a separate goroutine, and returns
@@ -101,8 +101,8 @@ func GoErr(ctx context.Context, fun func() error) Promise[any] {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func GoRes[T any](ctx context.Context, fun func(ctx context.Context) Result[T]) Promise[T] {
-	return goResCall[T](defPipelineCore, ctx, fun)
+func GoRes[T any](fun func(ctx context.Context) Result[T]) Promise[T] {
+	return goResCall[T](defPipelineCore, fun)
 }
 
 // Resolver provides a JavaScript-like promise creation. It runs the provided
@@ -148,14 +148,13 @@ func GoRes[T any](ctx context.Context, fun func(ctx context.Context) Result[T]) 
 //
 // It will panic if a nil function is passed.
 func Resolver[T any](
-	ctx context.Context,
 	fun func(
 		ctx context.Context,
 		fulfill func(val ...T),
 		reject func(err error, val ...T),
 	),
 ) Promise[T] {
-	return resolverCall[T](defPipelineCore, ctx, fun)
+	return resolverCall[T](defPipelineCore, fun)
 }
 
 // Delay returns a GoPromise that's resolved to the passed Res value, res,

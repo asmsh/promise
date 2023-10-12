@@ -23,44 +23,34 @@ import (
 func BenchmarkNew(b *testing.B) {
 	resChan := make(chan Result[any], 1)
 
-	b.Run("nil ctx nil pipeline", func(b *testing.B) {
+	b.Run("nil pipeline", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = New[any](nil, resChan, nil)
+			p = New[any](resChan, nil)
 		}
 		_ = p
 	})
 
-	b.Run("non-nil ctx nil pipeline", func(b *testing.B) {
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = New[any](context.Background(), resChan, nil)
-		}
-		_ = p
-	})
-
-	b.Run("non-nil ctx default pipeline", func(b *testing.B) {
+	b.Run("default pipeline", func(b *testing.B) {
 		var pp Pipeline[any]
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = New[any](context.Background(), resChan, &pp)
+			p = New[any](resChan, &pp)
 		}
 		_ = p
 	})
 
-	b.Run("non-nil ctx custom pipeline", func(b *testing.B) {
+	b.Run("custom pipeline", func(b *testing.B) {
 		var pp = NewPipeline[any](&PipelineConfig{})
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = New[any](context.Background(), resChan, pp)
+			p = New[any](resChan, pp)
 		}
 		_ = p
 	})
@@ -69,44 +59,24 @@ func BenchmarkNew(b *testing.B) {
 func BenchmarkChan(b *testing.B) {
 	resChan := make(chan Result[any], 1)
 
-	b.Run("nil ctx", func(b *testing.B) {
+	b.Run("", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Chan[any](nil, resChan)
-		}
-		_ = p
-	})
-
-	b.Run("non-nil ctx", func(b *testing.B) {
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = Chan[any](context.Background(), resChan)
+			p = Chan[any](resChan)
 		}
 		_ = p
 	})
 }
 
 func BenchmarkGo(b *testing.B) {
-	b.Run("nil ctx", func(b *testing.B) {
+	b.Run("", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Go(nil, func() {})
-		}
-		_ = p
-	})
-
-	b.Run("non-nil ctx", func(b *testing.B) {
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = Go(context.Background(), func() {})
+			p = Go(func() {})
 		}
 		_ = p
 	})
@@ -115,48 +85,36 @@ func BenchmarkGo(b *testing.B) {
 func BenchmarkGoErr(b *testing.B) {
 	setNoPanicsPipelineCore()
 
-	b.Run("nil ctx with nil error", func(b *testing.B) {
+	b.Run("nil error", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = GoErr(nil, func() error {
+			p = GoErr(func() error {
 				return nil
 			})
 		}
 		_ = p
 	})
 
-	b.Run("non-nil ctx with nil error", func(b *testing.B) {
+	b.Run("non-ptr error", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = GoErr(context.Background(), func() error {
-				return nil
-			})
-		}
-		_ = p
-	})
-
-	b.Run("non-nil ctx with non-ptr error", func(b *testing.B) {
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = GoErr(context.Background(), func() error {
+			p = GoErr(func() error {
 				return newStrError()
 			})
 		}
 		_ = p
 	})
 
-	b.Run("non-nil ctx with ptr error", func(b *testing.B) {
+	b.Run("ptr error", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = GoErr(context.Background(), func() error {
+			p = GoErr(func() error {
 				return newPtrError()
 			})
 		}
@@ -167,60 +125,48 @@ func BenchmarkGoErr(b *testing.B) {
 func BenchmarkGoRes(b *testing.B) {
 	setNoPanicsPipelineCore()
 
-	b.Run("nil ctx with empty result", func(b *testing.B) {
+	b.Run("empty result", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = GoRes(nil, func(ctx context.Context) Result[any] {
+			p = GoRes(func(ctx context.Context) Result[any] {
 				return Empty[any]()
 			})
 		}
 		_ = p
 	})
 
-	b.Run("non-nil ctx with empty result", func(b *testing.B) {
+	b.Run("value result", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = GoRes(context.Background(), func(ctx context.Context) Result[any] {
-				return Empty[any]()
-			})
-		}
-		_ = p
-	})
-
-	b.Run("non-nil ctx with value result", func(b *testing.B) {
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = GoRes(context.Background(), func(ctx context.Context) Result[any] {
+			p = GoRes(func(ctx context.Context) Result[any] {
 				return Val[any]("golang")
 			})
 		}
 		_ = p
 	})
 
-	b.Run("non-nil ctx with nil-error result", func(b *testing.B) {
+	b.Run("nil-error result", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = GoRes(context.Background(), func(ctx context.Context) Result[any] {
+			p = GoRes(func(ctx context.Context) Result[any] {
 				return ValErr[any]("golang", nil)
 			})
 		}
 		_ = p
 	})
 
-	b.Run("non-nil ctx with non-nil-error result", func(b *testing.B) {
+	b.Run("non-nil-error result", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = GoRes(context.Background(), func(ctx context.Context) Result[any] {
+			p = GoRes(func(ctx context.Context) Result[any] {
 				return ValErr[any]("golang", newStrError())
 			})
 		}
@@ -231,49 +177,37 @@ func BenchmarkGoRes(b *testing.B) {
 func BenchmarkResolver(b *testing.B) {
 	setNoPanicsPipelineCore()
 
-	b.Run("nil ctx fulfill", func(b *testing.B) {
+	b.Run("fulfill", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Resolver[any](nil, func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
+			p = Resolver[any](func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
 				fulfill()
 			})
 		}
 		_ = p
 	})
 
-	b.Run("non-nil ctx fulfill", func(b *testing.B) {
+	b.Run("reject nil error", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Resolver[any](context.Background(), func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
-				fulfill()
-			})
-		}
-		_ = p
-	})
-
-	b.Run("non-nil ctx reject nil error", func(b *testing.B) {
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = Resolver[any](context.Background(), func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
+			p = Resolver[any](func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
 				reject(nil, "success_value")
 			})
 		}
 		_ = p
 	})
 
-	b.Run("non-nil ctx reject non-nil error", func(b *testing.B) {
+	b.Run("reject non-nil error", func(b *testing.B) {
 		var p Promise[any]
 		err := newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Resolver[any](context.Background(), func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
+			p = Resolver[any](func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
 				reject(err, "success_value")
 			})
 		}

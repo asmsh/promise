@@ -74,7 +74,7 @@ func runCallback[PrevResT, NewResT any](
 	defer handleReturns(p, newResP)
 
 	// run the callback and extract the result
-	newRes := cb.call(p.ctx, prevRes)
+	newRes := cb.call(context.TODO(), prevRes)
 
 	// if the callback doesn't support Result returning, return early, as
 	// the rest of the logic isn't relevant anymore.

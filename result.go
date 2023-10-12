@@ -14,11 +14,6 @@
 
 package promise
 
-import (
-	"errors"
-	"fmt"
-)
-
 // Result is a Container for generic result values
 type Result[T any] interface {
 	Val() T
@@ -66,27 +61,6 @@ func (r valErrResult[T]) Err() error { return r.err }
 type errPromiseConsumedResult[T any] struct{ emptyResult[T] }
 
 func (r errPromiseConsumedResult[T]) Err() error { return ErrPromiseConsumed }
-
-type errPromiseTimeoutResult[T any] struct {
-	emptyResult[T]
-	// cause is typically p.ctx.Err(), but saved for fast usage without
-	// accessing ctx or creating new error containers.
-	cause error
-}
-
-func (r *errPromiseTimeoutResult[T]) Err() error { return r }
-
-func (r *errPromiseTimeoutResult[T]) Error() string {
-	return fmt.Sprintf("%s: %s", ErrPromiseTimeout, r.cause)
-}
-
-func (r *errPromiseTimeoutResult[T]) Is(err error) bool {
-	if err == ErrPromiseTimeout {
-		return true
-	}
-	// handle wrapped context errors as well
-	return errors.Is(r.cause, err)
-}
 
 type errPromisePanickedResult[T any] struct {
 	emptyResult[T]

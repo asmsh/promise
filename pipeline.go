@@ -38,92 +38,62 @@ func NewPipeline[T any](c ...*PipelineConfig) *Pipeline[T] {
 	return pp
 }
 
-func (pp *Pipeline[T]) Chan(ctx context.Context, resChan chan Result[T]) Promise[T] {
-	return chanCall[T](&pp.core, ctx, resChan)
+func (pp *Pipeline[T]) Chan(resChan chan Result[T]) Promise[T] {
+	return chanCall[T](&pp.core, resChan)
 }
 
 // TODO: panic if the resChan's capacity is 0
-func chanCall[T any](
-	pc *pipelineCore,
-	ctx context.Context,
-	resChan chan Result[T],
-) Promise[T] {
+func chanCall[T any](pc *pipelineCore, resChan chan Result[T]) Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	prom := newPromExter(pc, ctx, resChan)
-	return prom
+	return newPromExter(pc, resChan)
 }
 
-func (pp *Pipeline[T]) Go(ctx context.Context, fun func()) Promise[T] {
-	return goCall[T](&pp.core, ctx, fun)
+func (pp *Pipeline[T]) Go(fun func()) Promise[T] {
+	return goCall[T](&pp.core, fun)
 }
 
-func goCall[T any](
-	pc *pipelineCore,
-	ctx context.Context,
-	fun func(),
-) Promise[T] {
+func goCall[T any](pc *pipelineCore, fun func()) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	pc.reserveGoroutine()
-	p := newPromInter[T](pc, ctx)
+	p := newPromInter[T](pc)
 	go runCallback[T, T](p, goCallback[T, T](fun), nil, false, true)
 	return p
 }
 
-func (pp *Pipeline[T]) GoErr(ctx context.Context, fun func() error) Promise[T] {
-	return goErrCall[T](&pp.core, ctx, fun)
+func (pp *Pipeline[T]) GoErr(fun func() error) Promise[T] {
+	return goErrCall[T](&pp.core, fun)
 }
 
-func goErrCall[T any](
-	pc *pipelineCore,
-	ctx context.Context,
-	fun func() error,
-) Promise[T] {
+func goErrCall[T any](pc *pipelineCore, fun func() error) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	pc.reserveGoroutine()
-	p := newPromInter[T](pc, ctx)
+	p := newPromInter[T](pc)
 	go runCallback[T, T](p, goErrCallback[T, T](fun), nil, true, true)
 	return p
 }
 
-func (pp *Pipeline[T]) GoRes(
-	ctx context.Context,
-	fun func(ctx context.Context) Result[T],
-) Promise[T] {
-	return goResCall[T](&pp.core, ctx, fun)
+func (pp *Pipeline[T]) GoRes(fun func(ctx context.Context) Result[T]) Promise[T] {
+	return goResCall[T](&pp.core, fun)
 }
 
 func goResCall[T any](
 	pc *pipelineCore,
-	ctx context.Context,
 	fun func(ctx context.Context) Result[T],
 ) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	pc.reserveGoroutine()
-	p := newPromInter[T](pc, ctx)
+	p := newPromInter[T](pc)
 	go runCallback[T, T](p, goResCallback[T, T](fun), nil, true, true)
 	return p
 }
@@ -136,34 +106,25 @@ func (pp *Pipeline[T]) Resolver(
 		reject func(err error, val ...T),
 	),
 ) Promise[T] {
-	return resolverCall[T](&pp.core, ctx, fun)
+	return resolverCall[T](&pp.core, fun)
 }
 
 func resolverCall[T any](
 	pc *pipelineCore,
-	ctx context.Context,
-	resolverCb func(
-		ctx context.Context,
-		fulfill func(val ...T),
-		reject func(err error, val ...T),
-	),
+	resolverCb func(ctx context.Context, fulfill func(val ...T), reject func(err error, val ...T)),
 ) Promise[T] {
 	if resolverCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if ctx == nil {
-		ctx = context.Background()
-	}
 
 	pc.reserveGoroutine()
-	p := newPromInter[T](pc, ctx)
-	go resolverHandler(p, ctx, resolverCb)
+	p := newPromInter[T](pc)
+	go resolverHandler(p, resolverCb)
 	return p
 }
 
 func resolverHandler[T any](
 	p *genericPromise[T],
-	ctx context.Context,
 	cb func(ctx context.Context, fulfill func(...T), reject func(error, ...T)),
 ) {
 	// make sure we free this goroutine reservation
@@ -209,7 +170,7 @@ func resolverHandler[T any](
 		}
 	}
 
-	cb(ctx, fulfill, reject)
+	cb(context.TODO(), fulfill, reject)
 }
 
 func (pp *Pipeline[T]) Delay(
@@ -228,7 +189,7 @@ func delayCall[T any](
 ) Promise[T] {
 	flags := getDelayFlags(cond)
 	pc.reserveGoroutine()
-	p := newPromInter[T](pc, context.Background())
+	p := newPromInter[T](pc)
 	go delayHandler(p, res, d, flags)
 	return p
 }
@@ -261,7 +222,7 @@ func (pp *Pipeline[T]) Wrap(res Result[T]) Promise[T] {
 }
 
 func wrapCall[T any](pc *pipelineCore, res Result[T]) Promise[T] {
-	p := newPromSync[T](pc, context.Background())
+	p := newPromSync[T](pc)
 	p.resolveToResSync(res)
 	return p
 }
@@ -271,7 +232,7 @@ func (pp *Pipeline[T]) Panic(v any) Promise[T] {
 }
 
 func panicCall[T any](pc *pipelineCore, v any) Promise[T] {
-	p := newPromSync[T](pc, context.Background())
+	p := newPromSync[T](pc)
 	p.panicSync(errPromisePanickedResult[T]{v: v})
 	return p
 }

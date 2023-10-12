@@ -15,7 +15,6 @@
 package promise
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/asmsh/promise/internal/status"
@@ -75,69 +74,52 @@ func (p *genericPromise[T]) wait() (s uint32) {
 // it returns true only if the provided timerChan is received from, otherwise
 // it returns false.
 func (p *genericPromise[T]) exterWaitProc() {
-	select {
-	case res, ok := <-p.resChan: // the chan is closed or a value is received
+	// the chan is closed or a value is received
+	res, ok := <-p.resChan
+	if ok {
+		// a value is received.
+		// set the status to 'Resolving', and handle the result, only if it's
+		// been just set, otherwise panic, accordingly.
+		ok, _ = p.status.SetResolving()
 		if ok {
-			// a value is received.
-			// set the status to 'Resolving', and handle the result, only if it's
-			// been just set, otherwise panic, accordingly.
-			ok, _ = p.status.SetResolving()
-			if ok {
-				// this is the first result received on this channel.
-				// this will set the result value and close the chan.
-				resolveToRes(p, res)
+			// this is the first result received on this channel.
+			// this will set the result value and close the chan.
+			resolveToRes(p, res)
 
-				// FIXME: check if this is introducing a race condition
-				// only one value should be sent, but more is sent, panic.
-				if len(p.resChan) != 0 {
-					panic(multipleSendsPanicMsg)
-				}
-			} else {
-				// this may happen if two or more values are sent, and the
-				// first value is processed, and this is the second value.
-				// only one value should be sent, but more is sent, panic.
+			// FIXME: check if this is introducing a race condition
+			// only one value should be sent, but more is sent, panic.
+			if len(p.resChan) != 0 {
 				panic(multipleSendsPanicMsg)
 			}
 		} else {
-			// the chan is closed, either by us or by the user.
-			// set the status to 'Fulfilled' and 'Resolved'.
-			//
-			// if we closed the chan, then the res and status fields are now set
-			// as expected, and this call is a no-op, and that's acceptable.
-			//
-			// if the user closed the chan, which is considered acceptable, only
-			// if the user didn't send any values and just closed the chan, the
-			// res field will be empty, cause the user didn't send any values,
-			// and the status will be empty, so set it to fulfilled and resolve,
-			// cause no reason to reject can happen.
-			// TODO: in this scenario, the res value will be nil.
-			// TODO: maybe, disallow users from closing the chan, or figure a way to detect it first.
-			// TODO: this whole 'else' branch could be deleted and we can only rely on checking whether 'res' is 'nil' or not.
-			p.status.SetFulfilledResolved()
+			// this may happen if two or more values are sent, and the
+			// first value is processed, and this is the second value.
+			// only one value should be sent, but more is sent, panic.
+			panic(multipleSendsPanicMsg)
 		}
-	case <-p.ctx.Done():
-		p.resolveTimeout()
+	} else {
+		// the chan is closed, either by us or by the user.
+		// set the status to 'Fulfilled' and 'Resolved'.
+		//
+		// if we closed the chan, then the res and status fields are now set
+		// as expected, and this call is a no-op, and that's acceptable.
+		//
+		// if the user closed the chan, which is considered acceptable, only
+		// if the user didn't send any values and just closed the chan, the
+		// res field will be empty, cause the user didn't send any values,
+		// and the status will be empty, so set it to fulfilled and resolve,
+		// cause no reason to reject can happen.
+		// TODO: in this scenario, the res value will be nil.
+		// TODO: maybe, disallow users from closing the chan, or figure a way to detect it first.
+		// TODO: this whole 'else' branch could be deleted and we can only rely on checking whether 'res' is 'nil' or not.
+		p.status.SetFulfilledResolved()
 	}
 }
 
 func (p *genericPromise[T]) interWaitProc() {
-	select {
-	case <-p.resChan:
-		// internally created res chan will always be closed by the previous
-		// promise, after setting the res and status fields as expected.
-	case <-p.ctx.Done():
-		p.resolveTimeout()
-	}
-}
-
-func (p *genericPromise[T]) resolveTimeout() {
-	if set, _ := p.status.SetResolving(); set {
-		// resolve to an error result container that includes the cause error
-		resolveToRejectedRes[T](p, &errPromiseTimeoutResult[T]{cause: p.ctx.Err()})
-	} else {
-		// since it was resolving or already resolved, wait for the resChan to be closed
-		<-p.resChan
-	}
+	// internally created res chan will always be closed by the previous
+	// promise, after setting the res and status fields as expected.
+	<-p.resChan
 }
 
 func handleFollow[PrevT, NextT any](
@@ -407,10 +389,9 @@ func (p *genericPromise[T]) asyncFollow(cb func(res Result[T], args []any), args
 
 // newPromInter creates a new genericPromise which is resolved internally,
 // using an internal allocated channel.
-func newPromInter[T any](pipeline *pipelineCore, ctx context.Context, flags ...uint32) *genericPromise[T] {
+func newPromInter[T any](pipeline *pipelineCore, flags ...uint32) *genericPromise[T] {
 	p := &genericPromise[T]{
 		pipeline: pipeline,
-		ctx:      ctx,
 		resChan:  make(chan Result[T]),
 	}
 
@@ -424,10 +405,9 @@ func newPromInter[T any](pipeline *pipelineCore, ctx context.Context, flags ...u
 
 // newPromExter creates a new genericPromise which is resolved externally,
 // using an external allocated channel, the passed resChan.
-func newPromExter[T any](pipeline *pipelineCore, ctx context.Context, resChan chan Result[T], flags ...uint32) *genericPromise[T] {
+func newPromExter[T any](pipeline *pipelineCore, resChan chan Result[T], flags ...uint32) *genericPromise[T] {
 	p := &genericPromise[T]{
 		pipeline: pipeline,
-		ctx:      ctx,
 		resChan:  resChan,
 		status:   status.PromStatus(status.FlagsIsExternal),
 	}
@@ -442,10 +422,9 @@ func newPromExter[T any](pipeline *pipelineCore, ctx context.Context, resChan ch
 
 // newPromFollow creates a new genericPromise, for one of the follow methods,
 // which is resolved internally, using an internal allocated channel.
-func newPromFollow[T any](pipeline *pipelineCore, ctx context.Context, prevStatus uint32) *genericPromise[T] {
+func newPromFollow[T any](pipeline *pipelineCore, prevStatus uint32) *genericPromise[T] {
 	p := &genericPromise[T]{
 		pipeline: pipeline,
-		ctx:      ctx,
 		resChan:  make(chan Result[T]),
 		status:   status.NewFromFlags(prevStatus),
 	}
@@ -455,10 +434,9 @@ func newPromFollow[T any](pipeline *pipelineCore, ctx context.Context, prevStatu
 
 // newPromSync creates a new genericPromise which is resolved synchronously,
 // just after it's created.
-func newPromSync[T any](pipeline *pipelineCore, ctx context.Context, flags ...uint32) *genericPromise[T] {
+func newPromSync[T any](pipeline *pipelineCore, flags ...uint32) *genericPromise[T] {
 	p := &genericPromise[T]{
 		pipeline: pipeline,
-		ctx:      ctx,
 		// not needed, since sync promises are resolved directly after created,
 		// and before being used.
 		resChan: nil,
