@@ -389,35 +389,20 @@ func (p *genericPromise[T]) asyncFollow(cb func(res Result[T], args []any), args
 
 // newPromInter creates a new genericPromise which is resolved internally,
 // using an internal allocated channel.
-func newPromInter[T any](pipeline *pipelineCore, flags ...uint32) *genericPromise[T] {
-	p := &genericPromise[T]{
+func newPromInter[T any](pipeline *pipelineCore) *genericPromise[T] {
+	return &genericPromise[T]{
 		pipeline: pipeline,
 		resChan:  make(chan Result[T]),
 	}
-
-	// set the flags of the promise, accordingly
-	for f := range flags {
-		p.status = p.status | status.PromStatus(f)
-	}
-
-	return p
 }
 
 // newPromExter creates a new genericPromise which is resolved externally,
 // using an external allocated channel, the passed resChan.
-func newPromExter[T any](pipeline *pipelineCore, resChan chan Result[T], flags ...uint32) *genericPromise[T] {
-	p := &genericPromise[T]{
+func newPromExter[T any](pipeline *pipelineCore, resChan chan Result[T]) *genericPromise[T] {
+	return &genericPromise[T]{
 		pipeline: pipeline,
 		resChan:  resChan,
-		status:   status.PromStatus(status.FlagsIsExternal),
 	}
-
-	// set the flags of the promise, accordingly
-	for f := range flags {
-		p.status = p.status | status.PromStatus(f)
-	}
-
-	return p
 }
 
 // newPromFollow creates a new genericPromise, for one of the follow methods,
@@ -426,26 +411,20 @@ func newPromFollow[T any](pipeline *pipelineCore, prevStatus uint32) *genericPro
 	p := &genericPromise[T]{
 		pipeline: pipeline,
 		resChan:  make(chan Result[T]),
-		status:   status.NewFromFlags(prevStatus),
 	}
+
+	p.status = status.NewFrom(prevStatus)
 
 	return p
 }
 
 // newPromSync creates a new genericPromise which is resolved synchronously,
 // just after it's created.
-func newPromSync[T any](pipeline *pipelineCore, flags ...uint32) *genericPromise[T] {
-	p := &genericPromise[T]{
+func newPromSync[T any](pipeline *pipelineCore) *genericPromise[T] {
+	return &genericPromise[T]{
 		pipeline: pipeline,
 		// not needed, since sync promises are resolved directly after created,
 		// and before being used.
 		resChan: nil,
 	}
-
-	// set the flags of the promise, accordingly
-	for f := range flags {
-		p.status = p.status | status.PromStatus(f)
-	}
-
-	return p
 }

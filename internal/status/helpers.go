@@ -14,7 +14,9 @@
 
 package status
 
-func NewFromFlags(status uint32) PromStatus {
+// NewFrom creates a new PromStatus from the passed status, only carrying
+// the 'flags' bits of the status value to the newly created PromStatus.
+func NewFrom(status uint32) PromStatus {
 	return PromStatus(status & flagsBitsSetMask)
 }
 
