@@ -161,6 +161,8 @@ type promiseBench struct {
 	name string
 }
 
+const parallelism = 100
+
 var promiseBenchs = []promiseBench{
 	{stressed: false, callFollow: true, callWait: false, callRes: false, name: "normal_follow-only"},
 	{stressed: false, callFollow: false, callWait: true, callRes: false, name: "normal_wait-only"},
@@ -293,7 +295,7 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 				prom := getSuccessBenchmarkPromise()
 
 				if bc.stressed {
-					b.SetParallelism(100)
+					b.SetParallelism(parallelism)
 				}
 
 				b.ReportAllocs()
@@ -324,7 +326,7 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 				prom := getSuccessBenchmarkPromise()
 
 				if bc.stressed {
-					b.SetParallelism(100)
+					b.SetParallelism(parallelism)
 				}
 
 				b.ReportAllocs()
