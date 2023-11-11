@@ -2,6 +2,7 @@ package promise
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -255,10 +256,15 @@ func panicCall[T any](pc *pipelineCore, v any) Promise[T] {
 	return p
 }
 
+func (pp *Pipeline[T]) Wait() {
+	pp.core.wg.Wait()
+}
+
 type pipelineCore struct {
 	uncaughtPanicHandler func(v UncaughtPanic)
 	uncaughtErrHandler   func(v UncaughtError)
 
+	wg          sync.WaitGroup
 	reserveChan chan struct{}
 
 	// ctx will be non-nil if the Pipeline is meant to close all Context values
@@ -269,6 +275,9 @@ type pipelineCore struct {
 
 func (pc *pipelineCore) reserveGoroutine() {
 	if pc != nil {
+		// add to the wait group before waiting, to make sure that this goroutine
+		// reservation is accounted for.
+		pc.wg.Add(1)
 		if pc.reserveChan != nil {
 			pc.reserveChan <- struct{}{}
 		}
@@ -277,6 +286,7 @@ func (pc *pipelineCore) reserveGoroutine() {
 
 func (pc *pipelineCore) freeGoroutine() {
 	if pc != nil {
+		pc.wg.Done()
 		if pc.reserveChan != nil {
 			<-pc.reserveChan
 		}
