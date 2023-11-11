@@ -61,7 +61,8 @@ func goCall[T any](pc *pipelineCore, fun func()) Promise[T] {
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	go runCallback[T, T](p, goCallback[T, T](fun), nil, false, true)
+	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	go runCallback[T, T](p, goCallback[T, T](fun), nil, false, true, ctx, cancel)
 	return p
 }
 
@@ -76,7 +77,8 @@ func goErrCall[T any](pc *pipelineCore, fun func() error) Promise[T] {
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	go runCallback[T, T](p, goErrCallback[T, T](fun), nil, true, true)
+	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	go runCallback[T, T](p, goErrCallback[T, T](fun), nil, true, true, ctx, cancel)
 	return p
 }
 
@@ -94,12 +96,12 @@ func goResCall[T any](
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	go runCallback[T, T](p, goResCallback[T, T](fun), nil, true, true)
+	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	go runCallback[T, T](p, goResCallback[T, T](fun), nil, true, true, ctx, cancel)
 	return p
 }
 
 func (pp *Pipeline[T]) Resolver(
-	ctx context.Context,
 	fun func(
 		ctx context.Context,
 		fulfill func(val ...T),
@@ -119,14 +121,20 @@ func resolverCall[T any](
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	go resolverHandler(p, resolverCb)
+	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	go resolverHandler(p, resolverCb, ctx, cancel)
 	return p
 }
 
 func resolverHandler[T any](
 	p *genericPromise[T],
 	cb func(ctx context.Context, fulfill func(...T), reject func(error, ...T)),
+	ctx context.Context,
+	cancel context.CancelFunc,
 ) {
+	// make sure we close the context before returning
+	defer cancel()
+
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
 
@@ -170,7 +178,7 @@ func resolverHandler[T any](
 		}
 	}
 
-	cb(context.TODO(), fulfill, reject)
+	cb(ctx, fulfill, reject)
 }
 
 func (pp *Pipeline[T]) Delay(
@@ -242,6 +250,11 @@ type pipelineCore struct {
 	uncaughtErrHandler   func(v UncaughtError)
 
 	reserveChan chan struct{}
+
+	// ctx will be non-nil if the Pipeline is meant to close all Context values
+	// once any Promise that's created using it is rejected or panicked.
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func (pc *pipelineCore) reserveGoroutine() {
@@ -258,4 +271,13 @@ func (pc *pipelineCore) freeGoroutine() {
 			<-pc.reserveChan
 		}
 	}
+}
+
+func (pc *pipelineCore) ctxParent() context.Context {
+	if pc != nil {
+		if pc.ctx != nil {
+			return pc.ctx
+		}
+	}
+	return context.Background()
 }

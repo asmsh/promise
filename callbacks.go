@@ -58,12 +58,17 @@ func runCallback[PrevResT, NewResT any](
 	prevRes Result[PrevResT],
 	supportNewResult bool,
 	freeAfterDone bool,
+	ctx context.Context,
+	cancel context.CancelFunc,
 ) {
 	// create the Result pointer, to keep track of any result returned
 	var newResP *Result[NewResT]
 	if supportNewResult {
 		newResP = new(Result[NewResT])
 	}
+
+	// make sure we close the context before returning
+	defer cancel()
 
 	// make sure we free this goroutine reservation if it's required
 	if freeAfterDone {
@@ -74,7 +79,7 @@ func runCallback[PrevResT, NewResT any](
 	defer handleReturns(p, newResP)
 
 	// run the callback and extract the result
-	newRes := cb.call(context.TODO(), prevRes)
+	newRes := cb.call(ctx, prevRes)
 
 	// if the callback doesn't support Result returning, return early, as
 	// the rest of the logic isn't relevant anymore.

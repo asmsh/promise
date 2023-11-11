@@ -213,7 +213,8 @@ func (p *genericPromise[T]) Then(
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromFollow[T](p.pipeline, s)
-	go thenFollowCall(p, nextProm, thenCb)
+	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	go thenFollowCall(p, nextProm, thenCb, ctx, cancel)
 	return nextProm
 }
 
@@ -221,6 +222,8 @@ func thenFollowCall[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
 	cb thenCallback[T, T],
+	ctx context.Context,
+	cancel context.CancelFunc,
 ) {
 	// make sure we free this goroutine reservation
 	defer prevProm.pipeline.freeGoroutine()
@@ -244,7 +247,7 @@ func thenFollowCall[T any](
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, res, true, false)
+	runCallback[T, T](nextProm, cb, res, true, false, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Catch(
@@ -257,7 +260,8 @@ func (p *genericPromise[T]) Catch(
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromFollow[T](p.pipeline, s)
-	go catchFollowCall(p, nextProm, catchCb)
+	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	go catchFollowCall(p, nextProm, catchCb, ctx, cancel)
 	return nextProm
 }
 
@@ -265,6 +269,8 @@ func catchFollowCall[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
 	cb catchCallback[T, T],
+	ctx context.Context,
+	cancel context.CancelFunc,
 ) {
 	// make sure we free this goroutine reservation
 	defer prevProm.pipeline.freeGoroutine()
@@ -284,7 +290,7 @@ func catchFollowCall[T any](
 	res, _ := handleFollow(prevProm, nextProm, false)
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, res, true, false)
+	runCallback[T, T](nextProm, cb, res, true, false, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Recover(
@@ -297,7 +303,8 @@ func (p *genericPromise[T]) Recover(
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromFollow[T](p.pipeline, s)
-	go recoverFollowCall(p, nextProm, recoverCb)
+	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	go recoverFollowCall(p, nextProm, recoverCb, ctx, cancel)
 	return nextProm
 }
 
@@ -305,6 +312,8 @@ func recoverFollowCall[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
 	cb recoverCallback[T, T],
+	ctx context.Context,
+	cancel context.CancelFunc,
 ) {
 	// make sure we free this goroutine reservation
 	defer prevProm.pipeline.freeGoroutine()
@@ -328,7 +337,7 @@ func recoverFollowCall[T any](
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, res, true, false)
+	runCallback[T, T](nextProm, cb, res, true, false, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Finally(
@@ -341,7 +350,8 @@ func (p *genericPromise[T]) Finally(
 	_, s := p.status.RegWait()
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromFollow[T](p.pipeline, s)
-	go finallyFollowCall(p, nextProm, finallyCb)
+	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	go finallyFollowCall(p, nextProm, finallyCb, ctx, cancel)
 	return nextProm
 }
 
@@ -354,6 +364,8 @@ func finallyFollowCall[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
 	cb finallyCallback[T, T],
+	ctx context.Context,
+	cancel context.CancelFunc,
 ) {
 	// make sure we free this goroutine reservation
 	defer prevProm.pipeline.freeGoroutine()
@@ -362,5 +374,5 @@ func finallyFollowCall[T any](
 	prevProm.wait()
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, prevProm.res, true, false)
+	runCallback[T, T](nextProm, cb, prevProm.res, true, false, ctx, cancel)
 }
