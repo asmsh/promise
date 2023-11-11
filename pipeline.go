@@ -14,6 +14,11 @@ type PipelineConfig struct {
 	// and follow calls(Then, Catch, etc.).
 	// If it's 0 or less, then the pipeline size is unlimited.
 	Size int
+
+	// CancelAllCtxOnErr if true, will result in canceling all Context values passed
+	// to all callbacks, once any callback returns an error or cause a panic that's
+	// not caught or recovered, respectively.
+	CancelAllCtxOnErr bool
 }
 
 type Pipeline[T any] struct {
@@ -30,8 +35,13 @@ func NewPipeline[T any](c ...*PipelineConfig) *Pipeline[T] {
 		if cb := c[0].UncaughtErrHandler; cb != nil {
 			pp.core.uncaughtErrHandler = cb
 		}
+
 		if size := c[0].Size; size > 0 {
 			pp.core.reserveChan = make(chan struct{}, size)
+		}
+
+		if c[0].CancelAllCtxOnErr {
+			pp.core.ctx, pp.core.cancel = context.WithCancel(context.Background())
 		}
 	}
 
