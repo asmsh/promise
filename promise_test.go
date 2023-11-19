@@ -92,7 +92,7 @@ func TestPanicking(t *testing.T) {
 		if res == nil {
 			t.Fatalf("Res() = %v, want: non-nil", res)
 		}
-		if vv, ok := res.Err().(*UncaughtPanic); !ok || vv.V() != panicValue {
+		if vv, ok := res.Err().(UncaughtPanic); !ok || vv.V() != panicValue {
 			t.Fatalf("Res() got unexpected error: %v", res.Err())
 		}
 	})
@@ -103,7 +103,7 @@ func TestPanicking(t *testing.T) {
 			if v == nil {
 				t.Fatal("expected a panic, but none happened")
 			}
-			if vv, ok := v.(*UncaughtPanic); !ok || vv.V() != panicValue {
+			if vv, ok := v.(UncaughtPanic); !ok || vv.V() != panicValue {
 				t.Fatalf("got unexpected panic: %v", v)
 			}
 		}()
@@ -120,7 +120,7 @@ func TestPanicking(t *testing.T) {
 			if v == nil {
 				t.Fatal("expected a panic, but none happened")
 			}
-			if vv, ok := v.(*UncaughtPanic); !ok || vv.V() != panicValue {
+			if vv, ok := v.(UncaughtPanic); !ok || vv.V() != panicValue {
 				t.Fatalf("got unexpected panic: %v", v)
 			}
 		}()
