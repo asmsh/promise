@@ -105,58 +105,6 @@ func GoRes[T any](fun func(ctx context.Context) Result[T]) Promise[T] {
 	return goResCall[T](defPipelineCore, fun)
 }
 
-// Resolver provides a JavaScript-like promise creation. It runs the provided
-// resolverCb function in a separate goroutine, and returns a new GoPromise,
-// which will be resolved using the functions passed to the resolverCb.
-//
-// The returned promise will be fulfilled when the fulfill function is called,
-// for the first time, and before the reject function, then the promise's result
-// will be a Res value that contains the passed values, vals.
-// Or, when calling the reject function, but with a nil error, and in that case
-// the promise's result will be a Res value that contains the passed values, vals,
-// and a nil, after them at the end.
-//
-// The returned promise will be rejected when the reject function is called
-// with a non nil error, for the first time, and before the fulfill function,
-// then the promise's result will be a Res value that contains, both, the passed
-// values, vals(if present), and the provided err(after vals, always at the end).
-//
-// The returned promise will be panicked when the resolverCb causes a panic,
-// before any calls to fulfill or reject is made.
-//
-// If the callback called runtime.Goexit, before any calls to fulfill or reject
-// is made, the returned promise will be fulfilled to 'nil'.
-//
-// If the resolverCb causes a panic after calling fulfill or reject, the panic
-// will not be recovered by the promise.
-//
-// FIXME: we should lift the blow restriction
-// The fulfill and reject functions should not be called asynchronously, or more
-// specifically, they should be called and returned before the resolverCb return.
-//
-// The provided vals, if passed from a slice/array, the slice/array shouldn't
-// be modified after this call.
-//
-// If the returned promise is rejected, and the error is not caught(by a Catch
-// call) before the end of the promise's chain, or the promise result is not
-// read(by a Res call), a panic will happen with an error value of type
-// *UncaughtError, which has that uncaught error 'wrapped' inside it.
-//
-// If the returned promise is a panicked promise, and it's not recovered(by a
-// Recover call) before the end of the promise's chain, or before calling Finally,
-// it will re-panic(with the same value passed to the original 'panic' call).
-//
-// It will panic if a nil function is passed.
-func Resolver[T any](
-	fun func(
-		ctx context.Context,
-		fulfill func(val ...T),
-		reject func(err error, val ...T),
-	),
-) Promise[T] {
-	return resolverCall[T](defPipelineCore, fun)
-}
-
 // Delay returns a GoPromise that's resolved to the passed Res value, res,
 // after waiting for at least duration d, accordingly.
 //

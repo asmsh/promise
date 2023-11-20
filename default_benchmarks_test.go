@@ -174,47 +174,6 @@ func BenchmarkGoRes(b *testing.B) {
 	})
 }
 
-func BenchmarkResolver(b *testing.B) {
-	setNoPanicsPipelineCore()
-
-	b.Run("fulfill", func(b *testing.B) {
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = Resolver[any](func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
-				fulfill()
-			})
-		}
-		_ = p
-	})
-
-	b.Run("reject nil error", func(b *testing.B) {
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = Resolver[any](func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
-				reject(nil, "success_value")
-			})
-		}
-		_ = p
-	})
-
-	b.Run("reject non-nil error", func(b *testing.B) {
-		var p Promise[any]
-		err := newStrError()
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = Resolver[any](func(ctx context.Context, fulfill func(val ...any), reject func(err error, val ...any)) {
-				reject(err, "success_value")
-			})
-		}
-		_ = p
-	})
-}
-
 func BenchmarkDelay(b *testing.B) {
 	setNoPanicsPipelineCore()
 
