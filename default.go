@@ -28,13 +28,6 @@ var (
 // below, for the purpose of testing.
 var defPipelineCore *pipelineCore
 
-func New[T any](resChan chan Result[T], pipeline *Pipeline[T]) Promise[T] {
-	if pipeline != nil {
-		return chanCall[T](&pipeline.core, resChan)
-	}
-	return chanCall[T](defPipelineCore, resChan)
-}
-
 // Chan returns a GoPromise that's created using the provided resChan.
 //
 // The resChan must be a bi-directional chan(buffered or unbuffered), which is

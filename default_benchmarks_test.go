@@ -20,42 +20,6 @@ import (
 	"time"
 )
 
-func BenchmarkNew(b *testing.B) {
-	resChan := make(chan Result[any], 1)
-
-	b.Run("nil pipeline", func(b *testing.B) {
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = New[any](resChan, nil)
-		}
-		_ = p
-	})
-
-	b.Run("default pipeline", func(b *testing.B) {
-		var pp Pipeline[any]
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = New[any](resChan, &pp)
-		}
-		_ = p
-	})
-
-	b.Run("custom pipeline", func(b *testing.B) {
-		var pp = NewPipeline[any](&PipelineConfig{})
-		var p Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = New[any](resChan, pp)
-		}
-		_ = p
-	})
-}
-
 func BenchmarkChan(b *testing.B) {
 	resChan := make(chan Result[any], 1)
 
