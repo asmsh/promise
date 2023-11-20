@@ -109,10 +109,10 @@ const (
 	FlagsTypeTimed uint32 = 1 << (iota + 10)
 
 	// promise features...
-	_                      = 1 << (iota + 10) // reserved
-	_                      = 1 << (iota + 10) // reserved
-	FlagsIsNotSafe  uint32 = 1 << (iota + 10)
-	FlagsIsExternal uint32 = 1 << (iota + 10)
+	_ = 1 << (iota + 10) // reserved
+	_ = 1 << (iota + 10) // reserved
+	_ = 1 << (iota + 10) // reserved
+	_ = 1 << (iota + 10) // reserved
 
 	// 4095 = 1111_1111_1111 (the 12 flags above)
 	flagsBitsSetMask uint32 = 4095 << 10

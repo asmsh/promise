@@ -82,11 +82,3 @@ func IsFlagsOnce(status uint32) bool {
 func IsFlagsTimed(status uint32) bool {
 	return status&FlagsTypeTimed == FlagsTypeTimed
 }
-
-func IsFlagsNotSafe(status uint32) bool {
-	return status&FlagsIsNotSafe == FlagsIsNotSafe
-}
-
-func IsFlagsExternal(status uint32) bool {
-	return status&FlagsIsExternal == FlagsIsExternal
-}
