@@ -53,12 +53,20 @@ func (pp *Pipeline[T]) Chan(resChan chan Result[T]) Promise[T] {
 	return chanCall[T](&pp.core, resChan)
 }
 
-// TODO: panic if the resChan's capacity is 0
 func chanCall[T any](pc *pipelineCore, resChan chan Result[T]) Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
-	return newPromExter(pc, resChan)
+
+	pc.reserveGoroutine()
+	p := newPromInter[T](pc)
+	go chanHandler(p, resChan)
+	return p
+}
+
+func chanHandler[T any](p *genericPromise[T], resChan chan Result[T]) {
+	res := <-resChan
+	resolveToRes(p, res)
 }
 
 func (pp *Pipeline[T]) Go(fun func()) Promise[T] {

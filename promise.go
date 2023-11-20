@@ -28,37 +28,17 @@ type genericPromise[T any] struct {
 	pipeline *pipelineCore
 
 	// holds the result of the promise.
-	// written once, before the resChan channel is closed.
+	// written once, before the syncChan channel is closed.
 	//
-	// don't read it unless the resChan is known to be closed.
+	// don't read it unless the syncChan is known to be closed.
 	res Result[T]
 
-	// closed or received from when this promise is resolved.
-	//
-	// when this chan is created internally, it will be an unbuffered chan,
-	// in that case the result will be written to the res field, then it
-	// will be closed.
-	//
-	// when this chan is created externally and passed, it will be either a
-	// buffered chan, or an unbuffered chan, but it must be a bi-directional
-	// chan(so that it can be closed internally).
-	// in that case, to resolve the promise, the chan creator either sends
-	// the result to it, for only one time, OR, just close it.
-	// when the promise is resolved by closing the chan, it will always be
-	// fulfilled with a nil result, otherwise, it will be either fulfilled
-	// or rejected, depending on whether the sent result contains a non-nil
-	// error as its last element or not.
-	// the result of the promise will be the sent result.
-	//
-	// note: not following the expected behavior, either when passing the chan
-	// or when resolving the promise, will result in a run-time panic, either
-	// internally or in the creator side, and may introduce a data race on this
-	// channel.
-	resChan chan Result[T]
+	// closed when this promise is resolved.
+	syncChan chan struct{}
 
-	// hold the status of the different states, fates, flags, and other data
-	// about the promise.
-	// refer to the docs of the promStatus type for more info.
+	// hold the different states, fates, flags, and other data about
+	// the promise.
+	// refer to the docs of the PromStatus type for more info.
 	//
 	// the res field is guaranteed to be immutable, after the fate value is
 	// Resolved or Handled, so don't read it before then.

@@ -22,104 +22,36 @@ import (
 
 // panic messages
 const (
-	nilCallbackPanicMsg   = "promise: the provided callback is nil"
-	nilResChanPanicMsg    = "promise: the provided resChan is nil"
-	multipleSendsPanicMsg = "promise: only one send should be done on the resChan"
+	nilCallbackPanicMsg = "promise: the provided callback is nil"
+	nilResChanPanicMsg  = "promise: the provided resChan is nil"
 )
 
-// there are two ways for this method to work in, internal, or external way.
+// wait waits for the promise p to be resolved, by either blocking on receiving
+// from the syncChan, or utilizing the fate value of the promise status.
 //
-// the internal way: the resChan will be an unbuffered chan, which is allocated
-// internally.
-// the promise is resolved when the resChan is closed, and the res field will
-// has the result of the promise.
-//
-// the external way: the resChan will be bi-directional chan(buffered or not),
-// which is allocated externally, by the user.
-// the promise is resolved when a value is sent to the resChan chan, or it's
-// closed. if a value is sent, that value will be the result of the promise,
-// otherwise, the result will be nil.
-//
-// resolveOnTimeout if true, will set the state to pending(keep it as pending),
-// and the fate to resolved, when the wait times-out.
-// it should be true in all follow methods, in all implementation.
-// it should be true in 'wait' calls only in the 'timed' implementation, and
-// when the provided duration exceeds the wanted timeout.
-//
-// it returns true only if the wait times-out, otherwise it returns false.
+// the syncChan will be an unbuffered chan, which is allocated internally.
+// the promise is resolved when the syncChan is closed, and the res field will
+// have the result of the promise.
 func (p *genericPromise[T]) wait() (s uint32) {
 	s = p.status.Load()
 
 	// if the fate is 'Resolved' or 'Handled', don't wait, as they are guaranteed
-	// to happen after the result is saved, and after the resChan is closed.
+	// to happen after the result is saved, and after the syncChan is closed.
 	if status.IsFateResolved(s) || status.IsFateHandled(s) {
 		return s
 	}
 
 	// wait with the appropriate wait procedure
-	if status.IsFlagsExternal(s) {
-		p.exterWaitProc()
-	} else {
-		p.interWaitProc()
-	}
+	p.interWaitProc()
 
 	// return the up-to-date status value
 	return p.status.Load()
 }
 
-// exterWaitProc executes the wait procedure responsible for promises with
-// externally allocated resChan.
-// this method will be called in only one specific case, when the promise
-// is created with the external flag set.
-// it returns true only if the provided timerChan is received from, otherwise
-// it returns false.
-func (p *genericPromise[T]) exterWaitProc() {
-	// the chan is closed or a value is received
-	res, ok := <-p.resChan
-	if ok {
-		// a value is received.
-		// set the status to 'Resolving', and handle the result, only if it's
-		// been just set, otherwise panic, accordingly.
-		ok, _ = p.status.SetResolving()
-		if ok {
-			// this is the first result received on this channel.
-			// this will set the result value and close the chan.
-			resolveToRes(p, res)
-
-			// FIXME: check if this is introducing a race condition
-			// only one value should be sent, but more is sent, panic.
-			if len(p.resChan) != 0 {
-				panic(multipleSendsPanicMsg)
-			}
-		} else {
-			// this may happen if two or more values are sent, and the
-			// first value is processed, and this is the second value.
-			// only one value should be sent, but more is sent, panic.
-			panic(multipleSendsPanicMsg)
-		}
-	} else {
-		// the chan is closed, either by us or by the user.
-		// set the status to 'Fulfilled' and 'Resolved'.
-		//
-		// if we closed the chan, then the res and status fields are now set
-		// as expected, and this call is a no-op, and that's acceptable.
-		//
-		// if the user closed the chan, which is considered acceptable, only
-		// if the user didn't send any values and just closed the chan, the
-		// res field will be empty, cause the user didn't send any values,
-		// and the status will be empty, so set it to fulfilled and resolve,
-		// cause no reason to reject can happen.
-		// TODO: in this scenario, the res value will be nil.
-		// TODO: maybe, disallow users from closing the chan, or figure a way to detect it first.
-		// TODO: this whole 'else' branch could be deleted and we can only rely on checking whether 'res' is 'nil' or not.
-		p.status.SetFulfilledResolved()
-	}
-}
-
 func (p *genericPromise[T]) interWaitProc() {
-	// internally created res chan will always be closed by the previous
-	// promise, after setting the res and status fields as expected.
-	<-p.resChan
+	// the chan will always be closed by the previous promise,
+	// after setting the res and status fields as expected.
+	<-p.syncChan
 }
 
 func handleFollow[PrevT, NextT any](
@@ -237,11 +169,11 @@ func resolveToPanickedRes[T any](
 	prom *genericPromise[T],
 	res Result[T],
 ) (s uint32) {
-	// save the result, update the status, and close the resChan to unblock
+	// save the result, update the status, and close the syncChan to unblock
 	// all waiting calls.
 	prom.res = res
 	_, s = prom.status.SetPanickedResolved()
-	close(prom.resChan)
+	close(prom.syncChan)
 
 	// if the promise is panicked, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
@@ -258,11 +190,11 @@ func resolveToRejectedRes[T any](
 	prom *genericPromise[T],
 	res Result[T],
 ) (s uint32) {
-	// save the result, update the status, and close the resChan to unblock
+	// save the result, update the status, and close the syncChan to unblock
 	// all waiting calls.
 	prom.res = res
 	_, s = prom.status.SetRejectedResolved()
-	close(prom.resChan)
+	close(prom.syncChan)
 
 	// if the promise is rejected, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
@@ -281,7 +213,7 @@ func resolveToFulfilledRes[T any](
 ) (s uint32) {
 	prom.res = res
 	_, s = prom.status.SetFulfilledResolved()
-	close(prom.resChan)
+	close(prom.syncChan)
 	return
 }
 
@@ -412,16 +344,7 @@ func (p *genericPromise[T]) asyncFollow(cb func(res Result[T], args []any), args
 func newPromInter[T any](pipeline *pipelineCore) *genericPromise[T] {
 	return &genericPromise[T]{
 		pipeline: pipeline,
-		resChan:  make(chan Result[T]),
-	}
-}
-
-// newPromExter creates a new genericPromise which is resolved externally,
-// using an external allocated channel, the passed resChan.
-func newPromExter[T any](pipeline *pipelineCore, resChan chan Result[T]) *genericPromise[T] {
-	return &genericPromise[T]{
-		pipeline: pipeline,
-		resChan:  resChan,
+		syncChan: make(chan struct{}),
 	}
 }
 
@@ -430,7 +353,7 @@ func newPromExter[T any](pipeline *pipelineCore, resChan chan Result[T]) *generi
 func newPromFollow[T any](pipeline *pipelineCore, prevStatus uint32) *genericPromise[T] {
 	p := &genericPromise[T]{
 		pipeline: pipeline,
-		resChan:  make(chan Result[T]),
+		syncChan: make(chan struct{}),
 	}
 
 	p.status = status.NewFrom(prevStatus)
@@ -445,6 +368,6 @@ func newPromSync[T any](pipeline *pipelineCore) *genericPromise[T] {
 		pipeline: pipeline,
 		// not needed, since sync promises are resolved directly after created,
 		// and before being used.
-		resChan: nil,
+		syncChan: nil,
 	}
 }
