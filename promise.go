@@ -45,9 +45,34 @@ type genericPromise[T any] struct {
 	status status.PromStatus
 }
 
-func (p *genericPromise[T]) Status() Status {
+// State returns the state of the promise.
+func (p *genericPromise[T]) State() State {
 	s := p.status.Load()
-	return Status(s)
+	switch {
+	case status.IsStateFulfilled(s):
+		return Fulfilled
+	case status.IsStateRejected(s):
+		return Rejected
+	case status.IsStatePanicked(s):
+		return Panicked
+	default:
+		return State(0)
+	}
+}
+
+// Fate returns the fate of the promise.
+func (p *genericPromise[T]) Fate() Fate {
+	s := p.status.Load()
+	switch {
+	case status.IsFateResolving(s), status.IsFateUnresolved(s):
+		return Unresolved
+	case status.IsFateResolved(s):
+		return Unresolved
+	case status.IsFateHandled(s):
+		return Resolved
+	default:
+		return Fate(0)
+	}
 }
 
 func (p *genericPromise[T]) Wait() {

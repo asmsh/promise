@@ -28,10 +28,8 @@ import (
 // It's a private interface, which can only be implemented by embedding any
 // type that implement it from this module.
 type Promise[T any] interface {
-	// Status returns the status of this promise at this specific moment.
-	//
-	// The returned value corresponds only to the time it was created at.
-	Status() Status
+	State() State
+	Fate() Fate
 
 	// Wait waits the promise to be resolved. It returns false, if the promise
 	// has panicked, otherwise it follows the rules of the underlying Promise
@@ -202,4 +200,48 @@ type Promise[T any] interface {
 	// extends their functionality or provide new functionality.
 	asyncRead(cb func(res Result[T], args []any), args ...any)
 	asyncFollow(cb func(res Result[T], args []any), args ...any)
+}
+
+type State int
+
+const (
+	_ State = iota
+	Fulfilled
+	Rejected
+	Panicked
+)
+
+func (s State) String() string {
+	switch s {
+	case Fulfilled:
+		return "fulfilled"
+	case Rejected:
+		return "rejected"
+	case Panicked:
+		return "panicked"
+	default:
+		return "<unknown>"
+	}
+}
+
+type Fate int
+
+const (
+	_ Fate = iota
+	Unresolved
+	Resolved
+	Handled
+)
+
+func (f Fate) String() string {
+	switch f {
+	case Unresolved:
+		return "unresolved"
+	case Resolved:
+		return "resolved"
+	case Handled:
+		return "handled"
+	default:
+		return "<unknown>"
+	}
 }
