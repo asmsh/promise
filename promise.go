@@ -34,7 +34,13 @@ type genericPromise[T any] struct {
 	res Result[T]
 
 	// closed when this promise is resolved.
+	// this channel has one writer (one goroutine), which is the owner,
+	// which will close it, but can have multiple readers (follow promises).
 	syncChan chan struct{}
+
+	// this is sent on by the different extension calls.
+	// it's never closed.
+	extsChan chan extQueue[T]
 
 	// hold the different states, fates, flags, and other data about
 	// the promise.
@@ -43,6 +49,35 @@ type genericPromise[T any] struct {
 	// the res field is guaranteed to be immutable, after the fate value is
 	// Resolved or Handled, so don't read it before then.
 	status status.PromStatus
+}
+
+// extQueue wil be owned, at any time, by a single goroutine.
+type extQueue[T any] struct {
+	// whether the call value is valid or not.
+	valid bool
+
+	// call is the default extension call.
+	call extCall[T]
+
+	// extra holds any other extension calls, in addition to the one in call.
+	extra []extCall[T]
+}
+
+// extCall describes an extension call and how to communicate back to it.
+type extCall[T any] struct {
+	// idx is the index of this result's promise within the list of promises
+	// passed to the extension call.
+	idx int
+
+	// posResChan is the channel used to send the result back to the extension
+	// call's promise.
+	// this is a new, per extension call, unbuffered channel.
+	posResChan chan IdxRes[T]
+
+	// syncChan is the channel used to communicate that the extension call's
+	// promise has been resolved, so that the sending promise can return.
+	// this is typically extension call's promise's syncChan.
+	syncChan chan struct{}
 }
 
 // State returns the state of the promise.
@@ -138,11 +173,14 @@ func (p *genericPromise[T]) resCall() Result[T] {
 	}
 
 	// the promise result can be accessed multiple times...
+	return p.getRes()
+}
+
+func (p *genericPromise[T]) getRes() Result[T] {
 	// if no result was set, then it's implicitly the empty result
 	if p.res == nil {
 		return emptyResult[T]{}
 	}
-
 	return p.res
 }
 

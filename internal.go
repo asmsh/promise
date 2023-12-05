@@ -79,12 +79,7 @@ func handleFollow[PrevT, NextT any](
 	}
 
 	// the promise result can be accessed multiple times...
-	// if no result was set, then it's implicitly the empty result
-	if prevProm.res == nil {
-		return emptyResult[PrevT]{}, true
-	}
-
-	return prevProm.res, true
+	return prevProm.getRes(), true
 }
 
 // this handles invalid follow from then, catch, and recover calls.
@@ -119,7 +114,7 @@ func handleInvalidFollow[T any](
 // handleReturns must be deferred.
 // the callback function is called after a deferred call to this method.
 // no internal call that may cause a panic should be called after this method.
-// TODO: pass a new value, paniced (similar to valid from the sync.OnceFunc implementaiton),
+// TODO: pass a new value, panicked (similar to valid from the sync.OnceFunc implementation),
 // and make the handleReturns function uses this value to tell whether the nil value is valid or not.
 func handleReturns[T any](prom *genericPromise[T], resP *Result[T]) {
 	// make sure that only one call will resolve the promise, or return if
@@ -175,6 +170,8 @@ func resolveToPanickedRes[T any](
 	_, s = prom.status.SetPanickedResolved()
 	close(prom.syncChan)
 
+	handleExtCalls(prom, Panicked)
+
 	// if the promise is panicked, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught panic to the last call
@@ -196,6 +193,8 @@ func resolveToRejectedRes[T any](
 	_, s = prom.status.SetRejectedResolved()
 	close(prom.syncChan)
 
+	handleExtCalls(prom, Rejected)
+
 	// if the promise is rejected, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught error to the last call
@@ -214,7 +213,44 @@ func resolveToFulfilledRes[T any](
 	prom.res = res
 	_, s = prom.status.SetFulfilledResolved()
 	close(prom.syncChan)
+
+	handleExtCalls(prom, Fulfilled)
 	return
+}
+
+func handleExtCalls[T any](prom *genericPromise[T], state State) (handled bool) {
+	extQ := <-prom.extsChan
+
+	// handle not having any extension calls
+	if !extQ.valid {
+		return false
+	}
+
+	// get the final and ready-to-use result
+	res := prom.getRes()
+
+	// handle having a single extension call
+	handled = handleExtCall(extQ.call, res, state) || handled
+
+	// handle having multiple extension calls
+	for _, call := range extQ.extra {
+		handled = handleExtCall(call, res, state) || handled
+	}
+
+	return handled
+}
+
+func handleExtCall[T any](call extCall[T], res Result[T], state State) bool {
+	select {
+	case call.posResChan <- IdxRes[T]{
+		Idx:   call.idx,
+		Res:   res,
+		State: state,
+	}:
+		return true
+	case <-call.syncChan:
+		return false
+	}
 }
 
 func (p *genericPromise[T]) uncaughtPanicHandler() {
@@ -284,81 +320,31 @@ func (p *genericPromise[T]) privateImplementation() {}
 
 func (p *genericPromise[T]) impl() *genericPromise[T] { return p }
 
-// asyncRead is used internally to implement promise extension functions.
-//
-// as it's registered as a 'read' call, it can prevent UncaughtError panics if
-// the promise is about to be rejected, but it can't prevent a panicked promise
-// from re-broadcasting the panic.
-//
-// the cb will be called with ok = true, only if the promise is fulfilled
-// or rejected.
-func (p *genericPromise[T]) asyncRead(cb func(res Result[T], args []any), args ...any) {
-	// register this as a 'read' call, and return if no callback is passed
-	p.status.RegRead()
-	if cb == nil {
-		return
-	}
-
-	// asynchronously, wait the promise to be resolved and call cb, accordingly
-	go p.asyncReadCall(cb, args)
-}
-
-// asyncReadCall will call the cb with an argument that corresponds to the result
-// of a GetRes call.
-//
-// if the promise panics without having a 'follow' call, then the program will
-// crash, so if the promise' state is found to be panicked, here, this means
-// that, either it's already handled, or there are one or more follow calls
-// in the chain that might handle it, and if the panic reached the end of the
-// chain without finding a Recover call, the promise will re-broadcast the
-// panic, so there's no need to care about panics here.
-func (p *genericPromise[T]) asyncReadCall(
-	cb func(res Result[T], args []any),
-	args []any,
-) {
-	// wait the previous promise to be resolved, as long as ctx is not done
-	_ = p.wait()
-
-	// run the callback
-	cb(p.res, args)
-}
-
-// asyncFollow is used internally to implement promise extension functions.
-//
-// as it's registered as a 'follow' call, it can prevent UncaughtError panics if
-// the promise is about to be rejected, and also prevent a panicked promise from
-// re-broadcasting the panic.
-//
-// the cb will be called with ok = true, only if the promise is fulfilled
-// or rejected.
-func (p *genericPromise[T]) asyncFollow(cb func(res Result[T], args []any), args ...interface{}) {
-	// register this as a 'follow' call, and return if no callback is passed
-	p.status.RegFollow()
-	if cb == nil {
-		return
-	}
-}
-
 // newPromInter creates a new genericPromise which is resolved internally,
 // using an internal allocated channel.
 func newPromInter[T any](pipeline *pipelineCore) *genericPromise[T] {
+	extsChan := make(chan extQueue[T], 1)
+	extsChan <- extQueue[T]{}
+
 	return &genericPromise[T]{
 		pipeline: pipeline,
 		syncChan: make(chan struct{}),
+		extsChan: extsChan,
 	}
 }
 
 // newPromFollow creates a new genericPromise, for one of the follow methods,
 // which is resolved internally, using an internal allocated channel.
 func newPromFollow[T any](pipeline *pipelineCore, prevStatus uint32) *genericPromise[T] {
-	p := &genericPromise[T]{
-		pipeline: pipeline,
-		syncChan: make(chan struct{}),
-	}
-
+	p := newPromInter[T](pipeline)
 	p.status = status.NewFrom(prevStatus)
-
 	return p
+}
+
+var closedChan = make(chan struct{})
+
+func init() {
+	close(closedChan)
 }
 
 // newPromSync creates a new genericPromise which is resolved synchronously,
@@ -366,8 +352,9 @@ func newPromFollow[T any](pipeline *pipelineCore, prevStatus uint32) *genericPro
 func newPromSync[T any](pipeline *pipelineCore) *genericPromise[T] {
 	return &genericPromise[T]{
 		pipeline: pipeline,
-		// not needed, since sync promises are resolved directly after created,
-		// and before being used.
-		syncChan: nil,
+		syncChan: closedChan,
+		// not needed, since sync promises are resolved directly(synchronously)
+		// after created, so any extension call will depend on the syncChan.
+		extsChan: nil,
 	}
 }
