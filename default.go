@@ -19,11 +19,6 @@ import (
 	"time"
 )
 
-var (
-	defUncaughtPanicHandler = func(v UncaughtPanic) { panic(v) }
-	defUncaughtErrorHandler = func(v UncaughtError) { panic(v) }
-)
-
 // defPipelineCore is used for overriding the value passed to all constructors
 // below, for the purpose of testing.
 var defPipelineCore *pipelineCore

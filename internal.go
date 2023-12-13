@@ -259,40 +259,33 @@ func getPanicV[T any](res Result[T]) any {
 }
 
 func (p *genericPromise[T]) uncaughtPanicHandler() {
-	v := UncaughtPanic{v: getPanicV(p.res)}
-	if p.pipeline == nil {
-		defUncaughtPanicHandler(v)
-	} else {
-		// if there's a pipeline cancel function, call it before the handler
+	if p.pipeline != nil {
+		// if it's request to cancel all the promises of the pipeline on
+		// uncaught panics, call the cancel function before the handler.
 		if p.pipeline.cancel != nil {
 			p.pipeline.cancel()
 		}
 
-		// still, resolve to using the default handler if none is defined
+		// call the handler if one is provided
 		if p.pipeline.uncaughtPanicHandler != nil {
+			v := UncaughtPanic{v: getPanicV(p.res)}
 			p.pipeline.uncaughtPanicHandler(v)
-		} else {
-			defUncaughtPanicHandler(v)
 		}
 	}
 }
 
 func (p *genericPromise[T]) uncaughtErrorHandler() {
-	err := p.res.Err()
-	v := UncaughtError{err: err}
-	if p.pipeline == nil {
-		defUncaughtErrorHandler(v)
-	} else {
-		// if there's a pipeline cancel function, call it before the handler
+	if p.pipeline != nil {
+		// if it's request to cancel all the promises of the pipeline on
+		// uncaught errors, call the cancel function before the handler.
 		if p.pipeline.cancel != nil {
 			p.pipeline.cancel()
 		}
 
-		// still, resolve to using the default handler if none is defined
+		// call the handler if one is provided
 		if p.pipeline.uncaughtErrorHandler != nil {
+			v := UncaughtError{err: p.res.Err()}
 			p.pipeline.uncaughtErrorHandler(v)
-		} else {
-			defUncaughtErrorHandler(v)
 		}
 	}
 }
