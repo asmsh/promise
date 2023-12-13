@@ -289,8 +289,8 @@ func (p *genericPromise[T]) uncaughtErrorHandler() {
 		}
 
 		// still, resolve to using the default handler if none is defined
-		if p.pipeline.uncaughtErrHandler != nil {
-			p.pipeline.uncaughtErrHandler(v)
+		if p.pipeline.uncaughtErrorHandler != nil {
+			p.pipeline.uncaughtErrorHandler(v)
 		} else {
 			defUncaughtErrorHandler(v)
 		}

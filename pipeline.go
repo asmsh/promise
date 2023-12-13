@@ -8,7 +8,7 @@ import (
 
 type PipelineConfig struct {
 	UncaughtPanicHandler func(v UncaughtPanic)
-	UncaughtErrHandler   func(v UncaughtError)
+	UncaughtErrorHandler func(v UncaughtError)
 
 	// Size is the allowed number of goroutines which this pipeline can run.
 	// This includes goroutines created for both, constructor calls(Go, GoRes, etc.)
@@ -16,10 +16,10 @@ type PipelineConfig struct {
 	// If it's 0 or less, then the pipeline size is unlimited.
 	Size int
 
-	// CancelAllCtxOnErr if true, will result in canceling all Context values passed
-	// to all callbacks, once any callback returns an error or cause a panic that's
-	// not caught or recovered, respectively.
-	CancelAllCtxOnErr bool
+	// CancelAllCtxOnFailure, if true, will result in canceling all Context values
+	// passed to all callbacks, once any callback returns an error or cause a panic
+	// that's not caught or recovered, through Catch or Recover, respectively.
+	CancelAllCtxOnFailure bool
 }
 
 type Pipeline[T any] struct {
@@ -33,15 +33,15 @@ func NewPipeline[T any](c ...*PipelineConfig) *Pipeline[T] {
 		if cb := c[0].UncaughtPanicHandler; cb != nil {
 			pp.core.uncaughtPanicHandler = cb
 		}
-		if cb := c[0].UncaughtErrHandler; cb != nil {
-			pp.core.uncaughtErrHandler = cb
+		if cb := c[0].UncaughtErrorHandler; cb != nil {
+			pp.core.uncaughtErrorHandler = cb
 		}
 
 		if size := c[0].Size; size > 0 {
 			pp.core.reserveChan = make(chan struct{}, size)
 		}
 
-		if c[0].CancelAllCtxOnErr {
+		if c[0].CancelAllCtxOnFailure {
 			pp.core.ctx, pp.core.cancel = context.WithCancel(context.Background())
 		}
 	}
@@ -190,7 +190,7 @@ func (pp *Pipeline[T]) Wait() {
 
 type pipelineCore struct {
 	uncaughtPanicHandler func(v UncaughtPanic)
-	uncaughtErrHandler   func(v UncaughtError)
+	uncaughtErrorHandler func(v UncaughtError)
 
 	wg          sync.WaitGroup
 	reserveChan chan struct{}
