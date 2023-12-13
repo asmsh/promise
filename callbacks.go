@@ -67,9 +67,6 @@ func runCallback[PrevResT, NewResT any](
 		newResP = new(Result[NewResT])
 	}
 
-	// make sure we close the context before returning
-	defer cancel()
-
 	// make sure we free this goroutine reservation if it's required
 	if freeAfterDone {
 		defer p.pipeline.freeGoroutine()
@@ -77,6 +74,9 @@ func runCallback[PrevResT, NewResT any](
 
 	// defer the return handler to handle panics and runtime.Goexit calls
 	defer handleReturns(p, newResP)
+
+	// make sure we close the context once we return from the callback
+	defer cancel()
 
 	// run the callback and extract the result
 	newRes := cb.call(ctx, prevRes)
