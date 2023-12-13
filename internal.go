@@ -242,7 +242,7 @@ func handleExtCalls[T any](prom *genericPromise[T], state State) (handled bool) 
 
 func handleExtCall[T any](call extCall[T], res Result[T], state State) bool {
 	select {
-	case call.posResChan <- IdxRes[T]{
+	case call.resChan <- IdxRes[T]{
 		Idx:   call.idx,
 		Res:   res,
 		State: state,
@@ -253,9 +253,13 @@ func handleExtCall[T any](call extCall[T], res Result[T], state State) bool {
 	}
 }
 
+func getPanicV[T any](res Result[T]) any {
+	err := res.(errPromisePanickedResult[T])
+	return err.v
+}
+
 func (p *genericPromise[T]) uncaughtPanicHandler() {
-	err := p.res.(errPromisePanickedResult[T])
-	v := UncaughtPanic{v: err.v}
+	v := UncaughtPanic{v: getPanicV(p.res)}
 	if p.pipeline == nil {
 		defUncaughtPanicHandler(v)
 	} else {

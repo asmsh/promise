@@ -69,10 +69,10 @@ type extCall[T any] struct {
 	// passed to the extension call.
 	idx int
 
-	// posResChan is the channel used to send the result back to the extension
+	// resChan is the channel used to send the result back to the extension
 	// call's promise.
 	// this is a new, per extension call, unbuffered channel.
-	posResChan chan IdxRes[T]
+	resChan chan IdxRes[T]
 
 	// syncChan is the channel used to communicate that the extension call's
 	// promise has been resolved, so that the sending promise can return.
