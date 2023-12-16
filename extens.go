@@ -171,8 +171,8 @@ loop:
 // It doesn't wait for all passed Promise values to resolve.
 // The resulting IdxRes slice holds the Result values of the Promise values passed
 // up to when the returned Promise was resolved.
-// The order of the resulting IdxRes slice's elements isn't guaranteed to match
-// the order of the passed Promise values.
+// The order of the resulting IdxRes slice's elements is the order of resolving,
+// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 // Between resolving the returned Promise value to either Rejected or Panicked,
 // Panicked will always take precedence.
@@ -185,8 +185,8 @@ func All[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 // one resolved to Rejected or to Panicked, respectively.
 // It waits for all passed Promise values to resolve.
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
-// The order of the resulting IdxRes slice's elements isn't guaranteed to match
-// the order of the passed Promise values.
+// The order of the resulting IdxRes slice's elements is the order of resolving,
+// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func AllWait[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 	return allCall(true, p)
@@ -209,8 +209,8 @@ func allCall[T any](waitAll bool, p []Promise[T]) Promise[[]IdxRes[T]] {
 // It doesn't wait for all passed Promise values to resolve.
 // The resulting IdxRes slice holds the Result values of the Promise values passed
 // up to when the returned Promise was resolved.
-// The order of the resulting IdxRes slice's elements isn't guaranteed to match
-// the order of the passed Promise values.
+// The order of the resulting IdxRes slice's elements is the order of resolving,
+// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func Any[T any](waitAll bool, p ...Promise[T]) Promise[[]IdxRes[T]] {
 	return anyCall(waitAll, p)
@@ -222,8 +222,8 @@ func Any[T any](waitAll bool, p ...Promise[T]) Promise[[]IdxRes[T]] {
 // Panicked.
 // It waits for all passed Promise values to resolve.
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
-// The order of the resulting IdxRes slice's elements isn't guaranteed to match
-// the order of the passed Promise values.
+// The order of the resulting IdxRes slice's elements is the order of resolving,
+// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func AnyWait[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 	return anyCall(true, p)
@@ -243,8 +243,8 @@ func anyCall[T any](waitAll bool, p []Promise[T]) Promise[[]IdxRes[T]] {
 // values passed resolves.
 // It waits for all passed Promise values to resolve.
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
-// The order of the resulting IdxRes slice's elements isn't guaranteed to match
-// the order of the passed Promise values.
+// The order of the resulting IdxRes slice's elements is the order of resolving,
+// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func Join[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 	return joinCall(p)
