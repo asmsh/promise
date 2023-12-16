@@ -20,6 +20,7 @@ import "fmt"
 type Result[T any] interface {
 	Val() T
 	Err() error
+	State() State
 }
 
 func Empty[T any]() Result[T] {
@@ -56,13 +57,19 @@ func (r valResult[T]) Err() error    { return nil }
 func (r errResult[T]) Err() error    { return r.err }
 func (r valErrResult[T]) Err() error { return r.err }
 
+func (r emptyResult[T]) State() State  { return Fulfilled }
+func (r valResult[T]) State() State    { return Fulfilled }
+func (r errResult[T]) State() State    { return Rejected }
+func (r valErrResult[T]) State() State { return Rejected }
+
 // common error results
 
 // errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
 // it's used instead of saving the ErrPromiseConsumed error in a generic errResult value.
 type errPromiseConsumedResult[T any] struct{ emptyResult[T] }
 
-func (r errPromiseConsumedResult[T]) Err() error { return ErrPromiseConsumed }
+func (r errPromiseConsumedResult[T]) Err() error   { return ErrPromiseConsumed }
+func (r errPromiseConsumedResult[T]) State() State { return Rejected }
 
 // errPromisePanickedResult is used to wrap the panic value internally.
 // It's used to allow the res value of the promise to use the Result type,
@@ -74,7 +81,8 @@ type errPromisePanickedResult[T any] struct {
 	v any
 }
 
-func (r errPromisePanickedResult[T]) Err() error { return UncaughtPanic{v: r.v} }
+func (r errPromisePanickedResult[T]) Err() error   { return UncaughtPanic{v: r.v} }
+func (r errPromisePanickedResult[T]) State() State { return Panicked }
 
 // extension result types...
 // the following types are private, as they are used only internally.
@@ -98,15 +106,15 @@ func (r errPromisePanickedIdxResult[T]) Val() []IdxRes[T] {
 	// panics don't produce values. keep it like that.
 	return nil
 }
-
 func (r errPromisePanickedIdxResult[T]) Err() error {
 	return r
 }
+func (r errPromisePanickedIdxResult[T]) State() State { return Panicked }
 
 // TODO: implement support for errors.As & errors.Is
 func (r errPromisePanickedIdxResult[T]) Error() string {
 	if len(r.vals) == 1 {
-		return r.vals[0].Res.Err().Error()
+		return r.vals[0].Err().Error()
 	}
 	return fmt.Sprint(r.vals)
 }
@@ -125,15 +133,15 @@ type errPromiseRejectedIdxResult[T any] struct {
 func (r errPromiseRejectedIdxResult[T]) Val() []IdxRes[T] {
 	return r.vals
 }
-
 func (r errPromiseRejectedIdxResult[T]) Err() error {
 	return r
 }
+func (r errPromiseRejectedIdxResult[T]) State() State { return Rejected }
 
 // TODO: implement support for errors.As & errors.Is
 func (r errPromiseRejectedIdxResult[T]) Error() string {
 	if len(r.vals) == 1 {
-		return r.vals[0].Res.Err().Error()
+		return r.vals[0].Err().Error()
 	}
 	return fmt.Sprint(r.vals)
 }

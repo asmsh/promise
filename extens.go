@@ -11,10 +11,7 @@ import (
 // at index idx in the original list provided.
 type IdxRes[T any] struct {
 	Idx int
-	Res Result[T]
-
-	// TODO: move State inside the Result
-	State State
+	Result[T]
 }
 
 type logger struct {
@@ -96,9 +93,8 @@ loop:
 				// the promise is resolved...
 				// create a result value based on the current promise.
 				res = IdxRes[T]{
-					Idx:   idx,
-					Res:   currProm.getRes(),
-					State: currProm.State(),
+					Idx:    idx,
+					Result: currProm.getRes(),
 				}
 				break loop
 			case extQ := <-currProm.extsChan:
@@ -120,9 +116,8 @@ loop:
 			case <-currProm.syncChan:
 				logr.Println("non-blocking block syncChan case")
 				res = IdxRes[T]{
-					Idx:   idx,
-					Res:   currProm.getRes(),
-					State: currProm.State(),
+					Idx:    idx,
+					Result: currProm.getRes(),
 				}
 				break loop
 			case extQ := <-currProm.extsChan:
@@ -143,22 +138,22 @@ loop:
 	}
 
 	// because this is a Select extension call, only one result is expected
-	if res.State == 0 {
+	if res.Result == nil {
 		logr.Println("blocking on resChan receive")
 		res = <-resChan
 	}
 
 	// switch on the final Result got, to resolve the next promise as expected
-	switch res.State {
+	switch res.State() {
 	case Panicked:
 		// TODO: we should pass the error correctly, as IdxErr (??), in ALL panics,
 		//  so the result would be that the Recover callback must do a type-cast.
 		logr.Println("idx", res.Idx, "Panicked")
-		res := errPromisePanickedResult[IdxRes[T]]{v: getPanicV(res.Res)}
+		res := errPromisePanickedResult[IdxRes[T]]{v: getPanicV(res.Result)}
 		resolveToPanickedRes[IdxRes[T]](nextProm, res)
 	case Rejected:
 		logr.Println("idx", res.Idx, "Rejected")
-		resolveToRejectedRes(nextProm, ValErr[IdxRes[T]](res, res.Res.Err()))
+		resolveToRejectedRes(nextProm, ValErr[IdxRes[T]](res, res.Err()))
 	case Fulfilled:
 		logr.Println("idx", res.Idx, "Fulfilled")
 		resolveToFulfilledRes(nextProm, Val[IdxRes[T]](res))
@@ -305,19 +300,18 @@ loop:
 				// the promise is resolved...
 				// create a result value based on the current promise.
 				res := IdxRes[T]{
-					Idx:   idx,
-					Res:   currProm.getRes(),
-					State: currProm.State(),
+					Idx:    idx,
+					Result: currProm.getRes(),
 				}
 
-				logr.Println("blocking block syncChan case with res.state", res.State, "resState", resState)
+				logr.Println("blocking block syncChan case with res.state", res.State(), "resState", resState)
 				// update the resState to one with the lower priority,
 				// and add the new result to the result array.
 				resArr = append(resArr, res)
 				resState = Fulfilled
 				if allSuccess {
 					// if it's requested to return on the first failure, break.
-					resState = getAllResState(res.State, resState)
+					resState = getAllResState(res.State(), resState)
 					if !waitAll && resState != Fulfilled {
 						logr.Println("blocking block syncChan allSuccess break")
 						break loop
@@ -325,7 +319,7 @@ loop:
 				}
 				if anySuccess {
 					// if it's requested to return on the first failure, break.
-					resState = getAnyResState(res.State, resState)
+					resState = getAnyResState(res.State(), resState)
 					if !waitAll && resState == Fulfilled {
 						logr.Println("blocking block syncChan anySuccess break")
 						break loop
@@ -350,22 +344,21 @@ loop:
 			case <-currProm.syncChan:
 				logr.Println("non-blocking block syncChan case")
 				res := IdxRes[T]{
-					Idx:   idx,
-					Res:   currProm.getRes(),
-					State: currProm.State(),
+					Idx:    idx,
+					Result: currProm.getRes(),
 				}
-				logr.Println("non-blocking block syncChan case with res.state", res.State, "resState", resState)
+				logr.Println("non-blocking block syncChan case with res.state", res.State(), "resState", resState)
 				resArr = append(resArr, res)
 				resState = Fulfilled
 				if allSuccess {
-					resState = getAllResState(res.State, resState)
+					resState = getAllResState(res.State(), resState)
 					if !waitAll && resState != Fulfilled {
 						logr.Println("non-blocking block syncChan allSuccess break")
 						break loop
 					}
 				}
 				if anySuccess {
-					resState = getAnyResState(res.State, resState)
+					resState = getAnyResState(res.State(), resState)
 					if !waitAll && resState == Fulfilled {
 						logr.Println("non-blocking block syncChan anySuccess break")
 						break loop
@@ -397,11 +390,11 @@ loop:
 
 			for i := 0; i < pending; i++ {
 				res := <-resChan
-				logr.Println("waiting block with res.state", res.State, "resState", resState)
+				logr.Println("waiting block with res.state", res.State(), "resState", resState)
 				resArr = append(resArr, res)
 				if allSuccess {
 					// if it's requested to return on the first failure, break.
-					resState = getAllResState(res.State, resState)
+					resState = getAllResState(res.State(), resState)
 					if !waitAll && resState != Fulfilled {
 						logr.Println("waiting block allSuccess break")
 						break
@@ -409,7 +402,7 @@ loop:
 				}
 				if anySuccess {
 					// if it's requested to return on the first failure, break.
-					resState = getAnyResState(res.State, resState)
+					resState = getAnyResState(res.State(), resState)
 					if !waitAll && resState == Fulfilled {
 						logr.Println("waiting block anySuccess break")
 						break

@@ -243,9 +243,8 @@ func handleExtCalls[T any](prom *genericPromise[T], state State) (handled bool) 
 func handleExtCall[T any](call extCall[T], res Result[T], state State) bool {
 	select {
 	case call.resChan <- IdxRes[T]{
-		Idx:   call.idx,
-		Res:   res,
-		State: state,
+		Idx:    call.idx,
+		Result: res,
 	}:
 		return true
 	case <-call.syncChan:
