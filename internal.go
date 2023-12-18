@@ -116,7 +116,7 @@ func handleInvalidFollow[T any](
 func handleReturns[PrevResT, NewResT any](
 	p *genericPromise[NewResT],
 	prevRes Result[PrevResT],
-	resP *Result[NewResT],
+	newResP *Result[NewResT],
 ) {
 	// make sure that only one call will resolve the promise, or return if
 	// the promise is already resolved, so that we don't recover panics when
@@ -131,8 +131,8 @@ func handleReturns[PrevResT, NewResT any](
 	if v := recover(); v == nil {
 		// get the effective result.
 		var newRes Result[NewResT]
-		if resP != nil {
-			newRes = *resP
+		if newResP != nil {
+			newRes = *newResP
 		}
 		effRes := getEffectiveRes(prevRes, newRes)
 
