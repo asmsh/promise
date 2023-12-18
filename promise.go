@@ -173,15 +173,17 @@ func (p *genericPromise[T]) resCall() Result[T] {
 	}
 
 	// the promise result can be accessed multiple times...
-	return p.getRes()
+	return getFinalRes(p.res)
 }
 
-func (p *genericPromise[T]) getRes() Result[T] {
+// getFinalRes returns the final result to be used when returned outside
+// the scope of the internal functions here.
+func getFinalRes[T any](res Result[T]) Result[T] {
 	// if no result was set, then it's implicitly the empty result
-	if p.res == nil {
+	if res == nil {
 		return emptyResult[T]{}
 	}
-	return p.res
+	return res
 }
 
 func (p *genericPromise[T]) Delay(
@@ -384,7 +386,7 @@ func recoverFollowCall[T any](
 }
 
 func (p *genericPromise[T]) Finally(
-	finallyCb func(ctx context.Context) Result[T],
+	finallyCb func(ctx context.Context),
 ) Promise[T] {
 	if finallyCb == nil {
 		panic(nilCallbackPanicMsg)
@@ -417,5 +419,5 @@ func finallyFollowCall[T any](
 	prevProm.wait()
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, prevProm.res, true, false, ctx, cancel)
+	runCallback[T, T](nextProm, cb, prevProm.res, false, false, ctx, cancel)
 }

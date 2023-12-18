@@ -94,7 +94,7 @@ loop:
 				// create a result value based on the current promise.
 				res = IdxRes[T]{
 					Idx:    idx,
-					Result: currProm.getRes(),
+					Result: getFinalRes(currProm.res),
 				}
 				break loop
 			case extQ := <-currProm.extsChan:
@@ -117,7 +117,7 @@ loop:
 				logr.Println("non-blocking block syncChan case")
 				res = IdxRes[T]{
 					Idx:    idx,
-					Result: currProm.getRes(),
+					Result: getFinalRes(currProm.res),
 				}
 				break loop
 			case extQ := <-currProm.extsChan:
@@ -301,7 +301,7 @@ loop:
 				// create a result value based on the current promise.
 				res := IdxRes[T]{
 					Idx:    idx,
-					Result: currProm.getRes(),
+					Result: getFinalRes(currProm.res),
 				}
 
 				logr.Println("blocking block syncChan case with res.state", res.State(), "resState", resState)
@@ -345,7 +345,7 @@ loop:
 				logr.Println("non-blocking block syncChan case")
 				res := IdxRes[T]{
 					Idx:    idx,
-					Result: currProm.getRes(),
+					Result: getFinalRes(currProm.res),
 				}
 				logr.Println("non-blocking block syncChan case with res.state", res.State(), "resState", resState)
 				resArr = append(resArr, res)

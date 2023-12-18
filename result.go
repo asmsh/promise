@@ -46,21 +46,29 @@ type valErrResult[T any] struct {
 	val T
 	err error
 }
+type result[T any] struct {
+	val   T
+	err   error
+	state State
+}
 
 func (r emptyResult[T]) Val() (v T)  { return v }
 func (r valResult[T]) Val() (v T)    { return r.val }
 func (r errResult[T]) Val() (v T)    { return v }
 func (r valErrResult[T]) Val() (v T) { return r.val }
+func (r result[T]) Val() (v T)       { return r.val }
 
 func (r emptyResult[T]) Err() error  { return nil }
 func (r valResult[T]) Err() error    { return nil }
 func (r errResult[T]) Err() error    { return r.err }
 func (r valErrResult[T]) Err() error { return r.err }
+func (r result[T]) Err() error       { return r.err }
 
 func (r emptyResult[T]) State() State  { return Fulfilled }
 func (r valResult[T]) State() State    { return Fulfilled }
 func (r errResult[T]) State() State    { return Rejected }
 func (r valErrResult[T]) State() State { return Rejected }
+func (r result[T]) State() State       { return r.state }
 
 // common error results
 

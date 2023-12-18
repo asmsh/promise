@@ -15,6 +15,7 @@
 package promise
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/asmsh/promise/internal/status"
@@ -79,7 +80,7 @@ func handleFollow[PrevT, NextT any](
 	}
 
 	// the promise result can be accessed multiple times...
-	return prevProm.getRes(), true
+	return prevProm.res, true
 }
 
 // this handles invalid follow from then, catch, and recover calls.
@@ -116,29 +117,61 @@ func handleInvalidFollow[T any](
 // no internal call that may cause a panic should be called after this method.
 // TODO: pass a new value, panicked (similar to valid from the sync.OnceFunc implementation),
 // and make the handleReturns function uses this value to tell whether the nil value is valid or not.
-func handleReturns[T any](prom *genericPromise[T], resP *Result[T]) {
+func handleReturns[PrevResT, NewResT any](
+	p *genericPromise[NewResT],
+	prevRes Result[PrevResT],
+	resP *Result[NewResT],
+) {
 	// make sure that only one call will resolve the promise, or return if
 	// the promise is already resolved, so that we don't recover panics when
 	// we don't need to.
-	if set, _ := prom.status.SetResolving(); !set {
+	if set, _ := p.status.SetResolving(); !set {
 		return
 	}
 
 	// FIXME: double check that this will work with runtime.Goexit(), prevent the goroutine from terminating
+	// the callback returned normally, through a call to runtime.Goexit,
+	// or with a nil panic value.
 	if v := recover(); v == nil {
-		// the callback returned normally, through a call to runtime.Goexit,
-		// or with a nil panic value.
+		// get the effective result.
+		var newRes Result[NewResT]
 		if resP != nil {
-			// return from a callback that requires Result returning
-			resolveToRes[T](prom, *resP)
-		} else {
-			// return from a callback that doesn't support Result returning.
-			// this is equivalent to setting the result to Empty[T] explicitly.
-			resolveToFulfilledRes[T](prom, nil)
+			newRes = *resP
 		}
+		effRes := getEffectiveRes(prevRes, newRes)
+
+		// resolve to the effective result got.
+		resolveToRes[NewResT](p, effRes)
 	} else {
 		// a panic happened, resolve to panicked with the panic value.
-		resolveToPanickedRes[T](prom, errPromisePanickedResult[T]{v: v})
+		resolveToPanickedRes[NewResT](p, errPromisePanickedResult[NewResT]{v: v})
+	}
+}
+
+func getEffectiveRes[PrevResT, NewResT any](
+	prevRes Result[PrevResT],
+	newRes Result[NewResT],
+) (effRes Result[NewResT]) {
+	// if there was no previous Result provided, or there is a new Result
+	// provided, return the new Result; regardless of the previous Result.
+	if prevRes == nil || newRes != nil {
+		return newRes
+	}
+
+	// the following will happen when the previous Result is non-nil, and
+	// the new Result is nil, like in a Finally callback on a Promise with
+	// a non-nil Result.
+	prevResVal, ok := any(prevRes.Val()).(NewResT)
+	if !ok {
+		// TODO: this can't happen in the current implementation,
+		//  as all type parameters used so far is the same type.
+		return Err[NewResT](errors.New("TODO: unexpected"))
+	}
+
+	return result[NewResT]{
+		val:   prevResVal,
+		err:   prevRes.Err(),
+		state: prevRes.State(),
 	}
 }
 
@@ -148,11 +181,11 @@ func handleReturns[T any](prom *genericPromise[T], resP *Result[T]) {
 //
 // if called from exterWaitProc or handleReturns, then it will be called once
 // on the same promise, as it's protected by the Resolving fate setter.
-func resolveToRes[T any](prom *genericPromise[T], res Result[T]) (s uint32) {
+func resolveToRes[T any](p *genericPromise[T], res Result[T]) (s uint32) {
 	if res != nil && res.Err() != nil {
-		return resolveToRejectedRes(prom, res)
+		return resolveToRejectedRes(p, res)
 	} else {
-		return resolveToFulfilledRes(prom, res)
+		return resolveToFulfilledRes(p, res)
 	}
 }
 
@@ -161,65 +194,65 @@ func resolveToRes[T any](prom *genericPromise[T], res Result[T]) (s uint32) {
 // if called from handleReturns, then it will be called once on the same
 // promise, as it's called on return, and that can happen once.
 func resolveToPanickedRes[T any](
-	prom *genericPromise[T],
+	p *genericPromise[T],
 	res Result[T],
 ) (s uint32) {
 	// save the result, update the status, and close the syncChan to unblock
 	// all waiting calls.
-	prom.res = res
-	_, s = prom.status.SetPanickedResolved()
-	close(prom.syncChan)
+	p.res = res
+	_, s = p.status.SetPanickedResolved()
+	close(p.syncChan)
 
-	handleExtCalls(prom, Panicked)
+	handleExtCalls(p)
 
 	// if the promise is panicked, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught panic to the last call
 	// in the chain.
 	if status.IsChainEmpty(s) {
-		prom.uncaughtPanicHandler()
+		p.uncaughtPanicHandler()
 	}
 
 	return
 }
 
 func resolveToRejectedRes[T any](
-	prom *genericPromise[T],
+	p *genericPromise[T],
 	res Result[T],
 ) (s uint32) {
 	// save the result, update the status, and close the syncChan to unblock
 	// all waiting calls.
-	prom.res = res
-	_, s = prom.status.SetRejectedResolved()
-	close(prom.syncChan)
+	p.res = res
+	_, s = p.status.SetRejectedResolved()
+	close(p.syncChan)
 
-	handleExtCalls(prom, Rejected)
+	handleExtCalls(p)
 
 	// if the promise is rejected, and the chain is empty (no follow, read
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught error to the last call
 	// in the chain.
 	if status.IsChainEmpty(s) {
-		prom.uncaughtErrorHandler()
+		p.uncaughtErrorHandler()
 	}
 
 	return
 }
 
 func resolveToFulfilledRes[T any](
-	prom *genericPromise[T],
+	p *genericPromise[T],
 	res Result[T],
 ) (s uint32) {
-	prom.res = res
-	_, s = prom.status.SetFulfilledResolved()
-	close(prom.syncChan)
+	p.res = res
+	_, s = p.status.SetFulfilledResolved()
+	close(p.syncChan)
 
-	handleExtCalls(prom, Fulfilled)
+	handleExtCalls(p)
 	return
 }
 
-func handleExtCalls[T any](prom *genericPromise[T], state State) (handled bool) {
-	extQ := <-prom.extsChan
+func handleExtCalls[T any](p *genericPromise[T]) (handled bool) {
+	extQ := <-p.extsChan
 
 	// handle not having any extension calls
 	if !extQ.valid {
@@ -227,20 +260,20 @@ func handleExtCalls[T any](prom *genericPromise[T], state State) (handled bool) 
 	}
 
 	// get the final and ready-to-use result
-	res := prom.getRes()
+	res := getFinalRes(p.res)
 
 	// handle having a single extension call
-	handled = handleExtCall(extQ.call, res, state) || handled
+	handled = handleExtCall(extQ.call, res) || handled
 
 	// handle having multiple extension calls
 	for _, call := range extQ.extra {
-		handled = handleExtCall(call, res, state) || handled
+		handled = handleExtCall(call, res) || handled
 	}
 
 	return handled
 }
 
-func handleExtCall[T any](call extCall[T], res Result[T], state State) bool {
+func handleExtCall[T any](call extCall[T], res Result[T]) bool {
 	select {
 	case call.resChan <- IdxRes[T]{
 		Idx:    call.idx,

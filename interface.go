@@ -187,7 +187,7 @@ type Promise[T any] interface {
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Finally(finallyCb func(ctx context.Context) Result[T]) Promise[T]
+	Finally(finallyCb func(ctx context.Context)) Promise[T]
 
 	// this is a private interface that's specific to the different types and
 	// functions in this module, and knows about them.
