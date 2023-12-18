@@ -42,17 +42,13 @@ func (p *genericPromise[T]) wait() (s uint32) {
 		return s
 	}
 
-	// wait with the appropriate wait procedure
-	p.interWaitProc()
-
-	// return the up-to-date status value
-	return p.status.Load()
-}
-
-func (p *genericPromise[T]) interWaitProc() {
+	// wait until the promise is resolved.
 	// the chan will always be closed by the previous promise,
 	// after setting the res and status fields as expected.
 	<-p.syncChan
+
+	// return the up-to-date status value
+	return p.status.Load()
 }
 
 func handleFollow[PrevT, NextT any](
