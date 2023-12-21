@@ -28,7 +28,11 @@ import (
 // It's a private interface, which can only be implemented by embedding any
 // type that implement it from this module.
 type Promise[T any] interface {
-	State() State
+	// Result is the result of this Promise, once it's resolved.
+	// Accessing any of its methods will block until the Promise is resolved.
+	// Having the Promise implementing the Result means that it can be returned
+	// from a callback.
+	Result[T]
 
 	// Wait waits the promise to be resolved. It returns false, if the promise
 	// has panicked, otherwise it follows the rules of the underlying Promise
@@ -57,7 +61,7 @@ type Promise[T any] interface {
 	Res() Result[T]
 
 	// TODO: ??
-	//ResChan() <-chan Result[T]
+	// ResChan() <-chan Result[T]
 
 	// Delay returns a Promise value which will be resolved to this Promise(
 	// by adopting its Res value, state, and fate), after a delay of at least

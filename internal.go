@@ -125,26 +125,25 @@ func handleReturns[PrevResT, NewResT any](
 		return
 	}
 
-	// FIXME: double check that this will work with runtime.Goexit(), prevent the goroutine from terminating
-	// the callback returned normally, through a call to runtime.Goexit,
-	// or with a nil panic value.
-	if v := recover(); v == nil {
-		// get the effective result.
-		var newRes Result[NewResT]
+	// get the new Result value based on the state of the callback
+	var newRes Result[NewResT]
+	if v := recover(); v != nil {
+		// the callback panicked, create the appropriate Result value.
+		newRes = errPromisePanickedResult[NewResT]{v: v}
+	} else {
+		// the callback returned normally, called runtime.Goexit, or
+		// called panic with nil value.
 		if newResP != nil {
 			newRes = *newResP
 		}
-		effRes := getEffectiveRes(prevRes, newRes)
-
-		// resolve to the effective result got.
-		resolveToRes[NewResT](p, effRes)
-	} else {
-		// a panic happened, resolve to panicked with the panic value.
-		resolveToPanickedRes[NewResT](p, errPromisePanickedResult[NewResT]{v: v})
+		newRes = getEffectiveNewRes(prevRes, newRes)
 	}
+
+	// resolve the provided Promise to the new Result value.
+	resolveToRes[NewResT](p, newRes)
 }
 
-func getEffectiveRes[PrevResT, NewResT any](
+func getEffectiveNewRes[PrevResT, NewResT any](
 	prevRes Result[PrevResT],
 	newRes Result[NewResT],
 ) (effRes Result[NewResT]) {
@@ -171,17 +170,25 @@ func getEffectiveRes[PrevResT, NewResT any](
 	}
 }
 
-// resolveToRes resolves the promise when the computation has finished normally,
-// without panic nor timeout.
-// the promise is either rejected or fulfilled.
-//
-// if called from exterWaitProc or handleReturns, then it will be called once
-// on the same promise, as it's protected by the Resolving fate setter.
-func resolveToRes[T any](p *genericPromise[T], res Result[T]) (s uint32) {
-	if res != nil && res.Err() != nil {
-		return resolveToRejectedRes(p, res)
-	} else {
-		return resolveToFulfilledRes(p, res)
+func resolveToRes[T any](p *genericPromise[T], res Result[T]) {
+	// res will be nil after a Finally callback on a Promise with nil Result,
+	// after a callback that doesn't support returning Result, or when it's
+	// explicitly returned from a callback that supports returning Result.
+	if res == nil {
+		resolveToFulfilledRes(p, nil)
+		return
+	}
+
+	// resolve the provided Promise to the provided Result, accordingly.
+	// Note: if res is a Promise value, the State call will block until that
+	// Promise is resolved.
+	switch res.State() {
+	case Panicked:
+		resolveToPanickedRes(p, res)
+	case Rejected:
+		resolveToRejectedRes(p, res)
+	case Fulfilled:
+		resolveToFulfilledRes(p, res)
 	}
 }
 

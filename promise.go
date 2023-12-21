@@ -80,19 +80,16 @@ type extCall[T any] struct {
 	syncChan chan struct{}
 }
 
-// State returns the state of the promise.
+func (p *genericPromise[T]) Val() T {
+	return p.Res().Val()
+}
+
+func (p *genericPromise[T]) Err() error {
+	return p.Res().Err()
+}
+
 func (p *genericPromise[T]) State() State {
-	s := p.status.Load()
-	switch {
-	case status.IsStateFulfilled(s):
-		return Fulfilled
-	case status.IsStateRejected(s):
-		return Rejected
-	case status.IsStatePanicked(s):
-		return Panicked
-	default:
-		return State(0)
-	}
+	return p.Res().State()
 }
 
 func (p *genericPromise[T]) Wait() {
