@@ -95,21 +95,6 @@ func (p *genericPromise[T]) State() State {
 	}
 }
 
-// Fate returns the fate of the promise.
-func (p *genericPromise[T]) Fate() Fate {
-	s := p.status.Load()
-	switch {
-	case status.IsFateResolving(s), status.IsFateUnresolved(s):
-		return Unresolved
-	case status.IsFateResolved(s):
-		return Unresolved
-	case status.IsFateHandled(s):
-		return Resolved
-	default:
-		return Fate(0)
-	}
-}
-
 func (p *genericPromise[T]) Wait() {
 	p.status.RegWait()
 	_ = p.waitCall()

@@ -29,7 +29,6 @@ import (
 // type that implement it from this module.
 type Promise[T any] interface {
 	State() State
-	Fate() Fate
 
 	// Wait waits the promise to be resolved. It returns false, if the promise
 	// has panicked, otherwise it follows the rules of the underlying Promise
@@ -199,6 +198,7 @@ type Promise[T any] interface {
 type State int
 
 const (
+	// the order here matter
 	_ State = iota
 	Fulfilled
 	Rejected
@@ -213,28 +213,6 @@ func (s State) String() string {
 		return "rejected"
 	case Panicked:
 		return "panicked"
-	default:
-		return "<unknown>"
-	}
-}
-
-type Fate int
-
-const (
-	_ Fate = iota
-	Unresolved
-	Resolved
-	Handled
-)
-
-func (f Fate) String() string {
-	switch f {
-	case Unresolved:
-		return "unresolved"
-	case Resolved:
-		return "resolved"
-	case Handled:
-		return "handled"
 	default:
 		return "<unknown>"
 	}
