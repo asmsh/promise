@@ -287,9 +287,6 @@ func thenFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	// make sure we free this goroutine reservation
-	defer prevProm.pipeline.freeGoroutine()
-
 	// wait the previous promise to be resolved
 	s := prevProm.wait()
 
@@ -309,7 +306,7 @@ func thenFollowHandler[T any](
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, res, true, false, ctx, cancel)
+	runCallback[T, T](nextProm, cb, res, true, true, true, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Catch(
@@ -337,9 +334,6 @@ func catchFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	// make sure we free this goroutine reservation
-	defer prevProm.pipeline.freeGoroutine()
-
 	// wait the previous promise to be resolved
 	s := prevProm.wait()
 
@@ -355,7 +349,7 @@ func catchFollowHandler[T any](
 	res, _ := handleFollow(prevProm, nextProm, false)
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, res, true, false, ctx, cancel)
+	runCallback[T, T](nextProm, cb, res, true, true, true, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Recover(
@@ -383,9 +377,6 @@ func recoverFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	// make sure we free this goroutine reservation
-	defer prevProm.pipeline.freeGoroutine()
-
 	// wait the previous promise to be resolved
 	s := prevProm.wait()
 
@@ -405,7 +396,7 @@ func recoverFollowHandler[T any](
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, res, true, false, ctx, cancel)
+	runCallback[T, T](nextProm, cb, res, true, true, true, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Finally(
@@ -438,12 +429,9 @@ func finallyFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	// make sure we free this goroutine reservation
-	defer prevProm.pipeline.freeGoroutine()
-
 	// wait the previous promise to be resolved
 	prevProm.wait()
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, prevProm.res, false, false, ctx, cancel)
+	runCallback[T, T](nextProm, cb, prevProm.res, false, true, true, ctx, cancel)
 }

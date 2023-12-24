@@ -149,7 +149,7 @@ loop:
 		// TODO: we should pass the error correctly, as IdxErr (??), in ALL panics,
 		//  so the result would be that the Recover callback must do a type-cast.
 		logr.Println("idx", res.Idx, "Panicked")
-		res := errPromisePanickedResult[IdxRes[T]]{v: getPanicV(res.Result)}
+		res := errPromisePanickedResult[IdxRes[T]]{v: getPanicVFromRes(res.Result)}
 		resolveToPanickedRes[IdxRes[T]](nextProm, res)
 	case Rejected:
 		logr.Println("idx", res.Idx, "Rejected")
