@@ -27,12 +27,6 @@ import (
 type genericPromise[T any] struct {
 	pipeline *pipelineCore
 
-	// holds the result of the promise.
-	// written once, before the syncChan channel is closed.
-	//
-	// don't read it unless the syncChan is known to be closed.
-	res Result[T]
-
 	// closed when this promise is resolved.
 	// this channel has one writer (one goroutine), which is the owner,
 	// which will close it, but can have multiple readers (follow promises).
@@ -41,6 +35,12 @@ type genericPromise[T any] struct {
 	// this is sent on by the different extension calls.
 	// it's never closed.
 	extsChan chan extQueue[T]
+
+	// holds the result of the promise.
+	// written once, before the syncChan channel is closed.
+	//
+	// don't read it unless the syncChan is known to be closed.
+	res Result[T]
 
 	// hold the different states, fates, flags, and other data about
 	// the promise.
@@ -172,6 +172,10 @@ func (p *genericPromise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) Promise[T] {
+	if p.syncChan == nil {
+		return newPromBlocking[T]()
+	}
+
 	_, s := p.status.RegFollow()
 	flags := getDelayFlags(cond)
 	p.pipeline.reserveGoroutine()
@@ -236,6 +240,9 @@ func (p *genericPromise[T]) Then(
 	if thenCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if p.syncChan == nil {
+		return newPromBlocking[T]()
+	}
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
@@ -283,6 +290,9 @@ func (p *genericPromise[T]) Catch(
 	if catchCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if p.syncChan == nil {
+		return newPromBlocking[T]()
+	}
 
 	_, s := p.status.RegFollow()
 	p.pipeline.reserveGoroutine()
@@ -325,6 +335,9 @@ func (p *genericPromise[T]) Recover(
 ) Promise[T] {
 	if recoverCb == nil {
 		panic(nilCallbackPanicMsg)
+	}
+	if p.syncChan == nil {
+		return newPromBlocking[T]()
 	}
 
 	_, s := p.status.RegFollow()
@@ -372,6 +385,9 @@ func (p *genericPromise[T]) Finally(
 ) Promise[T] {
 	if finallyCb == nil {
 		panic(nilCallbackPanicMsg)
+	}
+	if p.syncChan == nil {
+		return newPromBlocking[T]()
 	}
 
 	_, s := p.status.RegWait()

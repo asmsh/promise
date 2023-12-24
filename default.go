@@ -46,6 +46,10 @@ func Chan[T any](resChan chan Result[T]) Promise[T] {
 	return chanCall[T](defPipelineCore, resChan)
 }
 
+func Ctx(ctx context.Context) Promise[any] {
+	return ctxCall[any](defPipelineCore, ctx)
+}
+
 // Go runs the provided function, fun, in a separate goroutine, and returns
 // a GoPromise whose result is a nil Res value.
 //

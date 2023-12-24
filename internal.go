@@ -390,3 +390,16 @@ func newPromSync[T any](pipeline *pipelineCore) *genericPromise[T] {
 		extsChan: nil,
 	}
 }
+
+// newPromBlocking returns a promise that will never be resolved.
+// it's used for promises for Ctx calls with empty context.Context value,
+// or for follow calls on such promises.
+func newPromBlocking[T any]() *genericPromise[T] {
+	return &genericPromise[T]{
+		// none of these fields needs to be initialized, since this promise
+		// will never be resolved.
+		pipeline: nil,
+		syncChan: nil,
+		extsChan: nil,
+	}
+}

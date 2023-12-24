@@ -14,7 +14,10 @@
 
 package promise
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 // Result is a Container for generic result values
 type Result[T any] interface {
@@ -51,24 +54,33 @@ type result[T any] struct {
 	err   error
 	state State
 }
+type ctxResult[T any] struct{ ctx context.Context }
 
 func (r emptyResult[T]) Val() (v T)  { return v }
 func (r valResult[T]) Val() (v T)    { return r.val }
 func (r errResult[T]) Val() (v T)    { return v }
 func (r valErrResult[T]) Val() (v T) { return r.val }
+func (r ctxResult[T]) Val() (v T)    { return v }
 func (r result[T]) Val() (v T)       { return r.val }
 
 func (r emptyResult[T]) Err() error  { return nil }
 func (r valResult[T]) Err() error    { return nil }
 func (r errResult[T]) Err() error    { return r.err }
 func (r valErrResult[T]) Err() error { return r.err }
+func (r ctxResult[T]) Err() error    { return r.ctx.Err() }
 func (r result[T]) Err() error       { return r.err }
 
 func (r emptyResult[T]) State() State  { return Fulfilled }
 func (r valResult[T]) State() State    { return Fulfilled }
 func (r errResult[T]) State() State    { return Rejected }
 func (r valErrResult[T]) State() State { return Rejected }
-func (r result[T]) State() State       { return r.state }
+func (r ctxResult[T]) State() State {
+	if r.ctx.Err() != nil {
+		return Rejected
+	}
+	return Fulfilled
+}
+func (r result[T]) State() State { return r.state }
 
 // common error results
 
