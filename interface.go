@@ -63,6 +63,8 @@ type Promise[T any] interface {
 	// TODO: ??
 	// ResChan() <-chan Result[T]
 
+	Callback(cb func(ctx context.Context, val T))
+
 	// Delay returns a Promise value which will be resolved to this Promise(
 	// by adopting its Res value, state, and fate), after a delay of at least
 	// duration d. The delay starts after this Promise is resolved, accordingly.

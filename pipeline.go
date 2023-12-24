@@ -102,7 +102,7 @@ func (pp *Pipeline[T]) Go(fun func()) Promise[T] {
 	return goCall[T](&pp.core, fun)
 }
 
-func goCall[T any](pc *pipelineCore, fun func()) Promise[T] {
+func goCall[T any](pc *pipelineCore, fun goCallback[T, T]) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -110,7 +110,7 @@ func goCall[T any](pc *pipelineCore, fun func()) Promise[T] {
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
-	go runCallback[T, T](p, goCallback[T, T](fun), nil, false, true, ctx, cancel)
+	go runCallback[T, T](p, fun, nil, false, true, true, ctx, cancel)
 	return p
 }
 
@@ -118,7 +118,7 @@ func (pp *Pipeline[T]) GoErr(fun func() error) Promise[T] {
 	return goErrCall[T](&pp.core, fun)
 }
 
-func goErrCall[T any](pc *pipelineCore, fun func() error) Promise[T] {
+func goErrCall[T any](pc *pipelineCore, fun goErrCallback[T, T]) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -126,7 +126,7 @@ func goErrCall[T any](pc *pipelineCore, fun func() error) Promise[T] {
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
-	go runCallback[T, T](p, goErrCallback[T, T](fun), nil, true, true, ctx, cancel)
+	go runCallback[T, T](p, fun, nil, true, true, true, ctx, cancel)
 	return p
 }
 
@@ -136,7 +136,7 @@ func (pp *Pipeline[T]) GoRes(fun func(ctx context.Context) Result[T]) Promise[T]
 
 func goResCall[T any](
 	pc *pipelineCore,
-	fun func(ctx context.Context) Result[T],
+	fun goResCallback[T, T],
 ) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
@@ -145,7 +145,7 @@ func goResCall[T any](
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
-	go runCallback[T, T](p, goResCallback[T, T](fun), nil, true, true, ctx, cancel)
+	go runCallback[T, T](p, fun, nil, true, true, true, ctx, cancel)
 	return p
 }
 

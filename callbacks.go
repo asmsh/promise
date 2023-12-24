@@ -27,6 +27,7 @@ type thenCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT)
 type catchCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT, err error) Result[NewResT]
 type recoverCallback[PrevResT, NewResT any] func(ctx context.Context, v any) Result[NewResT]
 type finallyCallback[PrevResT, NewResT any] func(ctx context.Context)
+type callbackCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT)
 
 func (cb goCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
 	cb()
@@ -52,6 +53,10 @@ func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, res Resul
 	cb(ctx)
 	return nil
 }
+func (cb callbackCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
+	cb(ctx, res.Val())
+	return nil
+}
 
 func runCallback[PrevResT, NewResT any](
 	p *genericPromise[NewResT],
@@ -59,6 +64,7 @@ func runCallback[PrevResT, NewResT any](
 	prevRes Result[PrevResT],
 	supportNewResult bool,
 	freeAfterDone bool,
+	supportHandleReturns bool,
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
@@ -74,7 +80,9 @@ func runCallback[PrevResT, NewResT any](
 	}
 
 	// defer the return handler to handle panics and runtime.Goexit calls
-	defer handleReturns(p, prevRes, newResP)
+	if supportHandleReturns {
+		defer handleReturns(p, prevRes, newResP)
+	}
 
 	// make sure we close the context once we return from the callback
 	defer cancel()

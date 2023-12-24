@@ -168,6 +168,34 @@ func getFinalRes[T any](res Result[T]) Result[T] {
 	return res
 }
 
+func (p *genericPromise[T]) Callback(
+	cb func(ctx context.Context, val T),
+) {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+	if p.syncChan == nil {
+		return
+	}
+
+	p.status.RegRead()
+	p.pipeline.reserveGoroutine()
+	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	go callbackFollowHandler(p, cb, ctx, cancel)
+}
+func callbackFollowHandler[T any](
+	prevProm *genericPromise[T],
+	cb callbackCallback[T, T],
+	ctx context.Context,
+	cancel context.CancelFunc,
+) {
+	// wait the previous promise to be resolved
+	prevProm.wait()
+
+	// run the callback with the actual promise result
+	runCallback[T, T](nil, cb, prevProm.res, false, true, false, ctx, cancel)
+}
+
 func (p *genericPromise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
