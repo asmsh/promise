@@ -180,12 +180,12 @@ func (p *genericPromise[T]) Delay(
 	flags := getDelayFlags(cond)
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromFollow[T](p.pipeline, s)
-	go delayFollowCall(p, nextProm, d, flags)
+	go delayFollowHandler(p, nextProm, d, flags)
 	return nextProm
 }
 
 // delay creates Promise values with the same type
-func delayFollowCall[T any](
+func delayFollowHandler[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
 	dd time.Duration,
@@ -248,11 +248,11 @@ func (p *genericPromise[T]) Then(
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromFollow[T](p.pipeline, s)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
-	go thenFollowCall(p, nextProm, thenCb, ctx, cancel)
+	go thenFollowHandler(p, nextProm, thenCb, ctx, cancel)
 	return nextProm
 }
 
-func thenFollowCall[T any](
+func thenFollowHandler[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
 	cb thenCallback[T, T],
@@ -298,11 +298,11 @@ func (p *genericPromise[T]) Catch(
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromFollow[T](p.pipeline, s)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
-	go catchFollowCall(p, nextProm, catchCb, ctx, cancel)
+	go catchFollowHandler(p, nextProm, catchCb, ctx, cancel)
 	return nextProm
 }
 
-func catchFollowCall[T any](
+func catchFollowHandler[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
 	cb catchCallback[T, T],
@@ -344,11 +344,11 @@ func (p *genericPromise[T]) Recover(
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromFollow[T](p.pipeline, s)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
-	go recoverFollowCall(p, nextProm, recoverCb, ctx, cancel)
+	go recoverFollowHandler(p, nextProm, recoverCb, ctx, cancel)
 	return nextProm
 }
 
-func recoverFollowCall[T any](
+func recoverFollowHandler[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
 	cb recoverCallback[T, T],
@@ -394,16 +394,16 @@ func (p *genericPromise[T]) Finally(
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromFollow[T](p.pipeline, s)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
-	go finallyFollowCall(p, nextProm, finallyCb, ctx, cancel)
+	go finallyFollowHandler(p, nextProm, finallyCb, ctx, cancel)
 	return nextProm
 }
 
-// finallyFollowCall is like an asyncReadCall, except that it can't set the 'Handled'
+// finallyFollowHandler is like an asyncReadCall, except that it can't set the 'Handled'
 // flag(handle the promise), and it can return new promise with new result.
 // if we made the finally a normal 'follow' method(like then,..), it will be
 // possible to call it on a panicked promise and return a fulfilled promise,
 // and the panic will be dismissed implicitly, which is something we don't want.
-func finallyFollowCall[T any](
+func finallyFollowHandler[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
 	cb finallyCallback[T, T],
