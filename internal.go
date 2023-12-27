@@ -133,10 +133,7 @@ func handleReturns[PrevResT, NewResT any](
 	} else {
 		// the callback returned normally, called runtime.Goexit, or
 		// called panic with nil value.
-		if newResP != nil {
-			newRes = *newResP
-		}
-		newRes = getEffectiveNewRes(prevRes, newRes)
+		newRes = getEffectiveNewRes(prevRes, newResP)
 	}
 
 	// resolve the provided Promise to the new Result value.
@@ -145,29 +142,44 @@ func handleReturns[PrevResT, NewResT any](
 
 func getEffectiveNewRes[PrevResT, NewResT any](
 	prevRes Result[PrevResT],
-	newRes Result[NewResT],
+	newResP *Result[NewResT],
 ) (effRes Result[NewResT]) {
-	// if there was no previous Result provided, or there is a new Result
-	// provided, return the new Result; regardless of the previous Result.
-	if prevRes == nil || newRes != nil {
-		return newRes
+	// if a new Result is set, return it.
+	if newResP != nil {
+		return *newResP
 	}
 
-	// the following will happen when the previous Result is non-nil, and
-	// the new Result is nil, like in a Finally callback on a Promise with
-	// a non-nil Result.
-	prevResVal, ok := any(prevRes.Val()).(NewResT)
-	if !ok {
-		// TODO: this can't happen in the current implementation,
-		//  as all type parameters used so far is the same type.
-		return Err[NewResT](errors.New("TODO: unexpected"))
+	// if there was no previous Result provided, return the zero value
+	// of the new Result.
+	if prevRes == nil {
+		return effRes
 	}
 
-	return result[NewResT]{
-		val:   prevResVal,
-		err:   prevRes.Err(),
-		state: prevRes.State(),
+	// no new result is set, and the previous Result is non-nil, so try
+	// to cast the previous Result to the new Result's type...
+
+	// handle having the previous Result value as nil.
+	anyPrevRes := any(prevRes.Val())
+	if anyPrevRes == nil {
+		return result[NewResT]{
+			err:   prevRes.Err(),
+			state: prevRes.State(),
+		}
 	}
+
+	// handle having the previous Result's type compatible with the new one.
+	prevResVal, ok := anyPrevRes.(NewResT)
+	if ok {
+		return result[NewResT]{
+			val:   prevResVal,
+			err:   prevRes.Err(),
+			state: prevRes.State(),
+		}
+	}
+
+	// TODO: this can't happen in the current implementation,
+	//  as all type parameters used so far is the same type.
+	return Err[NewResT](errors.New("TODO: unexpected"))
 }
 
 func resolveToRes[T any](p *genericPromise[T], res Result[T]) {
