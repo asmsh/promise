@@ -87,11 +87,6 @@ func handleInvalidFollow[T any](
 	nextProm *genericPromise[T],
 	prevStatus uint32,
 ) {
-	// return if the promise is resolved or being resolved by another call
-	if set, _ := nextProm.status.SetResolving(); !set {
-		return
-	}
-
 	switch {
 	case status.IsStateFulfilled(prevStatus):
 		// the previous promise is fulfilled, fulfill with its result
@@ -118,13 +113,6 @@ func handleReturns[PrevResT, NewResT any](
 	prevRes Result[PrevResT],
 	newResP *Result[NewResT],
 ) {
-	// make sure that only one call will resolve the promise, or return if
-	// the promise is already resolved, so that we don't recover panics when
-	// we don't need to.
-	if set, _ := p.status.SetResolving(); !set {
-		return
-	}
-
 	// get the new Result value based on the state of the callback
 	var newRes Result[NewResT]
 	if v := recover(); v != nil {
