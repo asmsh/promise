@@ -180,17 +180,7 @@ func delayHandler[T any](
 	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
 
-	if res != nil && res.Err() != nil {
-		if flags.onError {
-			time.Sleep(dd)
-		}
-		resolveToRejectedRes(p, res)
-	} else {
-		if flags.onSuccess {
-			time.Sleep(dd)
-		}
-		resolveToFulfilledRes(p, res)
-	}
+	resolveToResWithDelay(p, res, dd, flags)
 }
 
 func (pp *Pipeline[T]) Wrap(res Result[T]) Promise[T] {
