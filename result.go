@@ -86,8 +86,9 @@ func (r result[T]) State() State { return r.state }
 
 // errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
 // it's used instead of saving the ErrPromiseConsumed error in a generic errResult value.
-type errPromiseConsumedResult[T any] struct{ emptyResult[T] }
+type errPromiseConsumedResult[T any] struct{}
 
+func (r errPromiseConsumedResult[T]) Val() (v T)   { return v }
 func (r errPromiseConsumedResult[T]) Err() error   { return ErrPromiseConsumed }
 func (r errPromiseConsumedResult[T]) State() State { return Rejected }
 
@@ -96,11 +97,9 @@ func (r errPromiseConsumedResult[T]) State() State { return Rejected }
 // regardless of the promise resolved state.
 // It's used to wrap the panic value on individual promises, in comparison with
 // the errPromisePanickedIdxResult type, which is used to wrap join promises.
-type errPromisePanickedResult[T any] struct {
-	emptyResult[T]
-	v any
-}
+type errPromisePanickedResult[T any] struct{ v any }
 
+func (r errPromisePanickedResult[T]) Val() (v T)   { return v }
 func (r errPromisePanickedResult[T]) Err() error   { return UncaughtPanic{v: r.v} }
 func (r errPromisePanickedResult[T]) State() State { return Panicked }
 
