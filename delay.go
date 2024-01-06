@@ -37,13 +37,13 @@ var delayAllFlags = delayFlags{
 	onPanic:   true,
 }
 
-func getDelayFlags(modes []DelayCond) delayFlags {
-	if len(modes) == 0 {
+func getDelayFlags(conds []DelayCond) delayFlags {
+	if len(conds) == 0 {
 		return delayAllFlags
 	}
 
 	f := delayFlags{}
-	for _, m := range modes {
+	for _, m := range conds {
 		switch m {
 		case OnAll:
 			f.onSuccess = true

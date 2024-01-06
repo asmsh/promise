@@ -223,7 +223,7 @@ func delayFollowHandler[T any](
 	defer prevProm.pipeline.freeGoroutine()
 
 	// wait the previous promise to be resolved
-	s := prevProm.wait()
+	prevProm.wait()
 
 	// mark prevProm as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be used.
@@ -237,29 +237,7 @@ func delayFollowHandler[T any](
 		return
 	}
 
-	switch {
-	case status.IsStateFulfilled(s):
-		// a fulfilled state is considered a success
-		if flags.onSuccess {
-			time.Sleep(dd)
-		}
-		resolveToFulfilledRes(nextProm, res)
-	case status.IsStateRejected(s):
-		// a rejected state is considered a failure
-		if flags.onError {
-			time.Sleep(dd)
-		}
-		resolveToRejectedRes(nextProm, res)
-	case status.IsStatePanicked(s):
-		// a panicked state is considered a failure
-		if flags.onPanic {
-			time.Sleep(dd)
-		}
-		resolveToPanickedRes(nextProm, res)
-	default:
-		// TODO: investigate whether this might actually happen or not
-		panic("promise: internal: unexpected state")
-	}
+	resolveToResWithDelay(nextProm, res, dd, flags)
 }
 
 func (p *genericPromise[T]) Then(
@@ -292,7 +270,7 @@ func thenFollowHandler[T any](
 
 	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
 	if !status.IsStateFulfilled(s) {
-		handleInvalidFollow(prevProm, nextProm, s)
+		resolveToRes(nextProm, prevProm.res)
 		return
 	}
 
@@ -339,7 +317,7 @@ func catchFollowHandler[T any](
 
 	// 'Catch' can handle only the 'Rejected' state, so return otherwise
 	if !status.IsStateRejected(s) {
-		handleInvalidFollow(prevProm, nextProm, s)
+		resolveToRes(nextProm, prevProm.res)
 		return
 	}
 
@@ -382,7 +360,7 @@ func recoverFollowHandler[T any](
 
 	// 'Recover' can handle only the 'Panicked' state, so return otherwise
 	if !status.IsStatePanicked(s) {
-		handleInvalidFollow(prevProm, nextProm, s)
+		resolveToRes(nextProm, prevProm.res)
 		return
 	}
 

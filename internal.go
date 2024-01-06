@@ -17,6 +17,7 @@ package promise
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/asmsh/promise/internal/status"
 )
@@ -76,31 +77,8 @@ func handleFollow[PrevT, NextT any](
 	}
 
 	// the promise result can be accessed multiple times...
+	// Note: res might be nil if the previous promise was fulfilled via a nil return.
 	return prevProm.res, true
-}
-
-// this handles invalid follow from then, catch, and recover calls.
-// for any promise, this is guaranteed to be called only once, as it's called
-// with the newly created promise as a receiver.
-func handleInvalidFollow[T any](
-	prevProm *genericPromise[T],
-	nextProm *genericPromise[T],
-	prevStatus uint32,
-) {
-	switch {
-	case status.IsStateFulfilled(prevStatus):
-		// the previous promise is fulfilled, fulfill with its result
-		resolveToFulfilledRes(nextProm, prevProm.res)
-	case status.IsStateRejected(prevStatus):
-		// the previous promise is rejected, reject with its result
-		resolveToRejectedRes(nextProm, prevProm.res)
-	case status.IsStatePanicked(prevStatus):
-		// the previous promise is panicked, panic with its result
-		resolveToPanickedRes(nextProm, prevProm.res)
-	default:
-		// TODO: investigate whether this might actually happen or not
-		panic(fmt.Sprintf("promise: internal: unexpected state: '%b'", prevStatus))
-	}
 }
 
 // handleReturns must be deferred.
@@ -182,13 +160,53 @@ func resolveToRes[T any](p *genericPromise[T], res Result[T]) {
 	// resolve the provided Promise to the provided Result, accordingly.
 	// Note: if res is a Promise value, the State call will block until that
 	// Promise is resolved.
-	switch res.State() {
+	switch s := res.State(); s {
 	case Panicked:
 		resolveToPanickedRes(p, res)
 	case Rejected:
 		resolveToRejectedRes(p, res)
 	case Fulfilled:
 		resolveToFulfilledRes(p, res)
+	default:
+		panic(fmt.Sprintf("promise: internal: unexpected Result state: '%s'", s))
+	}
+}
+
+func resolveToResWithDelay[T any](
+	p *genericPromise[T],
+	res Result[T],
+	dd time.Duration,
+	flags delayFlags,
+) {
+	if res == nil {
+		if flags.onSuccess {
+			time.Sleep(dd)
+		}
+		resolveToFulfilledRes(p, nil)
+		return
+	}
+
+	switch s := res.State(); s {
+	case Panicked:
+		// a rejected state is considered a failure
+		if flags.onError {
+			time.Sleep(dd)
+		}
+		resolveToPanickedRes(p, res)
+	case Rejected:
+		// a rejected state is considered a failure
+		if flags.onError {
+			time.Sleep(dd)
+		}
+		resolveToRejectedRes(p, res)
+	case Fulfilled:
+		// a fulfilled state is considered a success
+		if flags.onSuccess {
+			time.Sleep(dd)
+		}
+		resolveToFulfilledRes(p, res)
+	default:
+		panic(fmt.Sprintf("promise: internal: unexpected Result state: '%s'", s))
 	}
 }
 
