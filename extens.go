@@ -1,6 +1,8 @@
 package promise
 
 import (
+	"fmt"
+
 	"github.com/asmsh/promise/internal/uniquerand"
 )
 
@@ -9,6 +11,10 @@ import (
 type IdxRes[T any] struct {
 	Idx int
 	Result[T]
+}
+
+func (ir IdxRes[T]) String() string {
+	return fmt.Sprintf("[%d]%v", ir.Idx, ir.Result)
 }
 
 // Select returns a Promise value that resolves to the first Promise that's

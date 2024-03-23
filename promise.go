@@ -16,6 +16,7 @@ package promise
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/asmsh/promise/internal/status"
@@ -90,6 +91,11 @@ func (p *genericPromise[T]) Err() error {
 
 func (p *genericPromise[T]) State() State {
 	return p.Res().State()
+}
+
+// String will block until the promise is resolved.
+func (p *genericPromise[T]) String() string {
+	return fmt.Sprintf("%v", p.Res())
 }
 
 func (p *genericPromise[T]) Wait() {
@@ -183,6 +189,7 @@ func (p *genericPromise[T]) Callback(
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
 	go callbackFollowHandler(p, cb, ctx, cancel)
 }
+
 func callbackFollowHandler[T any](
 	prevProm *genericPromise[T],
 	cb callbackCallback[T, T],

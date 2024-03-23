@@ -82,15 +82,27 @@ func (r ctxResult[T]) State() State {
 }
 func (r result[T]) State() State { return r.state }
 
+func (r emptyResult[T]) String() string  { return "[fulfilled] nil" }
+func (r valResult[T]) String() string    { return fmt.Sprintf("[fulfilled] %v", r.val) }
+func (r errResult[T]) String() string    { return fmt.Sprintf("[rejected] (nil, %s)", r.err) }
+func (r valErrResult[T]) String() string { return fmt.Sprintf("[rejected] (%v, %s)", r.val, r.err) }
+func (r ctxResult[T]) String() string {
+	if err := r.ctx.Err(); err != nil {
+		return fmt.Sprintf("[rejected] (nil, %s)", err)
+	}
+	return "[fulfilled] nil"
+}
+func (r result[T]) String() string {
+	if r.state == Fulfilled {
+		return fmt.Sprintf("[fulfilled] %v", r.val)
+	} else if r.state == Rejected {
+		return fmt.Sprintf("[rejected] (nil, %s)", r.err)
+	} else {
+		return fmt.Sprintf("[panicked] %s", r.err)
+	}
+}
+
 // common error results
-
-// errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
-// it's used instead of saving the ErrPromiseConsumed error in a generic errResult value.
-type errPromiseConsumedResult[T any] struct{}
-
-func (r errPromiseConsumedResult[T]) Val() (v T)   { return v }
-func (r errPromiseConsumedResult[T]) Err() error   { return ErrPromiseConsumed }
-func (r errPromiseConsumedResult[T]) State() State { return Rejected }
 
 // errPromisePanickedResult is used to wrap the panic value internally.
 // It's used to allow the res value of the promise to use the Result type,
@@ -102,6 +114,14 @@ type errPromisePanickedResult[T any] struct{ v any }
 func (r errPromisePanickedResult[T]) Val() (v T)   { return v }
 func (r errPromisePanickedResult[T]) Err() error   { return UncaughtPanic{v: r.v} }
 func (r errPromisePanickedResult[T]) State() State { return Panicked }
+
+// errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
+// it's used instead of saving the ErrPromiseConsumed error in a generic errResult value.
+type errPromiseConsumedResult[T any] struct{}
+
+func (r errPromiseConsumedResult[T]) Val() (v T)   { return v }
+func (r errPromiseConsumedResult[T]) Err() error   { return ErrPromiseConsumed }
+func (r errPromiseConsumedResult[T]) State() State { return Rejected }
 
 // extension result types...
 // the following types are private, as they are used only internally.
@@ -125,9 +145,7 @@ func (r errPromisePanickedIdxResult[T]) Val() []IdxRes[T] {
 	// panics don't produce values. keep it like that.
 	return nil
 }
-func (r errPromisePanickedIdxResult[T]) Err() error {
-	return r
-}
+func (r errPromisePanickedIdxResult[T]) Err() error   { return r }
 func (r errPromisePanickedIdxResult[T]) State() State { return Panicked }
 
 // TODO: implement support for errors.As & errors.Is
