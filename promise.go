@@ -175,7 +175,7 @@ func getFinalRes[T any](res Result[T]) Result[T] {
 }
 
 func (p *genericPromise[T]) Callback(
-	cb func(ctx context.Context, val T),
+	cb func(ctx context.Context, res Result[T]),
 ) {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
