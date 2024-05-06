@@ -324,8 +324,7 @@ func (p *genericPromise[T]) uncaughtPanicHandler() {
 
 		// call the handler if one is provided
 		if p.pipeline.uncaughtPanicHandler != nil {
-			v := UncaughtPanic{v: getPanicVFromRes(p.res)}
-			p.pipeline.uncaughtPanicHandler(v)
+			p.pipeline.uncaughtPanicHandler(getPanicVFromRes(p.res))
 		}
 	}
 }
@@ -340,8 +339,7 @@ func (p *genericPromise[T]) uncaughtErrorHandler() {
 
 		// call the handler if one is provided
 		if p.pipeline.uncaughtErrorHandler != nil {
-			v := UncaughtError{err: p.res.Err()}
-			p.pipeline.uncaughtErrorHandler(v)
+			p.pipeline.uncaughtErrorHandler(p.res.Err())
 		}
 	}
 }

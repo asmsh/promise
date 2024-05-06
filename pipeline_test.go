@@ -24,7 +24,7 @@ import (
 var setNoPanicsPipelineCore = sync.OnceFunc(func() {
 	// override the default handlers, to avoid panics during benchmarks
 	defPipelineCore = &pipelineCore{
-		uncaughtPanicHandler: func(v UncaughtPanic) {},
-		uncaughtErrorHandler: func(v UncaughtError) {},
+		uncaughtPanicHandler: func(v any) {},
+		uncaughtErrorHandler: func(v error) {},
 	}
 })

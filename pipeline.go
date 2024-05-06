@@ -7,8 +7,8 @@ import (
 )
 
 type PipelineConfig struct {
-	UncaughtPanicHandler func(v UncaughtPanic)
-	UncaughtErrorHandler func(v UncaughtError)
+	UncaughtPanicHandler func(v any)
+	UncaughtErrorHandler func(v error)
 
 	// Size is the allowed number of goroutines which this pipeline can run.
 	// This includes goroutines created for both, constructor calls(Go, GoRes, etc.)
@@ -208,8 +208,8 @@ func (pp *Pipeline[T]) Wait() {
 }
 
 type pipelineCore struct {
-	uncaughtPanicHandler func(v UncaughtPanic)
-	uncaughtErrorHandler func(v UncaughtError)
+	uncaughtPanicHandler func(v any)
+	uncaughtErrorHandler func(v error)
 
 	wg          sync.WaitGroup
 	reserveChan chan struct{}

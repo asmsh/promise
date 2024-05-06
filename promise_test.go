@@ -153,6 +153,7 @@ func TestRejection(t *testing.T) {
 	})
 
 	t.Run("Res handling", func(t *testing.T) {
+		wantErr := newStrError()
 		defer func() {
 			v := recover()
 			if v != nil {
@@ -161,78 +162,17 @@ func TestRejection(t *testing.T) {
 		}()
 
 		p := GoRes(func(ctx context.Context) Result[any] {
-			return Err[any](newStrError())
+			return Err[any](wantErr)
 		})
 		res := p.Res()
 		if res == nil {
-			t.Errorf("Res() = %v, want: non-nil", res)
+			t.Errorf("Res() = nil, want: non-nil")
 		}
-	})
-
-	// FIXME: check whether we are going to support this way of returning errors or not
-	//	t.Run("Res handling 2", func(t *testing.T) {
-	//		defer func() {
-	//			v := recover()
-	//			if v != nil {
-	//				t.Fatalf("got unexpected panic: %v", v)
-	//			}
-	//		}()
-	//
-	//		p := GoRes( func(ctx context.Context) Result[any] {
-	//			return Err[any](newStrError())
-	//		})
-	//		res := p.Res()
-	//		if res == nil {
-	//			t.Fatalf("Res() = %v, want: non-nil", res)
-	//		}
-	//		if vv, ok := res.Err().(*UncaughtError); !ok { // TODO: this is not the case right now
-	//			t.Fatalf("Res() got unexpected error: %v", res.Err())
-	//		} else if vvw := vv.Unwrap(); isTestErr(vvw) {
-	//			t.Fatalf("Res() got unexpected wrapped error: %v", vvw)
-	//		}
-	//	})
-
-	t.Run("uncaught error 1", func(t *testing.T) {
-		defer func() {
-			v := recover()
-			if v == nil {
-				t.Fatal("expected a panic, but none happened")
-			}
-			err, ok := v.(error)
-			if !ok {
-				t.Fatalf("expected a panic with error, but got: %v", v)
-			}
-			if vv := new(UncaughtError); !errors.As(err, &vv) || !errors.Is(vv, newStrError()) {
-				t.Fatalf("expected a panic with UncaughtError error, but got: %v", v)
-			}
-		}()
-
-		p := GoRes(func(ctx context.Context) Result[any] {
-			return Err[any](newStrError())
-		})
-		p.Wait()
-	})
-
-	t.Run("uncaught error 2", func(t *testing.T) {
-		defer func() {
-			v := recover()
-			if v == nil {
-				t.Fatal("expected a panic, but none happened")
-			}
-			err, ok := v.(error)
-			if !ok {
-				t.Fatalf("expected a panic with error, but got: %v", v)
-			}
-			if vv := new(UncaughtError); !errors.As(err, &vv) || !errors.Is(vv, newStrError()) {
-				t.Fatalf("expected a panic with UncaughtError error, but got: %v", v)
-			}
-		}()
-
-		p := GoRes(func(ctx context.Context) Result[any] {
-			return Err[any](newStrError())
-		}).Then(func(ctx context.Context, val any) Result[any] {
-			return nil
-		})
-		p.Wait()
+		if res.Err() == nil {
+			t.Errorf("Res().Err() = nil, want: non-nil")
+		}
+		if err := res.Err(); !errors.Is(err, wantErr) {
+			t.Errorf("Res().Err() = %v, want: %v", err, wantErr)
+		}
 	})
 }
