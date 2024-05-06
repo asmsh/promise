@@ -178,8 +178,8 @@ func allCall[T any](waitAll bool, p []Promise[T]) Promise[[]IdxRes[T]] {
 // The order of the resulting IdxRes slice's elements is the order of resolving,
 // which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
-func Any[T any](waitAll bool, p ...Promise[T]) Promise[[]IdxRes[T]] {
-	return anyCall(waitAll, p)
+func Any[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
+	return anyCall(false, p)
 }
 
 // AnyWait returns a Promise value that resolves to Fulfilled if at least of the
