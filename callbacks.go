@@ -34,8 +34,10 @@ func (cb goCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[Pre
 	return nil
 }
 func (cb goErrCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
-	err := cb()
-	return Err[NewResT](err)
+	if err := cb(); err != nil {
+		return Err[NewResT](err)
+	}
+	return nil
 }
 func (cb goResCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
 	return cb(ctx)
