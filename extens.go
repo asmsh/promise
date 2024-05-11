@@ -122,7 +122,7 @@ loop:
 	case Panicked:
 		// TODO: we should pass the error correctly, as IdxErr (??), in ALL panics,
 		//  so the result would be that the Recover callback must do a type-cast.
-		res := errPromisePanickedResult[IdxRes[T]]{v: getPanicVFromRes(res.Result)}
+		res := createPanicResFromV[IdxRes[T]](getPanicVFromRes(res.Result))
 		resolveToPanickedRes[IdxRes[T]](nextProm, res)
 	case Rejected:
 		resolveToRejectedRes(nextProm, ValErr[IdxRes[T]](res, res.Err()))
@@ -342,7 +342,6 @@ loop:
 		(anySuccess && resState != Fulfilled) {
 		pending := len(p) - len(resArr)
 		if pending != 0 {
-
 			for i := 0; i < pending; i++ {
 				res := <-resChan
 				resArr = append(resArr, res)
