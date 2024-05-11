@@ -15,24 +15,12 @@ var (
 	//	ErrPromiseNilResult = errors.New("promise got nil as result")
 )
 
-// UncaughtPanic wraps a panic that happened in a promise chain, but hasn't
-// been caught, by the end of that chain.
-// uncaughtPanic wraps a panic value that happened in a promise chain,
-// but hasn't been caught by the end of that chain.
-type UncaughtPanic struct{ v any }
-
-func (e UncaughtPanic) Error() string {
-	return fmt.Sprintf("uncaught panic in the promise chain: %v", e.v)
+// PanicError wraps a panic that got caught in a promise callback.
+type PanicError struct {
+	// V holds the value passed to the panic call.
+	V any
 }
 
-func (e UncaughtPanic) V() any { return e.v }
-
-// UncaughtError wraps an error that happened in a promise chain, but hasn't
-// been caught, by the end of that chain.
-type UncaughtError struct{ err error }
-
-func (e UncaughtError) Error() string {
-	return fmt.Sprintf("uncaught error in the promise chain: %s", e.err)
+func (e PanicError) Error() string {
+	return fmt.Sprintf("panicked: %v", e.V)
 }
-
-func (e UncaughtError) Unwrap() error { return e.err }

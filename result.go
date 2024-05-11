@@ -112,7 +112,7 @@ func (r result[T]) String() string {
 type errPromisePanickedResult[T any] struct{ v any }
 
 func (r errPromisePanickedResult[T]) Val() (v T)   { return v }
-func (r errPromisePanickedResult[T]) Err() error   { return UncaughtPanic{v: r.v} }
+func (r errPromisePanickedResult[T]) Err() error   { return PanicError{V: r.v} }
 func (r errPromisePanickedResult[T]) State() State { return Panicked }
 
 // errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
