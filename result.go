@@ -104,16 +104,41 @@ func (r result[T]) String() string {
 
 // common error results
 
-// errPromisePanickedResult is used to wrap the panic value internally.
-// It's used to allow the res value of the promise to use the Result type,
-// regardless of the promise resolved state.
-// It's used to wrap the panic value on individual promises, in comparison with
-// the errPromisePanickedIdxResult type, which is used to wrap join promises.
+// errPromisePanickedResult is a Result and error implementation for panic results
+// returned from all calls, except the All(and AllWait), Any(and AnyWait) or Join
+// extension calls.
+//
+// the purpose of this type is to reduce allocations when setting the Result of
+// the resolved promise, and implement the required logic to investigate the error
+// structure, using the error, errors.Unwrap, errors.Is and errors.As interfaces.
 type errPromisePanickedResult[T any] struct{ v any }
 
 func (r errPromisePanickedResult[T]) Val() (v T)   { return v }
-func (r errPromisePanickedResult[T]) Err() error   { return PanicError{V: r.v} }
+func (r errPromisePanickedResult[T]) Err() error   { return r }
 func (r errPromisePanickedResult[T]) State() State { return Panicked }
+func (r errPromisePanickedResult[T]) Error() string {
+	// same error message & format as the PanicError
+	return fmt.Sprintf("panicked: %v", r.v)
+}
+func (r errPromisePanickedResult[T]) Unwrap() error {
+	// try to return the panic value as an error value if it's really an error value.
+	if err, ok := r.v.(error); ok {
+		return err
+	}
+	return nil
+}
+func (r errPromisePanickedResult[T]) Is(target error) bool {
+	// make this error result implement the identity panic error value.
+	return target == ErrPromisePanicked
+}
+func (r errPromisePanickedResult[T]) As(target any) bool {
+	// populate the expected target with panic value.
+	if perr, ok := target.(*PanicError); ok {
+		perr.V = r.v
+		return true
+	}
+	return false
+}
 
 // errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
 // it's used instead of saving the ErrPromiseConsumed error in a generic errResult value.

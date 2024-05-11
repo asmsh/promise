@@ -8,6 +8,8 @@ import (
 var (
 	ErrPromiseConsumed = errors.New("promise already handled")
 
+	ErrPromisePanicked = errors.New("promise panicked")
+
 	// ErrPromiseNilResult will be returned when a callback returns nil as Result value,
 	// when a callback calls panic with nil, or when a callback calls runtime.Goexit.
 	// TODO: check if we should introduce a new error to report returns via runtime.Goexit or nil panic
