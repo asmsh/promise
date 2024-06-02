@@ -82,56 +82,65 @@ func (r ctxResult[T]) State() State {
 }
 func (r result[T]) State() State { return r.state }
 
-func (r emptyResult[T]) String() string  { return "[fulfilled] nil" }
-func (r valResult[T]) String() string    { return fmt.Sprintf("[fulfilled] %v", r.val) }
-func (r errResult[T]) String() string    { return fmt.Sprintf("[rejected] (nil, %s)", r.err) }
-func (r valErrResult[T]) String() string { return fmt.Sprintf("[rejected] (%v, %s)", r.val, r.err) }
+func (r emptyResult[T]) String() string {
+	return "fulfilled: <nil>"
+}
+func (r valResult[T]) String() string {
+	return fmt.Sprintf("fulfilled: %v", r.val)
+}
+func (r errResult[T]) String() string {
+	return fmt.Sprintf("rejected: %s", r.err.Error())
+}
+func (r valErrResult[T]) String() string {
+	return fmt.Sprintf("rejected: (%v, %s)", r.val, r.err.Error())
+}
 func (r ctxResult[T]) String() string {
 	if err := r.ctx.Err(); err != nil {
-		return fmt.Sprintf("[rejected] (nil, %s)", err)
+		return fmt.Sprintf("rejected: %s", err.Error())
 	}
-	return "[fulfilled] nil"
+	return "fulfilled: <nil>"
 }
 func (r result[T]) String() string {
 	if r.state == Fulfilled {
-		return fmt.Sprintf("[fulfilled] %v", r.val)
+		return fmt.Sprintf("fulfilled: %v", r.val)
 	} else if r.state == Rejected {
-		return fmt.Sprintf("[rejected] (nil, %s)", r.err)
+		return fmt.Sprintf("rejected: (%v, %s)", r.val, r.err.Error())
 	} else {
-		return fmt.Sprintf("[panicked] %s", r.err)
+		return fmt.Sprintf("panicked: %s", r.err.Error())
 	}
 }
 
-// common error results
+// internal result types
 
-// errPromisePanickedResult is a Result and error implementation for panic results
+// promisePanickedResult is a Result and error implementation for Panicked results
 // returned from all calls, except the All(and AllWait), Any(and AnyWait) or Join
 // extension calls.
 //
 // the purpose of this type is to reduce allocations when setting the Result of
 // the resolved promise, and implement the required logic to investigate the error
 // structure, using the error, errors.Unwrap, errors.Is and errors.As interfaces.
-type errPromisePanickedResult[T any] struct{ v any }
+type promisePanickedResult[T any] struct{ v any }
 
-func (r errPromisePanickedResult[T]) Val() (v T)   { return v }
-func (r errPromisePanickedResult[T]) Err() error   { return r }
-func (r errPromisePanickedResult[T]) State() State { return Panicked }
-func (r errPromisePanickedResult[T]) Error() string {
+func (r promisePanickedResult[T]) Val() (v T)   { return v }
+func (r promisePanickedResult[T]) Err() error   { return r }
+func (r promisePanickedResult[T]) State() State { return Panicked }
+func (r promisePanickedResult[T]) String() string {
 	// same error message & format as the PanicError
 	return fmt.Sprintf("panicked: %v", r.v)
 }
-func (r errPromisePanickedResult[T]) Unwrap() error {
+func (r promisePanickedResult[T]) Error() string { return r.String() }
+func (r promisePanickedResult[T]) Is(target error) bool {
+	// make this error result implement the identity panic error value.
+	return target == ErrPromisePanicked
+}
+func (r promisePanickedResult[T]) Unwrap() error {
 	// try to return the panic value as an error value if it's really an error value.
 	if err, ok := r.v.(error); ok {
 		return err
 	}
 	return nil
 }
-func (r errPromisePanickedResult[T]) Is(target error) bool {
-	// make this error result implement the identity panic error value.
-	return target == ErrPromisePanicked
-}
-func (r errPromisePanickedResult[T]) As(target any) bool {
+func (r promisePanickedResult[T]) As(target any) bool {
 	// populate the expected target with panic value.
 	if perr, ok := target.(*PanicError); ok {
 		perr.V = r.v
@@ -147,63 +156,6 @@ type errPromiseConsumedResult[T any] struct{}
 func (r errPromiseConsumedResult[T]) Val() (v T)   { return v }
 func (r errPromiseConsumedResult[T]) Err() error   { return ErrPromiseConsumed }
 func (r errPromiseConsumedResult[T]) State() State { return Rejected }
-
-// extension result types...
-// the following types are private, as they are used only internally.
-
-// errPromisePanickedIdxResult is the error value type of the promise returned from
-// either the All or the Any extension calls, when it's resolved to Panicked.
-// The value is passed to the Catch callback or returned from the Res method.
-//
-// The purpose of this type is to reduce allocations when setting the Result of
-// the resolved promise, and implement the required logic to investigate the error
-// structure, using the errors.As and errors.Is functions.
-//
-// We are using a new type instead of reusing the errPromisePanickedResult type,
-// because ???
-// TODO: find a reasonable need for this type, otherwise the errPromisePanickedResult can be used.
-type errPromisePanickedIdxResult[T any] struct {
-	vals []IdxRes[T]
-}
-
-func (r errPromisePanickedIdxResult[T]) Val() []IdxRes[T] {
-	// panics don't produce values. keep it like that.
-	return nil
-}
-func (r errPromisePanickedIdxResult[T]) Err() error   { return r }
-func (r errPromisePanickedIdxResult[T]) State() State { return Panicked }
-
-// TODO: implement support for errors.As & errors.Is
-func (r errPromisePanickedIdxResult[T]) Error() string {
-	if len(r.vals) == 1 {
-		return r.vals[0].Err().Error()
-	}
-	return fmt.Sprint(r.vals)
-}
-
-// errPromiseRejectedIdxResult is the error value type of the promise returned from
-// either the All or the Any extension calls, when it's resolved to Rejected.
-// The value is passed to the Catch callback or returned from the Res method.
-//
-// The purpose of this type is to reduce allocations when setting the Result of
-// the resolved promise, and implement the required logic to investigate the error
-// structure, using the errors.As and errors.Is functions.
-type errPromiseRejectedIdxResult[T any] struct {
-	vals []IdxRes[T]
-}
-
-func (r errPromiseRejectedIdxResult[T]) Val() []IdxRes[T] {
-	return r.vals
-}
-func (r errPromiseRejectedIdxResult[T]) Err() error {
-	return r
-}
-func (r errPromiseRejectedIdxResult[T]) State() State { return Rejected }
-
-// TODO: implement support for errors.As & errors.Is
-func (r errPromiseRejectedIdxResult[T]) Error() string {
-	if len(r.vals) == 1 {
-		return r.vals[0].Err().Error()
-	}
-	return fmt.Sprint(r.vals)
+func (r errPromiseConsumedResult[T]) String() string {
+	return fmt.Sprintf("rejected: %s", ErrPromiseConsumed.Error())
 }

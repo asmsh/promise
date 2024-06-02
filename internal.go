@@ -307,11 +307,11 @@ func handleExtCall[T any](call extCall[T], res Result[T]) bool {
 }
 
 func createPanicResFromV[T any](v any) Result[T] {
-	return errPromisePanickedResult[T]{v: v}
+	return promisePanickedResult[T]{v: v}
 }
 
 func getPanicVFromRes[T any](res Result[T]) any {
-	return res.(errPromisePanickedResult[T]).v
+	return res.(promisePanickedResult[T]).v
 }
 
 func (p *genericPromise[T]) uncaughtPanicHandler() {

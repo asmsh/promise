@@ -1,21 +1,22 @@
+// Copyright 2023 Ahmad Sameh(asmsh)
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package promise
 
 import (
-	"fmt"
-
 	"github.com/asmsh/promise/internal/uniquerand"
 )
-
-// IdxRes is a positional result view, that represents the result of the promise
-// at index idx in the original list provided.
-type IdxRes[T any] struct {
-	Idx int
-	Result[T]
-}
-
-func (ir IdxRes[T]) String() string {
-	return fmt.Sprintf("[%d]%v", ir.Idx, ir.Result)
-}
 
 // Select returns a Promise value that resolves to the first Promise that's
 // resolved from the Promise values passed.
@@ -120,14 +121,14 @@ loop:
 	// resolve the next promise, based on the final Result got
 	switch res.State() {
 	case Panicked:
-		// TODO: we should pass the error correctly, as IdxErr (??), in ALL panics,
-		//  so the result would be that the Recover callback must do a type-cast.
-		res := createPanicResFromV[IdxRes[T]](getPanicVFromRes(res.Result))
-		resolveToPanickedRes[IdxRes[T]](nextProm, res)
+		res := panickedResultSingleIdxRes[T]{res}
+		resolveToPanickedRes(nextProm, res)
 	case Rejected:
-		resolveToRejectedRes(nextProm, ValErr[IdxRes[T]](res, res.Err()))
+		res := rejectedResultSingleIdxRes[T]{res}
+		resolveToRejectedRes(nextProm, res)
 	case Fulfilled:
-		resolveToFulfilledRes(nextProm, Val[IdxRes[T]](res))
+		res := fulfilledResultSingleIdxRes[T]{res}
+		resolveToFulfilledRes(nextProm, res)
 	}
 }
 
@@ -366,13 +367,14 @@ loop:
 	// resolve the next promise as expected, based on the resState.
 	switch resState {
 	case Panicked:
-		res := errPromisePanickedIdxResult[T]{resArr}
-		resolveToPanickedRes[[]IdxRes[T]](nextProm, res)
+		res := panickedResultMultiIdxRes[T]{resArr}
+		resolveToPanickedRes(nextProm, res)
 	case Rejected:
-		res := errPromiseRejectedIdxResult[T]{resArr}
-		resolveToRejectedRes[[]IdxRes[T]](nextProm, res)
+		res := rejectedResultMultiIdxRes[T]{resArr}
+		resolveToRejectedRes(nextProm, res)
 	case Fulfilled:
-		resolveToFulfilledRes(nextProm, Val[[]IdxRes[T]](resArr))
+		res := fulfilledResultMultiIdxRes[T]{resArr}
+		resolveToFulfilledRes(nextProm, res)
 	}
 }
 
