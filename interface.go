@@ -205,7 +205,7 @@ type State int
 
 const (
 	// the order here matter
-	_ State = iota
+	unknown State = iota
 	Fulfilled
 	Rejected
 	Panicked

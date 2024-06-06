@@ -284,7 +284,7 @@ func joinHandler[T any](
 
 	// resArr and resState, collectively, represent the resolve result.
 	resArr := make([]IdxRes[T], 0, len(p))
-	resState := State(0)
+	resState := unknown
 
 	// loopCnt records how many iterations happened in the loop below
 	var loopCnt int
@@ -503,7 +503,8 @@ loop:
 
 	if waitAll ||
 		(allSuccess && resState == Fulfilled) ||
-		(anySuccess && resState != Fulfilled) {
+		(anySuccess && resState != Fulfilled) ||
+		resState == unknown {
 		pending := len(p) - len(resArr)
 		logr.Println("pending promises", pending)
 
@@ -560,6 +561,10 @@ loop:
 
 						break
 					}
+				}
+
+				if !allSuccess && !anySuccess {
+					resState = Fulfilled
 				}
 			}
 		}
