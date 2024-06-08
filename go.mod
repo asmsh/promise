@@ -1,3 +1,3 @@
 module github.com/asmsh/promise
 
-go 1.18
+go 1.21
