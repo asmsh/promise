@@ -178,27 +178,30 @@ loop:
 }
 
 // All returns a Promise value that resolves to Fulfilled if all Promise values
-// passed resolved to Fulfilled, resolves to Rejected or to Panicked if at least
-// one resolved to Rejected or to Panicked, respectively.
-// It doesn't wait for all passed Promise values to resolve.
+// passed resolved to Fulfilled.
+// It resolves to Panicked if at least one resolved to Panicked.
+// It resolves to Rejected if at least one resolved to Rejected and none resolves
+// to Panicked.
+//
+// It doesn't wait for all passed Promise values to resolve, unless the resolved
+// one(s) is Panicked.
+//
 // The resulting IdxRes slice holds the Result values of the Promise values passed
 // up to when the returned Promise was resolved.
-// The order of the resulting IdxRes slice's elements is the order of resolving,
-// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
-// Between resolving the returned Promise value to either Rejected or Panicked,
-// Panicked will always take precedence.
 func All[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 	return allCall(false, p)
 }
 
 // AllWait returns a Promise value that resolves to Fulfilled if all Promise values
-// passed resolved to Fulfilled, resolves to Rejected or to Panicked if at least
-// one resolved to Rejected or to Panicked, respectively.
+// passed resolved to Fulfilled.
+// It resolves to Panicked if at least one resolved to Panicked.
+// It resolves to Rejected if at least one resolved to Rejected and none resolves
+// to Panicked.
+//
 // It waits for all passed Promise values to resolve.
+//
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
-// The order of the resulting IdxRes slice's elements is the order of resolving,
-// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func AllWait[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 	return allCall(true, p)
@@ -214,28 +217,29 @@ func allCall[T any](waitAll bool, p []Promise[T]) Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// Any returns a Promise value that resolves to Fulfilled if at least of the
-// Promise values passed resolved to Fulfilled, resolves to Rejected if all
-// resolved to Rejected, or resolves to Panicked if at least one resolved to
-// Panicked.
-// It doesn't wait for all passed Promise values to resolve.
+// Any returns a Promise value that resolves to Fulfilled if at least one of
+// the Promise values passed resolves to Fulfilled and none resolves to Panicked.
+// It resolves to Panicked if at least one resolved to Panicked.
+// It resolves to Rejected if all resolves to Rejected.
+//
+// It doesn't wait for all passed Promise values to resolve, unless the resolved
+// one(s) is Panicked.
+//
 // The resulting IdxRes slice holds the Result values of the Promise values passed
 // up to when the returned Promise was resolved.
-// The order of the resulting IdxRes slice's elements is the order of resolving,
-// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func Any[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 	return anyCall(false, p)
 }
 
-// AnyWait returns a Promise value that resolves to Fulfilled if at least of the
-// Promise values passed resolved to Fulfilled, resolves to Rejected if all
-// resolved to Rejected, or resolves to Panicked if at least one resolved to
-// Panicked.
+// AnyWait returns a Promise value that resolves to Fulfilled if at least one of
+// the Promise values passed resolves to Fulfilled and none resolves to Panicked.
+// It resolves to Panicked if at least one resolved to Panicked.
+// It resolves to Rejected if all resolves to Rejected.
+//
 // It waits for all passed Promise values to resolve.
+//
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
-// The order of the resulting IdxRes slice's elements is the order of resolving,
-// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func AnyWait[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 	return anyCall(true, p)
@@ -253,10 +257,10 @@ func anyCall[T any](waitAll bool, p []Promise[T]) Promise[[]IdxRes[T]] {
 
 // Join returns a Promise value that resolves to Fulfilled after all Promise
 // values passed resolves.
+//
 // It waits for all passed Promise values to resolve.
+//
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
-// The order of the resulting IdxRes slice's elements is the order of resolving,
-// which doesn't have to match the order of the passed Promise values.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func Join[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 	return joinCall(p)
@@ -346,7 +350,7 @@ loop:
 				resArr = append(resArr, res)
 				resState = Fulfilled
 				if allSuccess {
-					// if it's requested to return on the first failure, break.
+					// update the final state, based on the previous and new ones.
 					newResState := getAllResState(res.State(), resState)
 
 					logr.Println(
@@ -357,14 +361,18 @@ loop:
 					)
 
 					resState = newResState
-					if !waitAll && resState != Fulfilled {
+
+					// the new state is Rejected, and it's requested not to wait all, break.
+					// note: by default, we won't break on Panicked states, as it will be used
+					// only to alter the final state.
+					if !waitAll && res.State() == Rejected {
 						logr.Println("blocking block syncChan allSuccess break")
 
 						break loop
 					}
 				}
 				if anySuccess {
-					// if it's requested to return on the first failure, break.
+					// update the final state, based on the previous and new ones.
 					newResState := getAnyResState(res.State(), resState)
 
 					logr.Println(
@@ -375,7 +383,9 @@ loop:
 					)
 
 					resState = newResState
-					if !waitAll && resState == Fulfilled {
+
+					// the new state is Fulfilled, and it's requested not to wait all, break.
+					if !waitAll && res.State() == Fulfilled {
 						logr.Println("blocking block syncChan anySuccess break")
 
 						break loop
@@ -443,7 +453,7 @@ loop:
 					)
 
 					resState = newResState
-					if !waitAll && resState != Fulfilled {
+					if !waitAll && res.State() == Rejected {
 						logr.Println("non-blocking block syncChan allSuccess break")
 
 						break loop
@@ -460,7 +470,7 @@ loop:
 					)
 
 					resState = newResState
-					if !waitAll && resState == Fulfilled {
+					if !waitAll && res.State() == Fulfilled {
 						logr.Println("non-blocking block syncChan anySuccess break")
 
 						break loop
@@ -535,7 +545,7 @@ loop:
 					)
 
 					resState = newResState
-					if !waitAll && resState != Fulfilled {
+					if !waitAll && res.State() == Rejected {
 						logr.Println("waiting block allSuccess break")
 
 						break
@@ -556,7 +566,7 @@ loop:
 					)
 
 					resState = newResState
-					if !waitAll && resState == Fulfilled {
+					if !waitAll && res.State() == Fulfilled {
 						logr.Println("waiting block anySuccess break")
 
 						break
@@ -607,19 +617,32 @@ func updateExtQCall[T any](
 
 // getAllResState returns the resolve state of the promise returned by All.
 // Panicked has the highest priority.
+// Rejected has the highest priority between Fulfilled and Rejected.
 func getAllResState(newState, prevState State) State {
-	if newState > prevState {
+	switch {
+	case newState == Panicked || prevState == Panicked:
+		return Panicked
+	case newState == Rejected:
+		return Rejected
+	case prevState == unknown:
 		return newState
+	default:
+		return prevState
 	}
-	return prevState
 }
 
 // getAnyResState returns the resolve state of the promise returned by Any.
-// Fulfilled has the highest priority.
-// Panicked has the highest priority between Panicked and Rejected.
+// Panicked has the highest priority.
+// Fulfilled has the highest priority between Fulfilled and Rejected.
 func getAnyResState(newState, prevState State) State {
-	if newState == Fulfilled || prevState == Fulfilled {
+	switch {
+	case newState == Panicked || prevState == Panicked:
+		return Panicked
+	case newState == Fulfilled:
 		return Fulfilled
+	case prevState == unknown:
+		return newState
+	default:
+		return prevState
 	}
-	return getAllResState(newState, prevState)
 }

@@ -204,7 +204,7 @@ type Promise[T any] interface {
 type State int
 
 const (
-	// the order here matter
+	// the order here matters
 	unknown State = iota
 	Fulfilled
 	Rejected
