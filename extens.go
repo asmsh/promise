@@ -324,7 +324,94 @@ loop:
 		// promises, without being stuck(blocked) on the first one we encounter.
 		blocking := loopCnt > len(p)
 
-		if blocking {
+		if !blocking {
+			logr.Println("non-blocking block")
+
+			select {
+			case <-currProm.syncChan:
+				logr.Println("non-blocking block syncChan case")
+
+				res := IdxRes[T]{
+					Idx:    idx,
+					Result: getFinalRes(currProm.res),
+				}
+
+				logr.Println(
+					"non-blocking block syncChan case with res.state",
+					res.State(),
+					"resState",
+					resState,
+				)
+
+				resArr = append(resArr, res)
+				resState = Fulfilled
+				if allSuccess {
+					newResState := getAllResState(res.State(), resState)
+
+					logr.Println(
+						"non-blocking block syncChan allSuccess prevResState",
+						resState,
+						"newResState",
+						newResState,
+					)
+
+					resState = newResState
+					if !waitAll && res.State() == Rejected {
+						logr.Println("non-blocking block syncChan allSuccess break")
+
+						break loop
+					}
+				}
+				if anySuccess {
+					newResState := getAnyResState(res.State(), resState)
+
+					logr.Println(
+						"non-blocking block syncChan anySuccess prevResState",
+						resState,
+						"newResState",
+						newResState,
+					)
+
+					resState = newResState
+					if !waitAll && res.State() == Fulfilled {
+						logr.Println("non-blocking block syncChan anySuccess break")
+
+						break loop
+					}
+				}
+			case extQ := <-currProm.extsChan:
+				logr.Println("non-blocking block extQ case")
+
+				if resChan == nil {
+					logr.Println("non-blocking block extQ case new chan")
+
+					resChan = make(chan IdxRes[T])
+				}
+
+				logr.Println(
+					"non-blocking block extQ case prev queue valid",
+					extQ.valid,
+					"len",
+					len(extQ.extra),
+				)
+				updateExtQCall(&extQ, idx, resChan, nextProm.syncChan)
+				logr.Println(
+					"non-blocking block extQ case prev queue valid",
+					extQ.valid,
+					"len",
+					len(extQ.extra),
+				)
+
+				currProm.extsChan <- extQ
+			default:
+				logr.Println("non-blocking block default case")
+
+				// This would happen when the promise is not resolved yet, and there's
+				// another extension call that owns the extQueue value.
+				// Re-put the index in the randIdx source, to re-visit this case later.
+				randIdx.Put(idx)
+			}
+		} else {
 			logr.Println("blocking block")
 
 			select {
@@ -420,93 +507,6 @@ loop:
 				// send the updated queue back for either another extension call,
 				// or the currProm's resolving logic.
 				currProm.extsChan <- extQ
-			}
-		} else {
-			logr.Println("non-blocking block")
-
-			select {
-			case <-currProm.syncChan:
-				logr.Println("non-blocking block syncChan case")
-
-				res := IdxRes[T]{
-					Idx:    idx,
-					Result: getFinalRes(currProm.res),
-				}
-
-				logr.Println(
-					"non-blocking block syncChan case with res.state",
-					res.State(),
-					"resState",
-					resState,
-				)
-
-				resArr = append(resArr, res)
-				resState = Fulfilled
-				if allSuccess {
-					newResState := getAllResState(res.State(), resState)
-
-					logr.Println(
-						"non-blocking block syncChan allSuccess prevResState",
-						resState,
-						"newResState",
-						newResState,
-					)
-
-					resState = newResState
-					if !waitAll && res.State() == Rejected {
-						logr.Println("non-blocking block syncChan allSuccess break")
-
-						break loop
-					}
-				}
-				if anySuccess {
-					newResState := getAnyResState(res.State(), resState)
-
-					logr.Println(
-						"non-blocking block syncChan anySuccess prevResState",
-						resState,
-						"newResState",
-						newResState,
-					)
-
-					resState = newResState
-					if !waitAll && res.State() == Fulfilled {
-						logr.Println("non-blocking block syncChan anySuccess break")
-
-						break loop
-					}
-				}
-			case extQ := <-currProm.extsChan:
-				logr.Println("non-blocking block extQ case")
-
-				if resChan == nil {
-					logr.Println("non-blocking block extQ case new chan")
-
-					resChan = make(chan IdxRes[T])
-				}
-
-				logr.Println(
-					"non-blocking block extQ case prev queue valid",
-					extQ.valid,
-					"len",
-					len(extQ.extra),
-				)
-				updateExtQCall(&extQ, idx, resChan, nextProm.syncChan)
-				logr.Println(
-					"non-blocking block extQ case prev queue valid",
-					extQ.valid,
-					"len",
-					len(extQ.extra),
-				)
-
-				currProm.extsChan <- extQ
-			default:
-				logr.Println("non-blocking block default case")
-
-				// This would happen when the promise is not resolved yet, and there's
-				// another extension call that owns the extQueue value.
-				// Re-put the index in the randIdx source, to re-visit this case later.
-				randIdx.Put(idx)
 			}
 		}
 	}
