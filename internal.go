@@ -284,7 +284,7 @@ func handleExtCalls[T any](p *genericPromise[T]) (handled bool) {
 	res := getFinalRes(p.res)
 
 	// handle having a single extension call
-	handled = handleExtCall(extQ.call, res) || handled
+	handled = handleExtCall(extQ.call, res)
 
 	// handle having multiple extension calls
 	for _, call := range extQ.extra {
