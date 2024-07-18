@@ -49,7 +49,7 @@ func (cb catchCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[
 	return cb(ctx, res.Val(), res.Err())
 }
 func (cb recoverCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
-	return cb(ctx, getPanicVFromRes(res))
+	return cb(ctx, res.(panicResult).getPanicV())
 }
 func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
 	cb(ctx)

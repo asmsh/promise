@@ -199,7 +199,7 @@ func (pp *Pipeline[T]) Panic(v any) Promise[T] {
 
 func panicCall[T any](pc *pipelineCore, v any) Promise[T] {
 	p := newPromSync[T](pc)
-	p.panicSync(createPanicResFromV[T](v))
+	p.panicSync(promisePanickedResult[T]{v: v})
 	return p
 }
 

@@ -95,7 +95,7 @@ func handleReturns[PrevResT, NewResT any](
 	var newRes Result[NewResT]
 	if v := recover(); v != nil {
 		// the callback panicked, create the appropriate Result value.
-		newRes = createPanicResFromV[NewResT](v)
+		newRes = promisePanickedResult[NewResT]{v: v}
 	} else {
 		// the callback returned normally, called runtime.Goexit, or
 		// called panic with nil value.
@@ -306,14 +306,6 @@ func handleExtCall[T any](call extCall[T], res Result[T]) bool {
 	}
 }
 
-func createPanicResFromV[T any](v any) Result[T] {
-	return promisePanickedResult[T]{v: v}
-}
-
-func getPanicVFromRes[T any](res Result[T]) any {
-	return res.(promisePanickedResult[T]).v
-}
-
 func (p *genericPromise[T]) uncaughtPanicHandler() {
 	if p.pipeline != nil {
 		// if it's request to cancel all the promises of the pipeline on
@@ -324,7 +316,7 @@ func (p *genericPromise[T]) uncaughtPanicHandler() {
 
 		// call the handler if one is provided
 		if p.pipeline.uncaughtPanicHandler != nil {
-			p.pipeline.uncaughtPanicHandler(getPanicVFromRes(p.res))
+			p.pipeline.uncaughtPanicHandler(p.res.(panicResult).getPanicV())
 		}
 	}
 }
