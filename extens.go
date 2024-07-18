@@ -349,11 +349,9 @@ loop:
 					resState,
 				)
 
-				// update the resState to one with the lower priority.
-				resState = Fulfilled
+				// get the final promise's state, based on the previous resState and
+				// the recent resolved promise's state, using the selected mode rules.
 				if allSuccess {
-					// get the final promise's state, based on the previous resState
-					// and the recent resolved promise's state.
 					newResState := getAllResState(res.State(), resState)
 
 					logr.Println(
@@ -453,7 +451,6 @@ loop:
 					resState,
 				)
 
-				resState = Fulfilled
 				if allSuccess {
 					newResState := getAllResState(res.State(), resState)
 
@@ -547,9 +544,9 @@ loop:
 					resState,
 				)
 
+				// get the final promise's state, based on the previous resState and
+				// the recent resolved promise's state, using the selected mode rules.
 				if allSuccess {
-					// get the final promise's state, based on the previous resState
-					// and the recent resolved promise's state.
 					newResState := getAllResState(res.State(), resState)
 
 					logr.Println(
