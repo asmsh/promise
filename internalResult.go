@@ -263,7 +263,7 @@ type panickedResultMultiIdxRes[T any] struct {
 	vals []IdxRes[T]
 }
 
-func (r panickedResultMultiIdxRes[T]) Val() []IdxRes[T] { return nil }
+func (r panickedResultMultiIdxRes[T]) Val() []IdxRes[T] { return r.vals }
 func (r panickedResultMultiIdxRes[T]) Err() error       { return r }
 func (r panickedResultMultiIdxRes[T]) State() State     { return Panicked }
 func (r panickedResultMultiIdxRes[T]) String() string {

@@ -163,7 +163,7 @@ type Promise[T any] interface {
 	// It will panic if a nil callback is passed.
 	//
 	// For more details, see 'Callback Notes' in the package comment.
-	Recover(recoverCb func(ctx context.Context, v any) Result[T]) Promise[T]
+	Recover(recoverCb func(ctx context.Context, val T, v any) Result[T]) Promise[T]
 
 	// Finally waits the promise to be resolved, and calls the finallyCb function,
 	// regardless the promise is rejected, panicked, or neither.

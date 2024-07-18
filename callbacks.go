@@ -25,7 +25,7 @@ type goErrCallback[PrevResT, NewResT any] func() error
 type goResCallback[PrevResT, NewResT any] func(ctx context.Context) Result[NewResT]
 type thenCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT) Result[NewResT]
 type catchCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT, err error) Result[NewResT]
-type recoverCallback[PrevResT, NewResT any] func(ctx context.Context, v any) Result[NewResT]
+type recoverCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT, v any) Result[NewResT]
 type finallyCallback[PrevResT, NewResT any] func(ctx context.Context)
 type callbackCallback[PrevResT, NewResT any] func(ctx context.Context, res Result[PrevResT])
 
@@ -49,7 +49,7 @@ func (cb catchCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[
 	return cb(ctx, res.Val(), res.Err())
 }
 func (cb recoverCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
-	return cb(ctx, res.(panicResult).getPanicV())
+	return cb(ctx, res.Val(), res.(panicResult).getPanicV())
 }
 func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
 	cb(ctx)

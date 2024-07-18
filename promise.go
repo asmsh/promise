@@ -338,7 +338,7 @@ func catchFollowHandler[T any](
 }
 
 func (p *genericPromise[T]) Recover(
-	recoverCb func(ctx context.Context, v any) Result[T],
+	recoverCb func(ctx context.Context, val T, v any) Result[T],
 ) Promise[T] {
 	if recoverCb == nil {
 		panic(nilCallbackPanicMsg)
