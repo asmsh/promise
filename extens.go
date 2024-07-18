@@ -355,7 +355,9 @@ loop:
 					newResState := getAllResState(res.State(), resState)
 
 					logr.Println(
-						"non-blocking block syncChan allSuccess prevResState",
+						"non-blocking block syncChan allSuccess res.state",
+						res.State(),
+						"prevResState",
 						resState,
 						"newResState",
 						newResState,
@@ -379,7 +381,9 @@ loop:
 					newResState := getAnyResState(res.State(), resState)
 
 					logr.Println(
-						"non-blocking block syncChan anySuccess prevResState",
+						"non-blocking block syncChan anySuccess res.state",
+						res.State(),
+						"prevResState",
 						resState,
 						"newResState",
 						newResState,
@@ -455,7 +459,9 @@ loop:
 					newResState := getAllResState(res.State(), resState)
 
 					logr.Println(
-						"blocking block syncChan allSuccess prevResState",
+						"blocking block syncChan allSuccess res.state",
+						res.State(),
+						"prevResState",
 						resState,
 						"newResState",
 						newResState,
@@ -473,7 +479,9 @@ loop:
 					newResState := getAnyResState(res.State(), resState)
 
 					logr.Println(
-						"blocking block syncChan anySuccess prevResState",
+						"blocking block syncChan anySuccess res.state",
+						res.State(),
+						"prevResState",
 						resState,
 						"newResState",
 						newResState,
