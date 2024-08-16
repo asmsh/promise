@@ -18,8 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/asmsh/promise/internal/status"
 )
 
 // panic messages
@@ -28,19 +26,46 @@ const (
 	nilResChanPanicMsg  = "promise: the provided resChan is nil"
 )
 
-// wait waits for the promise p to be resolved, by either blocking on receiving
-// from the syncChan, or utilizing the fate value of the promise status.
-//
-// the syncChan will be an unbuffered chan, which is allocated internally.
-// the promise is resolved when the syncChan is closed, and the res field will
-// have the result of the promise.
-func (p *genericPromise[T]) wait() (s uint32) {
-	s = p.status.Load()
+const (
+	chainStatusEmpty = iota
+	chainStatusWait
+	chainStatusRead
+	chainStatusHandled
+)
 
-	// if the fate is 'Resolved' or 'Handled', don't wait, as they are guaranteed
-	// to happen after the result is saved, and after the syncChan is closed.
-	if status.IsFateResolved(s) || status.IsFateHandled(s) {
-		return s
+func (p *genericPromise[T]) regChainWait() {
+	// this will do nothing if the chain was already wait, read or handled.
+	p.chainStatus.CompareAndSwap(chainStatusEmpty, chainStatusWait)
+}
+
+func (p *genericPromise[T]) regChainRead() {
+	// fast-path, in case we are trying to do a redundant CAS, returns early.
+	if p.chainStatus.Load() >= chainStatusRead {
+		return
+	}
+
+	// this will first try to swap the read value with the empty value,
+	// otherwise, will assume the current value is wait and try to swap it.
+	// this will do nothing if the chain was already read or handled.
+	if !p.chainStatus.CompareAndSwap(chainStatusEmpty, chainStatusRead) {
+		p.chainStatus.CompareAndSwap(chainStatusWait, chainStatusRead)
+	}
+}
+
+func (p *genericPromise[T]) setChainHandled() (validHandle bool) {
+	// this will return true, only if the chain wasn't already handled.
+	oldChain := p.chainStatus.Swap(chainStatusHandled)
+	return oldChain != chainStatusHandled
+}
+
+// wait waits for the promise p to be resolved, by either blocking on receiving
+// from the syncChan, or by using the resolveState value of the promise.
+func (p *genericPromise[T]) wait() State {
+	// if the resolve status is non-zero, then no need to wait, as
+	// this is guaranteed to happen before closing the sync channel.
+	s := p.resolveState.Load()
+	if s != 0 {
+		return State(s)
 	}
 
 	// wait until the promise is resolved.
@@ -48,8 +73,8 @@ func (p *genericPromise[T]) wait() (s uint32) {
 	// after setting the res and status fields as expected.
 	<-p.syncChan
 
-	// return the up-to-date status value
-	return p.status.Load()
+	s = p.resolveState.Load()
+	return State(s)
 }
 
 func handleFollow[PrevT, NextT any](
@@ -60,12 +85,11 @@ func handleFollow[PrevT, NextT any](
 	// set the 'Handled' flag, and keep track of whether this handle is
 	// valid(first) or not, to decide whether we should move forward and
 	// use the actual result of the promise or reject with an erroneous one.
-	validHandle, s := prevProm.status.SetHandled()
+	validHandle := prevProm.setChainHandled()
 
+	// TODO: support one-time promise, based on the pipeline options.
 	// if the promise isn't a one-time promise, all handle calls will be valid
-	if !status.IsFlagsOnce(s) {
-		validHandle = true
-	}
+	validHandle = true
 
 	// if the promise result has been used, either return or resolve with the expected error
 	if !validHandle {
@@ -217,11 +241,11 @@ func resolveToResWithDelay[T any](
 func resolveToPanickedRes[T any](
 	p *genericPromise[T],
 	res Result[T],
-) (s uint32) {
-	// save the result, update the status, and close the syncChan to unblock
+) {
+	// save the result, set the resolve status, and close the syncChan to unblock
 	// all waiting calls.
 	p.res = res
-	_, s = p.status.SetPanickedResolved()
+	p.resolveState.Store(uint32(Panicked))
 	close(p.syncChan)
 
 	handleExtCalls(p)
@@ -230,21 +254,17 @@ func resolveToPanickedRes[T any](
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught panic to the last call
 	// in the chain.
-	if status.IsChainEmpty(s) {
+	if p.chainStatus.Load() == chainStatusEmpty {
 		p.uncaughtPanicHandler()
 	}
-
-	return
 }
 
 func resolveToRejectedRes[T any](
 	p *genericPromise[T],
 	res Result[T],
-) (s uint32) {
-	// save the result, update the status, and close the syncChan to unblock
-	// all waiting calls.
+) {
 	p.res = res
-	_, s = p.status.SetRejectedResolved()
+	p.resolveState.Store(uint32(Rejected))
 	close(p.syncChan)
 
 	handleExtCalls(p)
@@ -253,23 +273,20 @@ func resolveToRejectedRes[T any](
 	// or wait calls), execute the default uncaught panic handling logic.
 	// otherwise, delay the handling of the uncaught error to the last call
 	// in the chain.
-	if status.IsChainEmpty(s) {
+	if p.chainStatus.Load() == chainStatusEmpty {
 		p.uncaughtErrorHandler()
 	}
-
-	return
 }
 
 func resolveToFulfilledRes[T any](
 	p *genericPromise[T],
 	res Result[T],
-) (s uint32) {
+) {
 	p.res = res
-	_, s = p.status.SetFulfilledResolved()
+	p.resolveState.Store(uint32(Fulfilled))
 	close(p.syncChan)
 
 	handleExtCalls(p)
-	return
 }
 
 func handleExtCalls[T any](p *genericPromise[T]) (handled bool) {
@@ -336,27 +353,27 @@ func (p *genericPromise[T]) uncaughtErrorHandler() {
 	}
 }
 
-func (p *genericPromise[T]) resolveToResSync(res Result[T]) (s uint32) {
+func (p *genericPromise[T]) resolveToResSync(res Result[T]) {
 	if res != nil && res.Err() != nil {
-		return p.rejectSync(res)
+		p.rejectSync(res)
 	} else {
-		return p.fulfillSync(res)
+		p.fulfillSync(res)
 	}
 }
 
-func (p *genericPromise[T]) panicSync(res Result[T]) (s uint32) {
+func (p *genericPromise[T]) panicSync(res Result[T]) {
 	p.res = res
-	return p.status.SetPanickedResolvedSync()
+	p.resolveState.Store(uint32(Panicked))
 }
 
-func (p *genericPromise[T]) rejectSync(res Result[T]) (s uint32) {
+func (p *genericPromise[T]) rejectSync(res Result[T]) {
 	p.res = res
-	return p.status.SetRejectedResolvedSync()
+	p.resolveState.Store(uint32(Rejected))
 }
 
-func (p *genericPromise[T]) fulfillSync(res Result[T]) (s uint32) {
+func (p *genericPromise[T]) fulfillSync(res Result[T]) {
 	p.res = res
-	return p.status.SetFulfilledResolvedSync()
+	p.resolveState.Store(uint32(Fulfilled))
 }
 
 func (p *genericPromise[T]) privateImplementation() {}
@@ -374,14 +391,6 @@ func newPromInter[T any](pipeline *pipelineCore) *genericPromise[T] {
 		syncChan: make(chan struct{}),
 		extsChan: extsChan,
 	}
-}
-
-// newPromFollow creates a new genericPromise, for one of the follow methods,
-// which is resolved internally, using an internal allocated channel.
-func newPromFollow[T any](pipeline *pipelineCore, prevStatus uint32) *genericPromise[T] {
-	p := newPromInter[T](pipeline)
-	p.status = status.NewFrom(prevStatus)
-	return p
 }
 
 var closedChan = make(chan struct{})
@@ -407,10 +416,6 @@ func newPromSync[T any](pipeline *pipelineCore) *genericPromise[T] {
 // or for follow calls on such promises.
 func newPromBlocking[T any]() *genericPromise[T] {
 	return &genericPromise[T]{
-		// none of these fields needs to be initialized, since this promise
-		// will never be resolved.
-		pipeline: nil,
-		syncChan: nil,
-		extsChan: nil,
+		// no fields need to be initialized, since this promise will never be resolved.
 	}
 }

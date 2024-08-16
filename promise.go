@@ -17,20 +17,21 @@ package promise
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
-
-	"github.com/asmsh/promise/internal/status"
 )
 
 // genericPromise is the default implementation of the Promise interface
 //
 // The zero value will block forever on any calls.
 type genericPromise[T any] struct {
+	// pipeline is a pointer to the group which this promise is part of,
+	// or nil, if it's part of the default group.
 	pipeline *pipelineCore
 
 	// closed when this promise is resolved.
 	// this channel has one writer (one goroutine), which is the owner,
-	// which will close it, but can have multiple readers (follow promises).
+	// which will close it, but can have multiple readers (chain promises).
 	syncChan chan struct{}
 
 	// this is sent on by the different extension calls.
@@ -43,13 +44,15 @@ type genericPromise[T any] struct {
 	// don't read it unless the syncChan is known to be closed.
 	res Result[T]
 
-	// hold the different states, fates, flags, and other data about
-	// the promise.
-	// refer to the docs of the PromStatus type for more info.
-	//
-	// the res field is guaranteed to be immutable, after the fate value is
-	// Resolved or Handled, so don't read it before then.
-	status status.PromStatus
+	// resolveState holds the state of this promise.
+	// once the promise is resolved, it will be non-zero.
+	// written once, before the syncChan channel is closed.
+	resolveState atomic.Uint32
+
+	// chainStatus holds the status of this promise's chain.
+	// once there are any calls registered on this promise, or
+	// the promise has been already handled, it will be non-zero.
+	chainStatus atomic.Uint32
 }
 
 // extQueue wil be owned, at any time, by a single goroutine.
@@ -99,8 +102,8 @@ func (p *genericPromise[T]) String() string {
 }
 
 func (p *genericPromise[T]) Wait() {
-	p.status.RegWait()
-	_ = p.waitCall()
+	p.regChainWait()
+	p.waitCall()
 }
 
 func (p *genericPromise[T]) WaitChan() chan struct{} {
@@ -114,29 +117,27 @@ func (p *genericPromise[T]) WaitChan() chan struct{} {
 	return c
 }
 
-func (p *genericPromise[T]) waitCall() (s uint32) {
+func (p *genericPromise[T]) waitCall() {
 	// wait the promise to be resolved
-	s = p.wait()
+	s := p.wait()
 
-	if !status.IsChainAtLeastRead(s) && !status.IsFateHandled(s) {
-		if status.IsStatePanicked(s) {
-			// the promise is panicked, not handled, and there are no chained
-			// calls to handle it, run the uncaught panic handler, and continue.
-			p.uncaughtPanicHandler()
-		}
-
-		if status.IsStateRejected(s) {
-			// the promise is rejected, not handled, and there are no chained
-			// calls to handle it, run the uncaught error handler, and continue.
-			p.uncaughtErrorHandler()
-		}
+	// if the chain has a read call or is already handled, return early
+	if p.chainStatus.Load() >= chainStatusRead {
+		return
 	}
 
-	return
+	// at this point, the promise is not handled and doesn't have a read call,
+	// so call the unhandled handlers if the state is one of a failure.
+	switch s {
+	case Rejected:
+		p.uncaughtErrorHandler()
+	case Panicked:
+		p.uncaughtPanicHandler()
+	}
 }
 
 func (p *genericPromise[T]) Res() Result[T] {
-	p.status.RegRead()
+	p.regChainRead()
 	return p.resCall()
 }
 
@@ -148,12 +149,11 @@ func (p *genericPromise[T]) resCall() Result[T] {
 	// also, keep track of whether this handle was valid(first) or not,
 	// to decide whether we should return the actual result of the promise
 	// or an erroneous one.
-	validHandle, s := p.status.SetHandled()
+	validHandle := p.setChainHandled()
 
+	// TODO: support one-time promise, based on the pipeline options.
 	// if the promise isn't a one-time promise, all handle calls will be valid
-	if !status.IsFlagsOnce(s) {
-		validHandle = true
-	}
+	validHandle = true
 
 	// if the promise result has been used, return the expected error
 	if !validHandle {
@@ -184,7 +184,7 @@ func (p *genericPromise[T]) Callback(
 		return
 	}
 
-	p.status.RegRead()
+	p.regChainRead()
 	p.pipeline.reserveGoroutine()
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
 	go callbackFollowHandler(p, cb, ctx, cancel)
@@ -211,10 +211,10 @@ func (p *genericPromise[T]) Delay(
 		return newPromBlocking[T]()
 	}
 
-	_, s := p.status.RegFollow()
+	p.regChainRead()
 	flags := getDelayFlags(cond)
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, s)
+	nextProm := newPromInter[T](p.pipeline)
 	go delayFollowHandler(p, nextProm, d, flags)
 	return nextProm
 }
@@ -257,9 +257,9 @@ func (p *genericPromise[T]) Then(
 		return newPromBlocking[T]()
 	}
 
-	_, s := p.status.RegFollow()
+	p.regChainRead()
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, s)
+	nextProm := newPromInter[T](p.pipeline)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
 	go thenFollowHandler(p, nextProm, thenCb, ctx, cancel)
 	return nextProm
@@ -276,7 +276,7 @@ func thenFollowHandler[T any](
 	s := prevProm.wait()
 
 	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
-	if !status.IsStateFulfilled(s) {
+	if s != Fulfilled {
 		resolveToRes(nextProm, prevProm.res)
 		return
 	}
@@ -304,9 +304,9 @@ func (p *genericPromise[T]) Catch(
 		return newPromBlocking[T]()
 	}
 
-	_, s := p.status.RegFollow()
+	p.regChainRead()
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, s)
+	nextProm := newPromInter[T](p.pipeline)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
 	go catchFollowHandler(p, nextProm, catchCb, ctx, cancel)
 	return nextProm
@@ -323,7 +323,7 @@ func catchFollowHandler[T any](
 	s := prevProm.wait()
 
 	// 'Catch' can handle only the 'Rejected' state, so return otherwise
-	if !status.IsStateRejected(s) {
+	if s != Rejected {
 		resolveToRes(nextProm, prevProm.res)
 		return
 	}
@@ -347,9 +347,9 @@ func (p *genericPromise[T]) Recover(
 		return newPromBlocking[T]()
 	}
 
-	_, s := p.status.RegFollow()
+	p.regChainRead()
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, s)
+	nextProm := newPromInter[T](p.pipeline)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
 	go recoverFollowHandler(p, nextProm, recoverCb, ctx, cancel)
 	return nextProm
@@ -366,7 +366,7 @@ func recoverFollowHandler[T any](
 	s := prevProm.wait()
 
 	// 'Recover' can handle only the 'Panicked' state, so return otherwise
-	if !status.IsStatePanicked(s) {
+	if s != Panicked {
 		resolveToRes(nextProm, prevProm.res)
 		return
 	}
@@ -394,9 +394,9 @@ func (p *genericPromise[T]) Finally(
 		return newPromBlocking[T]()
 	}
 
-	_, s := p.status.RegWait()
+	p.regChainRead()
 	p.pipeline.reserveGoroutine()
-	nextProm := newPromFollow[T](p.pipeline, s)
+	nextProm := newPromInter[T](p.pipeline)
 	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
 	go finallyFollowHandler(p, nextProm, finallyCb, ctx, cancel)
 	return nextProm
