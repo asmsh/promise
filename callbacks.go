@@ -60,10 +60,10 @@ func (cb callbackCallback[PrevResT, NewResT]) call(ctx context.Context, res Resu
 	return nil
 }
 
-func runCallback[PrevResT, NewResT any](
-	p *genericPromise[NewResT],
-	cb callbackFunc[PrevResT, NewResT],
-	prevRes Result[PrevResT],
+func runCallback[PrevValT, NewValT any](
+	p *genericPromise[NewValT],
+	cb callbackFunc[PrevValT, NewValT],
+	prevRes Result[PrevValT],
 	supportNewResult bool,
 	freeAfterDone bool,
 	supportHandleReturns bool,
@@ -71,9 +71,9 @@ func runCallback[PrevResT, NewResT any](
 	cancel context.CancelFunc,
 ) {
 	// create the Result pointer, to keep track of any result returned
-	var newResP *Result[NewResT]
+	var newResP *Result[NewValT]
 	if supportNewResult {
-		newResP = new(Result[NewResT])
+		newResP = new(Result[NewValT])
 	}
 
 	// make sure we free this goroutine reservation if it's required
