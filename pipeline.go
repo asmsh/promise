@@ -20,6 +20,13 @@ type PipelineConfig struct {
 	// passed to all callbacks, once any callback returns an error or cause a panic
 	// that's not caught or recovered, through Catch or Recover, respectively.
 	CancelAllCtxOnFailure bool
+
+	// UseEmptyCallbackCtx, if true, will result in passing the empty Context value,
+	// context.Background, to all callback functions.
+	// If true, it will result in not canceling the Context value when the promise is
+	// resolved.
+	// If CancelAllCtxOnFailure is true, this will be set to false.
+	UseEmptyCallbackCtx bool
 }
 
 type Pipeline[T any] struct {
@@ -43,6 +50,10 @@ func NewPipeline[T any](c ...*PipelineConfig) *Pipeline[T] {
 
 		if c[0].CancelAllCtxOnFailure {
 			pp.core.ctx, pp.core.cancel = context.WithCancel(context.Background())
+		}
+
+		if c[0].UseEmptyCallbackCtx && !c[0].CancelAllCtxOnFailure {
+			pp.core.useEmptyCallbackCtx = true
 		}
 	}
 
@@ -109,7 +120,7 @@ func goCall[T any](pc *pipelineCore, fun goCallback[T, T]) Promise[T] {
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	ctx, cancel := pc.callbackCtx()
 	go runCallback[T, T](p, fun, nil, false, true, true, ctx, cancel)
 	return p
 }
@@ -125,7 +136,7 @@ func goErrCall[T any](pc *pipelineCore, fun goErrCallback[T, T]) Promise[T] {
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	ctx, cancel := pc.callbackCtx()
 	go runCallback[T, T](p, fun, nil, true, true, true, ctx, cancel)
 	return p
 }
@@ -144,7 +155,7 @@ func goResCall[T any](
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	ctx, cancel := pc.callbackCtx()
 	go runCallback[T, T](p, fun, nil, true, true, true, ctx, cancel)
 	return p
 }
@@ -214,6 +225,8 @@ type pipelineCore struct {
 	wg          sync.WaitGroup
 	reserveChan chan struct{}
 
+	useEmptyCallbackCtx bool
+
 	// ctx will be non-nil if the Pipeline is meant to close all Context values
 	// once any Promise that's created using it is rejected or panicked.
 	ctx    context.Context
@@ -221,30 +234,39 @@ type pipelineCore struct {
 }
 
 func (pc *pipelineCore) reserveGoroutine() {
-	if pc != nil {
-		// add to the wait group before waiting, to make sure that this goroutine
-		// reservation is accounted for.
-		pc.wg.Add(1)
-		if pc.reserveChan != nil {
-			pc.reserveChan <- struct{}{}
-		}
+	if pc == nil {
+		return
+	}
+	// add to the wait group before waiting, to make sure that this goroutine
+	// reservation is accounted for.
+	pc.wg.Add(1)
+	if pc.reserveChan != nil {
+		pc.reserveChan <- struct{}{}
 	}
 }
 
 func (pc *pipelineCore) freeGoroutine() {
-	if pc != nil {
-		pc.wg.Done()
-		if pc.reserveChan != nil {
-			<-pc.reserveChan
-		}
+	if pc == nil {
+		return
+	}
+	pc.wg.Done()
+	if pc.reserveChan != nil {
+		<-pc.reserveChan
 	}
 }
 
 func (pc *pipelineCore) ctxParent() context.Context {
-	if pc != nil {
-		if pc.ctx != nil {
-			return pc.ctx
-		}
+	if pc == nil || pc.ctx == nil {
+		return context.Background()
 	}
-	return context.Background()
+	return pc.ctx
+}
+
+func noop() {}
+
+func (pc *pipelineCore) callbackCtx() (context.Context, context.CancelFunc) {
+	if pc == nil || pc.useEmptyCallbackCtx {
+		return context.Background(), noop
+	}
+	return context.WithCancel(pc.ctxParent())
 }

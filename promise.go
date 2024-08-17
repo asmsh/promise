@@ -260,7 +260,7 @@ func (p *genericPromise[T]) Then(
 	p.regChainRead()
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromInter[T](p.pipeline)
-	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	ctx, cancel := p.pipeline.callbackCtx()
 	go thenFollowHandler(p, nextProm, thenCb, ctx, cancel)
 	return nextProm
 }
@@ -307,7 +307,7 @@ func (p *genericPromise[T]) Catch(
 	p.regChainRead()
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromInter[T](p.pipeline)
-	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	ctx, cancel := p.pipeline.callbackCtx()
 	go catchFollowHandler(p, nextProm, catchCb, ctx, cancel)
 	return nextProm
 }
@@ -350,7 +350,7 @@ func (p *genericPromise[T]) Recover(
 	p.regChainRead()
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromInter[T](p.pipeline)
-	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	ctx, cancel := p.pipeline.callbackCtx()
 	go recoverFollowHandler(p, nextProm, recoverCb, ctx, cancel)
 	return nextProm
 }
@@ -397,7 +397,7 @@ func (p *genericPromise[T]) Finally(
 	p.regChainRead()
 	p.pipeline.reserveGoroutine()
 	nextProm := newPromInter[T](p.pipeline)
-	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	ctx, cancel := p.pipeline.callbackCtx()
 	go finallyFollowHandler(p, nextProm, finallyCb, ctx, cancel)
 	return nextProm
 }
