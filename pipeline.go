@@ -76,6 +76,7 @@ func chanCall[T any](pc *pipelineCore, resChan chan Result[T]) Promise[T] {
 }
 
 func chanHandler[T any](p *genericPromise[T], resChan chan Result[T]) {
+	defer p.pipeline.freeGoroutine()
 	res := <-resChan
 	resolveToRes(p, res)
 }
@@ -188,9 +189,7 @@ func delayHandler[T any](
 	dd time.Duration,
 	flags delayFlags,
 ) {
-	// make sure we free this goroutine reservation
 	defer p.pipeline.freeGoroutine()
-
 	resolveToResWithDelay(p, res, dd, flags)
 }
 

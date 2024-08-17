@@ -196,11 +196,14 @@ func callbackFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
+	// make sure we free this goroutine reservation
+	defer prevProm.pipeline.freeGoroutine()
+
 	// wait the previous promise to be resolved
 	prevProm.wait()
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nil, cb, prevProm.res, false, true, false, ctx, cancel)
+	runCallback[T, T](nil, cb, prevProm.res, false, false, false, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Delay(
@@ -226,10 +229,7 @@ func delayFollowHandler[T any](
 	dd time.Duration,
 	flags delayFlags,
 ) {
-	// make sure we free this goroutine reservation
 	defer prevProm.pipeline.freeGoroutine()
-
-	// wait the previous promise to be resolved
 	prevProm.wait()
 
 	// mark prevProm as 'Handled', and check whether we should continue or not.
@@ -272,7 +272,7 @@ func thenFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	// wait the previous promise to be resolved
+	defer prevProm.pipeline.freeGoroutine()
 	s := prevProm.wait()
 
 	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
@@ -291,7 +291,7 @@ func thenFollowHandler[T any](
 	}
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, res, true, true, true, ctx, cancel)
+	runCallback[T, T](nextProm, cb, res, true, false, true, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Catch(
@@ -319,7 +319,7 @@ func catchFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	// wait the previous promise to be resolved
+	defer prevProm.pipeline.freeGoroutine()
 	s := prevProm.wait()
 
 	// 'Catch' can handle only the 'Rejected' state, so return otherwise
@@ -334,7 +334,7 @@ func catchFollowHandler[T any](
 	res, _ := handleFollow(prevProm, nextProm, false)
 
 	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, res, true, true, true, ctx, cancel)
+	runCallback[T, T](nextProm, cb, res, true, false, true, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Recover(
@@ -362,7 +362,7 @@ func recoverFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	// wait the previous promise to be resolved
+	defer prevProm.pipeline.freeGoroutine()
 	s := prevProm.wait()
 
 	// 'Recover' can handle only the 'Panicked' state, so return otherwise
@@ -414,9 +414,7 @@ func finallyFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	// wait the previous promise to be resolved
+	defer prevProm.pipeline.freeGoroutine()
 	prevProm.wait()
-
-	// run the callback with the actual promise result
-	runCallback[T, T](nextProm, cb, prevProm.res, false, true, true, ctx, cancel)
+	runCallback[T, T](nextProm, cb, prevProm.res, false, false, true, ctx, cancel)
 }
