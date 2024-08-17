@@ -15,6 +15,7 @@
 package promise
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -71,7 +72,7 @@ func (p *genericPromise[T]) wait() State {
 	// wait until the promise is resolved.
 	// the chan will always be closed by the previous promise,
 	// after setting the res and status fields as expected.
-	<-p.syncChan
+	<-p.syncCtx.Done()
 
 	s = p.resolveState.Load()
 	return State(s)
@@ -246,7 +247,7 @@ func resolveToPanickedRes[T any](
 	// all waiting calls.
 	p.res = res
 	p.resolveState.Store(uint32(Panicked))
-	close(p.syncChan)
+	closeSyncCtx(p.syncCtx)
 
 	handleExtCalls(p)
 
@@ -265,7 +266,7 @@ func resolveToRejectedRes[T any](
 ) {
 	p.res = res
 	p.resolveState.Store(uint32(Rejected))
-	close(p.syncChan)
+	closeSyncCtx(p.syncCtx)
 
 	handleExtCalls(p)
 
@@ -284,7 +285,7 @@ func resolveToFulfilledRes[T any](
 ) {
 	p.res = res
 	p.resolveState.Store(uint32(Fulfilled))
-	close(p.syncChan)
+	closeSyncCtx(p.syncCtx)
 
 	handleExtCalls(p)
 }
@@ -388,7 +389,18 @@ func newPromInter[T any](pipeline *pipelineCore) *genericPromise[T] {
 
 	return &genericPromise[T]{
 		pipeline: pipeline,
-		syncChan: make(chan struct{}),
+		syncCtx:  syncCtx{syncChan: make(chan struct{})},
+		extsChan: extsChan,
+	}
+}
+
+func newPromCtx[T any](pipeline *pipelineCore, ctx context.Context) *genericPromise[T] {
+	extsChan := make(chan extQueue[T], 1)
+	extsChan <- extQueue[T]{}
+
+	return &genericPromise[T]{
+		pipeline: pipeline,
+		syncCtx:  ctx,
 		extsChan: extsChan,
 	}
 }
@@ -404,7 +416,7 @@ func init() {
 func newPromSync[T any](pipeline *pipelineCore) *genericPromise[T] {
 	return &genericPromise[T]{
 		pipeline: pipeline,
-		syncChan: closedChan,
+		syncCtx:  syncCtx{syncChan: closedChan},
 		// not needed, since sync promises are resolved directly(synchronously)
 		// after created, so any extension call will depend on the syncChan.
 		extsChan: nil,
@@ -416,6 +428,6 @@ func newPromSync[T any](pipeline *pipelineCore) *genericPromise[T] {
 // or for follow calls on such promises.
 func newPromBlocking[T any]() *genericPromise[T] {
 	return &genericPromise[T]{
-		// no fields need to be initialized, since this promise will never be resolved.
+		// no other fields need to be initialized, since this promise will never be resolved.
 	}
 }

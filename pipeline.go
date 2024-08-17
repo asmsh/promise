@@ -75,28 +75,14 @@ func (pp *Pipeline[T]) Ctx(ctx context.Context) Promise[T] {
 }
 
 func ctxCall[T any](pc *pipelineCore, ctx context.Context) Promise[T] {
-	if ctx.Done() == nil {
+	if ctx == nil || ctx.Done() == nil {
 		// since this ctx value will never be closed, the equivalent outcome would
 		// be a Promise that's never resolved.
 		// so, return that equivalent value without creating any unneeded resources.
 		return newPromBlocking[T]()
 	}
 
-	pc.reserveGoroutine()
-	p := newPromInter[T](pc)
-	go ctxHandler(p, ctx)
-	return p
-}
-
-func ctxHandler[T any](p *genericPromise[T], ctx context.Context) {
-	// make sure we free this goroutine reservation
-	defer p.pipeline.freeGoroutine()
-
-	// wait until the Context is closed
-	<-ctx.Done()
-
-	// resolve to the equivalent result
-	resolveToRes[T](p, ctxResult[T]{ctx: ctx})
+	return newPromCtx[T](pc, ctx)
 }
 
 func (pp *Pipeline[T]) Go(fun func()) Promise[T] {

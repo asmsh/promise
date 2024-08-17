@@ -95,7 +95,7 @@ loop:
 			logr.Println("blocking block")
 
 			select {
-			case <-currProm.syncChan:
+			case <-currProm.syncCtx.Done():
 				logr.Println("blocking block syncChan case")
 
 				// the promise is resolved...
@@ -114,7 +114,7 @@ loop:
 					resChan = make(chan IdxRes[T])
 				}
 				// update the queue with this extension call.
-				updateExtQCall(&extQ, idx, resChan, nextProm.syncChan)
+				updateExtQCall(&extQ, idx, resChan, nextProm.syncCtx.Done())
 				// send the updated queue back for either another extension call,
 				// or the currProm's resolving logic.
 				currProm.extsChan <- extQ
@@ -123,7 +123,7 @@ loop:
 			logr.Println("non-blocking block")
 
 			select {
-			case <-currProm.syncChan:
+			case <-currProm.syncCtx.Done():
 				logr.Println("non-blocking block syncChan case")
 
 				res = IdxRes[T]{
@@ -137,7 +137,7 @@ loop:
 				if resChan == nil {
 					resChan = make(chan IdxRes[T])
 				}
-				updateExtQCall(&extQ, idx, resChan, nextProm.syncChan)
+				updateExtQCall(&extQ, idx, resChan, nextProm.syncCtx.Done())
 				currProm.extsChan <- extQ
 			default:
 				logr.Println("non-blocking block default case")
@@ -330,7 +330,7 @@ loop:
 			logr.Println("non-blocking block")
 
 			select {
-			case <-currProm.syncChan:
+			case <-currProm.syncCtx.Done():
 				logr.Println("non-blocking block syncChan case")
 
 				// the promise is resolved...
@@ -415,7 +415,7 @@ loop:
 				)
 
 				// update the queue with this extension call.
-				updateExtQCall(&extQ, idx, resChan, nextProm.syncChan)
+				updateExtQCall(&extQ, idx, resChan, nextProm.syncCtx.Done())
 
 				logr.Println(
 					"non-blocking block extQ case prev queue valid",
@@ -439,7 +439,7 @@ loop:
 			logr.Println("blocking block")
 
 			select {
-			case <-currProm.syncChan:
+			case <-currProm.syncCtx.Done():
 				logr.Println("blocking block syncChan case")
 
 				res := IdxRes[T]{
@@ -512,7 +512,7 @@ loop:
 					len(extQ.extra),
 				)
 
-				updateExtQCall(&extQ, idx, resChan, nextProm.syncChan)
+				updateExtQCall(&extQ, idx, resChan, nextProm.syncCtx.Done())
 
 				logr.Println(
 					"blocking block extQ case new queue valid",
@@ -627,7 +627,7 @@ func updateExtQCall[T any](
 	q *extQueue[T],
 	idx int,
 	resChan chan IdxRes[T],
-	syncChan chan struct{},
+	syncChan <-chan struct{},
 ) {
 	call := extCall[T]{
 		idx:      idx,

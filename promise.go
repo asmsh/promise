@@ -30,9 +30,9 @@ type genericPromise[T any] struct {
 	pipeline *pipelineCore
 
 	// closed when this promise is resolved.
-	// this channel has one writer (one goroutine), which is the owner,
+	// its channel has one writer (one goroutine), which is the owner,
 	// which will close it, but can have multiple readers (chain promises).
-	syncChan chan struct{}
+	syncCtx context.Context
 
 	// this is sent on by the different extension calls.
 	// it's never closed.
@@ -76,12 +76,12 @@ type extCall[T any] struct {
 	// resChan is the channel used to send the result back to the extension
 	// call's promise.
 	// this is a new, per extension call, unbuffered channel.
-	resChan chan IdxRes[T]
+	resChan chan<- IdxRes[T]
 
 	// syncChan is the channel used to communicate that the extension call's
 	// promise has been resolved, so that the sending promise can return.
 	// this is typically extension call's promise's syncChan.
-	syncChan chan struct{}
+	syncChan <-chan struct{}
 }
 
 func (p *genericPromise[T]) Val() T {
@@ -180,7 +180,7 @@ func (p *genericPromise[T]) Callback(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncChan == nil {
+	if p.syncCtx == nil {
 		return
 	}
 
@@ -210,7 +210,7 @@ func (p *genericPromise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) Promise[T] {
-	if p.syncChan == nil {
+	if p.syncCtx == nil {
 		return newPromBlocking[T]()
 	}
 
@@ -253,7 +253,7 @@ func (p *genericPromise[T]) Then(
 	if thenCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncChan == nil {
+	if p.syncCtx == nil {
 		return newPromBlocking[T]()
 	}
 
@@ -300,7 +300,7 @@ func (p *genericPromise[T]) Catch(
 	if catchCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncChan == nil {
+	if p.syncCtx == nil {
 		return newPromBlocking[T]()
 	}
 
@@ -343,7 +343,7 @@ func (p *genericPromise[T]) Recover(
 	if recoverCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncChan == nil {
+	if p.syncCtx == nil {
 		return newPromBlocking[T]()
 	}
 
@@ -390,7 +390,7 @@ func (p *genericPromise[T]) Finally(
 	if finallyCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncChan == nil {
+	if p.syncCtx == nil {
 		return newPromBlocking[T]()
 	}
 
