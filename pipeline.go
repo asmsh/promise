@@ -20,13 +20,6 @@ type PipelineConfig struct {
 	// passed to all callbacks, once any callback returns an error or cause a panic
 	// that's not caught or recovered, through Catch or Recover, respectively.
 	CancelAllCtxOnFailure bool
-
-	// UseEmptyCallbackCtx, if true, will result in passing the empty Context value,
-	// context.Background, to all callback functions.
-	// If true, it will result in not canceling the Context value when the promise is
-	// resolved.
-	// If CancelAllCtxOnFailure is true, this will be set to false.
-	UseEmptyCallbackCtx bool
 }
 
 type Pipeline[T any] struct {
@@ -50,10 +43,6 @@ func NewPipeline[T any](c ...*PipelineConfig) *Pipeline[T] {
 
 		if c[0].CancelAllCtxOnFailure {
 			pp.core.ctx, pp.core.cancel = context.WithCancel(context.Background())
-		}
-
-		if c[0].UseEmptyCallbackCtx && !c[0].CancelAllCtxOnFailure {
-			pp.core.useEmptyCallbackCtx = true
 		}
 	}
 
@@ -224,8 +213,6 @@ type pipelineCore struct {
 	wg          sync.WaitGroup
 	reserveChan chan struct{}
 
-	useEmptyCallbackCtx bool
-
 	// ctx will be non-nil if the Pipeline is meant to close all Context values
 	// once any Promise that's created using it is rejected or panicked.
 	ctx    context.Context
@@ -254,18 +241,11 @@ func (pc *pipelineCore) freeGoroutine() {
 	}
 }
 
-func (pc *pipelineCore) ctxParent() context.Context {
-	if pc == nil || pc.ctx == nil {
-		return context.Background()
-	}
-	return pc.ctx
-}
-
 func noop() {}
 
 func (pc *pipelineCore) callbackCtx() (context.Context, context.CancelFunc) {
-	if pc == nil || pc.useEmptyCallbackCtx {
+	if pc == nil || pc.ctx == nil {
 		return context.Background(), noop
 	}
-	return context.WithCancel(pc.ctxParent())
+	return context.WithCancel(pc.ctx)
 }

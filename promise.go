@@ -186,7 +186,7 @@ func (p *genericPromise[T]) Callback(
 
 	p.regChainRead()
 	p.pipeline.reserveGoroutine()
-	ctx, cancel := context.WithCancel(p.pipeline.ctxParent())
+	ctx, cancel := p.pipeline.callbackCtx()
 	go callbackFollowHandler(p, cb, ctx, cancel)
 }
 
