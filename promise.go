@@ -25,9 +25,9 @@ import (
 //
 // The zero value will block forever on any calls.
 type genericPromise[T any] struct {
-	// pipeline is a pointer to the group which this promise is part of,
+	// group is a pointer to the promise group which this promise is part of,
 	// or nil, if it's part of the default group.
-	pipeline *pipelineCore
+	group *groupCore
 
 	// closed when this promise is resolved.
 	// its channel has one writer (one goroutine), which is the owner,
@@ -151,7 +151,7 @@ func (p *genericPromise[T]) resCall() Result[T] {
 	// or an erroneous one.
 	validHandle := p.setChainHandled()
 
-	// TODO: support one-time promise, based on the pipeline options.
+	// TODO: support one-time promise, based on the group options.
 	// if the promise isn't a one-time promise, all handle calls will be valid
 	validHandle = true
 
@@ -185,8 +185,8 @@ func (p *genericPromise[T]) Callback(
 	}
 
 	p.regChainRead()
-	p.pipeline.reserveGoroutine()
-	ctx, cancel := p.pipeline.callbackCtx(nil)
+	p.group.reserveGoroutine()
+	ctx, cancel := p.group.callbackCtx(nil)
 	go callbackFollowHandler(p, cb, ctx, cancel)
 }
 
@@ -197,7 +197,7 @@ func callbackFollowHandler[T any](
 	cancel context.CancelFunc,
 ) {
 	// make sure we free this goroutine reservation
-	defer prevProm.pipeline.freeGoroutine()
+	defer prevProm.group.freeGoroutine()
 
 	// wait the previous promise to be resolved
 	prevProm.wait()
@@ -216,8 +216,8 @@ func (p *genericPromise[T]) Delay(
 
 	p.regChainRead()
 	flags := getDelayFlags(cond)
-	p.pipeline.reserveGoroutine()
-	nextProm := newPromInter[T](p.pipeline)
+	p.group.reserveGoroutine()
+	nextProm := newPromInter[T](p.group)
 	go delayFollowHandler(p, nextProm, d, flags)
 	return nextProm
 }
@@ -229,7 +229,7 @@ func delayFollowHandler[T any](
 	dd time.Duration,
 	flags delayFlags,
 ) {
-	defer prevProm.pipeline.freeGoroutine()
+	defer prevProm.group.freeGoroutine()
 	prevProm.wait()
 
 	// mark prevProm as 'Handled', and check whether we should continue or not.
@@ -258,9 +258,9 @@ func (p *genericPromise[T]) Then(
 	}
 
 	p.regChainRead()
-	p.pipeline.reserveGoroutine()
-	nextProm := newPromInter[T](p.pipeline)
-	ctx, cancel := p.pipeline.callbackCtx(nextProm.syncCtx)
+	p.group.reserveGoroutine()
+	nextProm := newPromInter[T](p.group)
+	ctx, cancel := p.group.callbackCtx(nextProm.syncCtx)
 	go thenFollowHandler(p, nextProm, thenCb, ctx, cancel)
 	return nextProm
 }
@@ -272,7 +272,7 @@ func thenFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	defer prevProm.pipeline.freeGoroutine()
+	defer prevProm.group.freeGoroutine()
 	s := prevProm.wait()
 
 	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
@@ -305,9 +305,9 @@ func (p *genericPromise[T]) Catch(
 	}
 
 	p.regChainRead()
-	p.pipeline.reserveGoroutine()
-	nextProm := newPromInter[T](p.pipeline)
-	ctx, cancel := p.pipeline.callbackCtx(nextProm.syncCtx)
+	p.group.reserveGoroutine()
+	nextProm := newPromInter[T](p.group)
+	ctx, cancel := p.group.callbackCtx(nextProm.syncCtx)
 	go catchFollowHandler(p, nextProm, catchCb, ctx, cancel)
 	return nextProm
 }
@@ -319,7 +319,7 @@ func catchFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	defer prevProm.pipeline.freeGoroutine()
+	defer prevProm.group.freeGoroutine()
 	s := prevProm.wait()
 
 	// 'Catch' can handle only the 'Rejected' state, so return otherwise
@@ -348,9 +348,9 @@ func (p *genericPromise[T]) Recover(
 	}
 
 	p.regChainRead()
-	p.pipeline.reserveGoroutine()
-	nextProm := newPromInter[T](p.pipeline)
-	ctx, cancel := p.pipeline.callbackCtx(nextProm.syncCtx)
+	p.group.reserveGoroutine()
+	nextProm := newPromInter[T](p.group)
+	ctx, cancel := p.group.callbackCtx(nextProm.syncCtx)
 	go recoverFollowHandler(p, nextProm, recoverCb, ctx, cancel)
 	return nextProm
 }
@@ -362,7 +362,7 @@ func recoverFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	defer prevProm.pipeline.freeGoroutine()
+	defer prevProm.group.freeGoroutine()
 	s := prevProm.wait()
 
 	// 'Recover' can handle only the 'Panicked' state, so return otherwise
@@ -395,9 +395,9 @@ func (p *genericPromise[T]) Finally(
 	}
 
 	p.regChainRead()
-	p.pipeline.reserveGoroutine()
-	nextProm := newPromInter[T](p.pipeline)
-	ctx, cancel := p.pipeline.callbackCtx(nextProm.syncCtx)
+	p.group.reserveGoroutine()
+	nextProm := newPromInter[T](p.group)
+	ctx, cancel := p.group.callbackCtx(nextProm.syncCtx)
 	go finallyFollowHandler(p, nextProm, finallyCb, ctx, cancel)
 	return nextProm
 }
@@ -414,7 +414,7 @@ func finallyFollowHandler[T any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	defer prevProm.pipeline.freeGoroutine()
+	defer prevProm.group.freeGoroutine()
 	prevProm.wait()
 	runCallback[T, T](nextProm, cb, prevProm.res, false, false, true, ctx, cancel)
 }

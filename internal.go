@@ -88,7 +88,7 @@ func handleFollow[PrevT, NextT any](
 	// use the actual result of the promise or reject with an erroneous one.
 	validHandle := prevProm.setChainHandled()
 
-	// TODO: support one-time promise, based on the pipeline options.
+	// TODO: support one-time promise, based on the group options.
 	// if the promise isn't a one-time promise, all handle calls will be valid
 	validHandle = true
 
@@ -325,31 +325,31 @@ func handleExtCall[T any](call extCall[T], res Result[T]) bool {
 }
 
 func (p *genericPromise[T]) uncaughtPanicHandler() {
-	if p.pipeline != nil {
-		// if it's request to cancel all the promises of the pipeline on
+	if p.group != nil {
+		// if it's request to cancel all the promises of the group on
 		// uncaught panics, call the cancel function before the handler.
-		if p.pipeline.cancel != nil {
-			p.pipeline.cancel()
+		if p.group.cancel != nil {
+			p.group.cancel()
 		}
 
 		// call the handler if one is provided
-		if p.pipeline.uncaughtPanicHandler != nil {
-			p.pipeline.uncaughtPanicHandler(p.res.(panicResult).getPanicV())
+		if p.group.uncaughtPanicHandler != nil {
+			p.group.uncaughtPanicHandler(p.res.(panicResult).getPanicV())
 		}
 	}
 }
 
 func (p *genericPromise[T]) uncaughtErrorHandler() {
-	if p.pipeline != nil {
-		// if it's request to cancel all the promises of the pipeline on
+	if p.group != nil {
+		// if it's request to cancel all the promises of the group on
 		// uncaught errors, call the cancel function before the handler.
-		if p.pipeline.cancel != nil {
-			p.pipeline.cancel()
+		if p.group.cancel != nil {
+			p.group.cancel()
 		}
 
 		// call the handler if one is provided
-		if p.pipeline.uncaughtErrorHandler != nil {
-			p.pipeline.uncaughtErrorHandler(p.res.Err())
+		if p.group.uncaughtErrorHandler != nil {
+			p.group.uncaughtErrorHandler(p.res.Err())
 		}
 	}
 }
@@ -383,23 +383,23 @@ func (p *genericPromise[T]) impl() *genericPromise[T] { return p }
 
 // newPromInter creates a new genericPromise which is resolved internally,
 // using an internal allocated channel.
-func newPromInter[T any](pipeline *pipelineCore) *genericPromise[T] {
+func newPromInter[T any](gc *groupCore) *genericPromise[T] {
 	extsChan := make(chan extQueue[T], 1)
 	extsChan <- extQueue[T]{}
 
 	return &genericPromise[T]{
-		pipeline: pipeline,
+		group:    gc,
 		syncCtx:  syncCtx{syncChan: make(chan struct{})},
 		extsChan: extsChan,
 	}
 }
 
-func newPromCtx[T any](pipeline *pipelineCore, ctx context.Context) *genericPromise[T] {
+func newPromCtx[T any](gc *groupCore, ctx context.Context) *genericPromise[T] {
 	extsChan := make(chan extQueue[T], 1)
 	extsChan <- extQueue[T]{}
 
 	return &genericPromise[T]{
-		pipeline: pipeline,
+		group:    gc,
 		syncCtx:  ctx,
 		extsChan: extsChan,
 	}
@@ -413,10 +413,10 @@ func init() {
 
 // newPromSync creates a new genericPromise which is resolved synchronously,
 // just after it's created.
-func newPromSync[T any](pipeline *pipelineCore) *genericPromise[T] {
+func newPromSync[T any](gc *groupCore) *genericPromise[T] {
 	return &genericPromise[T]{
-		pipeline: pipeline,
-		syncCtx:  syncCtx{syncChan: closedChan},
+		group:   gc,
+		syncCtx: syncCtx{syncChan: closedChan},
 		// not needed, since sync promises are resolved directly(synchronously)
 		// after created, so any extension call will depend on the syncChan.
 		extsChan: nil,

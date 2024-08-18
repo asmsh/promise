@@ -23,7 +23,7 @@ import (
 // it's required so that the Promise doesn't panic according to the default handlers' logic.
 var setNoPanicsPipelineCore = sync.OnceFunc(func() {
 	// override the default handlers, to avoid panics during benchmarks
-	defPipelineCore = &pipelineCore{
+	defaultGroupCore = &groupCore{
 		uncaughtPanicHandler: func(v any) {},
 		uncaughtErrorHandler: func(v error) {},
 	}

@@ -78,7 +78,7 @@ func runCallback[PrevValT, NewValT any](
 
 	// make sure we free this goroutine reservation if it's required
 	if freeAfterDone {
-		defer p.pipeline.freeGoroutine()
+		defer p.group.freeGoroutine()
 	}
 
 	// defer the return handler to handle panics and runtime.Goexit calls
