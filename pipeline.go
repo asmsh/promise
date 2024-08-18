@@ -19,7 +19,15 @@ type PipelineConfig struct {
 	// CancelAllCtxOnFailure, if true, will result in canceling all Context values
 	// passed to all callbacks, once any callback returns an error or cause a panic
 	// that's not caught or recovered, through Catch or Recover, respectively.
+	// The default behavior is never canceling the callbacks' [context.Context] value
+	// on any failures.
 	CancelAllCtxOnFailure bool
+
+	// NeverCancelCallbackCtx, if true, will result in passing a never canceled
+	// [context.Context] value to all callbacks.
+	// If CancelAllCtxOnFailure is true, this will be set to false.
+	// The default behavior is always canceling the callbacks' [context.Context] value.
+	NeverCancelCallbackCtx bool
 }
 
 type Pipeline[T any] struct {
@@ -43,6 +51,10 @@ func NewPipeline[T any](c ...*PipelineConfig) *Pipeline[T] {
 
 		if c[0].CancelAllCtxOnFailure {
 			pp.core.ctx, pp.core.cancel = context.WithCancel(context.Background())
+		}
+
+		if c[0].NeverCancelCallbackCtx && !c[0].CancelAllCtxOnFailure {
+			pp.core.neverCancelCallbackCtx = true
 		}
 	}
 
@@ -199,6 +211,8 @@ type pipelineCore struct {
 	wg          sync.WaitGroup
 	reserveChan chan struct{}
 
+	neverCancelCallbackCtx bool
+
 	// ctx will be non-nil if the Pipeline is meant to close all Context values
 	// once any Promise that's created using it is rejected or panicked.
 	ctx    context.Context
@@ -233,11 +247,14 @@ func noop() {}
 // if one is needed.
 // syncCtx should be a non-closed Context.
 func (pc *pipelineCore) callbackCtx(syncCtx context.Context) (context.Context, context.CancelFunc) {
-	if pc == nil || pc.ctx == nil {
+	if pc == nil {
 		if syncCtx != nil {
 			return syncCtx, noop
 		}
 		return context.WithCancel(context.Background())
+	}
+	if pc.ctx == nil && pc.neverCancelCallbackCtx {
+		return context.Background(), noop
 	}
 	return context.WithCancel(pc.ctx)
 }
