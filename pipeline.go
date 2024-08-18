@@ -96,7 +96,7 @@ func goCall[T any](pc *pipelineCore, fun goCallback[T, T]) Promise[T] {
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	ctx, cancel := pc.callbackCtx()
+	ctx, cancel := pc.callbackCtx(p.syncCtx)
 	go runCallback[T, T](p, fun, nil, false, true, true, ctx, cancel)
 	return p
 }
@@ -112,7 +112,7 @@ func goErrCall[T any](pc *pipelineCore, fun goErrCallback[T, T]) Promise[T] {
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	ctx, cancel := pc.callbackCtx()
+	ctx, cancel := pc.callbackCtx(p.syncCtx)
 	go runCallback[T, T](p, fun, nil, true, true, true, ctx, cancel)
 	return p
 }
@@ -131,7 +131,7 @@ func goResCall[T any](
 
 	pc.reserveGoroutine()
 	p := newPromInter[T](pc)
-	ctx, cancel := pc.callbackCtx()
+	ctx, cancel := pc.callbackCtx(p.syncCtx)
 	go runCallback[T, T](p, fun, nil, true, true, true, ctx, cancel)
 	return p
 }
@@ -229,9 +229,15 @@ func (pc *pipelineCore) freeGoroutine() {
 
 func noop() {}
 
-func (pc *pipelineCore) callbackCtx() (context.Context, context.CancelFunc) {
+// callbackCtx returns the effective Context for a callback, and its CancelFunc,
+// if one is needed.
+// syncCtx should be a non-closed Context.
+func (pc *pipelineCore) callbackCtx(syncCtx context.Context) (context.Context, context.CancelFunc) {
 	if pc == nil || pc.ctx == nil {
-		return context.Background(), noop
+		if syncCtx != nil {
+			return syncCtx, noop
+		}
+		return context.WithCancel(context.Background())
 	}
 	return context.WithCancel(pc.ctx)
 }
