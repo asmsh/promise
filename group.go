@@ -253,7 +253,7 @@ func (gc *groupCore) callbackCtx(syncCtx context.Context) (context.Context, cont
 		}
 		return context.WithCancel(context.Background())
 	}
-	if gc.ctx == nil && gc.neverCancelCallbackCtx {
+	if gc.ctx == nil || gc.neverCancelCallbackCtx {
 		return context.Background(), noop
 	}
 	return context.WithCancel(gc.ctx)
