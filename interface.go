@@ -42,13 +42,8 @@ type Promise[T any] interface {
 	// panicked, then ok will always = true.
 	Wait()
 
-	// WaitChan returns a newly created channel, which a boolean value will be
-	// sent on, for only one time, after waiting the promise to be resolved.
-	// The sent value correspond to the return of the Wait method.
-	//
-	// If it's called on a resolved promise, the value will be sent without
-	// waiting.
-	WaitChan() chan struct{}
+	// WaitChan returns a channel which will be closed once the promise is resolved.
+	WaitChan() <-chan struct{}
 
 	// Res waits the promise to be resolved, and returns its result, res,
 	// and a boolean, ok, which will be true only if res is valid.

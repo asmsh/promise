@@ -106,15 +106,8 @@ func (p *genericPromise[T]) Wait() {
 	p.waitCall()
 }
 
-func (p *genericPromise[T]) WaitChan() chan struct{} {
-	c := make(chan struct{})
-
-	go func(c chan struct{}) {
-		p.Wait()
-		close(c)
-	}(c)
-
-	return c
+func (p *genericPromise[T]) WaitChan() <-chan struct{} {
+	return p.syncCtx.Done()
 }
 
 func (p *genericPromise[T]) waitCall() {
