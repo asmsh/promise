@@ -19,10 +19,6 @@ import (
 	"time"
 )
 
-// defaultGroupCore is used for overriding the value passed to all constructors
-// below, for the purpose of testing.
-var defaultGroupCore *groupCore
-
 // Chan returns a GoPromise that's created using the provided resChan.
 //
 // The resChan must be a bi-directional chan(buffered or unbuffered), which is
@@ -43,11 +39,11 @@ var defaultGroupCore *groupCore
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
 func Chan[T any](resChan chan Result[T]) Promise[T] {
-	return chanCall[T](defaultGroupCore, resChan)
+	return chanCall[T](nil, resChan)
 }
 
 func Ctx(ctx context.Context) Promise[any] {
-	return ctxCall[any](defaultGroupCore, ctx)
+	return ctxCall[any](nil, ctx)
 }
 
 // Go runs the provided function, fun, in a separate goroutine, and returns
@@ -65,11 +61,11 @@ func Ctx(ctx context.Context) Promise[any] {
 //
 // It will panic if a nil function is passed.
 func Go(fun func()) Promise[any] {
-	return goCall[any](defaultGroupCore, fun)
+	return goCall[any](nil, fun)
 }
 
 func GoErr(fun func() error) Promise[any] {
-	return goErrCall[any](defaultGroupCore, fun)
+	return goErrCall[any](nil, fun)
 }
 
 // GoRes runs the provided function, fun, in a separate goroutine, and returns
@@ -94,7 +90,7 @@ func GoErr(fun func() error) Promise[any] {
 //
 // It will panic if a nil function is passed.
 func GoRes[T any](fun func(ctx context.Context) Result[T]) Promise[T] {
-	return goResCall[T](defaultGroupCore, fun)
+	return goResCall[T](nil, fun)
 }
 
 // Delay returns a GoPromise that's resolved to the passed Res value, res,
@@ -117,7 +113,7 @@ func GoRes[T any](fun func(ctx context.Context) Result[T]) Promise[T] {
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
 func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) Promise[T] {
-	return delayCall[T](defaultGroupCore, res, d, cond...)
+	return delayCall[T](nil, res, d, cond...)
 }
 
 // Wrap returns a GoPromise that's resolved, synchronously, to the provided
@@ -134,7 +130,7 @@ func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) Promise[T] 
 // until the error is caught on each of these chains(by a Catch call), or the
 // promise result is read(by a Res call).
 func Wrap[T any](res Result[T]) Promise[T] {
-	return wrapCall[T](defaultGroupCore, res)
+	return wrapCall[T](nil, res)
 }
 
 // Panic returns a GoPromise that's resolved to panicked, synchronously, and
@@ -146,5 +142,5 @@ func Wrap[T any](res Result[T]) Promise[T] {
 // promise needs to call Recover, before the end of each promise's chain,
 // otherwise all these promise will re-panic(with the passed value, v).
 func Panic[T any](v any) Promise[T] {
-	return panicCall[T](defaultGroupCore, v)
+	return panicCall[T](nil, v)
 }

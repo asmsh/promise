@@ -16,13 +16,12 @@ package promise
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
 
 func getErrorBenchmarkPromise() Promise[any] {
-	setNoPanicsPipelineCore()
-
 	prom := GoRes(func(ctx context.Context) Result[any] {
 		time.Sleep(1 * time.Millisecond)
 		return Err[any](newStrError())
@@ -161,7 +160,7 @@ type promiseBench struct {
 	name string
 }
 
-const parallelism = 100
+const parallelism = 100_000
 
 var promiseBenchs = []promiseBench{
 	{stressed: false, callFollow: true, callWait: false, callRes: false, name: "normal_follow-only"},
@@ -252,7 +251,8 @@ func BenchmarkPromise_Catch(b *testing.B) {
 						prom.Wait()
 					}
 					if bc.callRes {
-						prom.Res()
+						res := prom.Res()
+						res = res
 					}
 				}
 			})
@@ -354,8 +354,6 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 
 // create a fulfilled promise, chain 1 callback, and callWait on the final promise
 func BenchmarkPromise_Chain_Short(b *testing.B) {
-	setNoPanicsPipelineCore()
-
 	b.Run("no-res_wait-call", func(b *testing.B) {
 		prom := getSuccessBenchmarkPromise()
 		b.ReportAllocs()
@@ -548,8 +546,8 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			})
 			res = p.Res()
 			err = res.Err()
-			upErr := err.(UncaughtPanic)
-			if upErr.v != "test panic" {
+
+			if upErr := (PanicError{}); errors.As(err, &upErr) && upErr.V != "test panic" {
 				b.Fatalf("unexpected error: %v, from: %v", upErr, err)
 			}
 		}

@@ -47,8 +47,6 @@ func BenchmarkGo(b *testing.B) {
 }
 
 func BenchmarkGoErr(b *testing.B) {
-	setNoPanicsPipelineCore()
-
 	b.Run("nil error", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
@@ -87,8 +85,6 @@ func BenchmarkGoErr(b *testing.B) {
 }
 
 func BenchmarkGoRes(b *testing.B) {
-	setNoPanicsPipelineCore()
-
 	b.Run("empty result", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()
@@ -139,8 +135,6 @@ func BenchmarkGoRes(b *testing.B) {
 }
 
 func BenchmarkDelay(b *testing.B) {
-	setNoPanicsPipelineCore()
-
 	b.Run("empty result with no conditions", func(b *testing.B) {
 		var p Promise[any]
 		b.ReportAllocs()

@@ -325,32 +325,36 @@ func handleExtCall[T any](call extCall[T], res Result[T]) bool {
 }
 
 func (p *genericPromise[T]) uncaughtPanicHandler() {
-	if p.group != nil {
-		// if it's request to cancel all the promises of the group on
-		// uncaught panics, call the cancel function before the handler.
-		if p.group.cancel != nil {
-			p.group.cancel()
-		}
+	if p.group == nil {
+		return
+	}
 
-		// call the handler if one is provided
-		if p.group.uncaughtPanicHandler != nil {
-			p.group.uncaughtPanicHandler(p.res.(panicResult).getPanicV())
-		}
+	// if it's request to cancel all the promises of the group on
+	// uncaught panics, call the cancel function before the handler.
+	if p.group.core.cancel != nil {
+		p.group.core.cancel()
+	}
+
+	// call the handler if one is provided
+	if p.group.core.uncaughtPanicHandler != nil {
+		p.group.core.uncaughtPanicHandler(p.res.(panicResult).getPanicV())
 	}
 }
 
 func (p *genericPromise[T]) uncaughtErrorHandler() {
-	if p.group != nil {
-		// if it's request to cancel all the promises of the group on
-		// uncaught errors, call the cancel function before the handler.
-		if p.group.cancel != nil {
-			p.group.cancel()
-		}
+	if p.group == nil {
+		return
+	}
 
-		// call the handler if one is provided
-		if p.group.uncaughtErrorHandler != nil {
-			p.group.uncaughtErrorHandler(p.res.Err())
-		}
+	// if it's request to cancel all the promises of the group on
+	// uncaught errors, call the cancel function before the handler.
+	if p.group.core.cancel != nil {
+		p.group.core.cancel()
+	}
+
+	// call the handler if one is provided
+	if p.group.core.uncaughtErrorHandler != nil {
+		p.group.core.uncaughtErrorHandler(p.res.Err())
 	}
 }
 
@@ -383,23 +387,23 @@ func (p *genericPromise[T]) impl() *genericPromise[T] { return p }
 
 // newPromInter creates a new genericPromise which is resolved internally,
 // using an internal allocated channel.
-func newPromInter[T any](gc *groupCore) *genericPromise[T] {
+func newPromInter[T any](g *Group[T]) *genericPromise[T] {
 	extsChan := make(chan extQueue[T], 1)
 	extsChan <- extQueue[T]{}
 
 	return &genericPromise[T]{
-		group:    gc,
+		group:    g,
 		syncCtx:  syncCtx{syncChan: make(chan struct{})},
 		extsChan: extsChan,
 	}
 }
 
-func newPromCtx[T any](gc *groupCore, ctx context.Context) *genericPromise[T] {
+func newPromCtx[T any](g *Group[T], ctx context.Context) *genericPromise[T] {
 	extsChan := make(chan extQueue[T], 1)
 	extsChan <- extQueue[T]{}
 
 	return &genericPromise[T]{
-		group:    gc,
+		group:    g,
 		syncCtx:  ctx,
 		extsChan: extsChan,
 	}
@@ -413,9 +417,9 @@ func init() {
 
 // newPromSync creates a new genericPromise which is resolved synchronously,
 // just after it's created.
-func newPromSync[T any](gc *groupCore) *genericPromise[T] {
+func newPromSync[T any](g *Group[T]) *genericPromise[T] {
 	return &genericPromise[T]{
-		group:   gc,
+		group:   g,
 		syncCtx: syncCtx{syncChan: closedChan},
 		// not needed, since sync promises are resolved directly(synchronously)
 		// after created, so any extension call will depend on the syncChan.

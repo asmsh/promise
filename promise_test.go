@@ -46,18 +46,6 @@ func newPtrError() error {
 	return &testPtrError{txt: "ptr_test_error"}
 }
 
-func isTestErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	switch err.(type) {
-	case testStrError, *testPtrError:
-		return true
-	default:
-		return false
-	}
-}
-
 func TestPanicking(t *testing.T) {
 	panicValue := "test_panic"
 
@@ -71,7 +59,7 @@ func TestPanicking(t *testing.T) {
 
 		p := Go(func() {
 			panic(panicValue)
-		}).Recover(func(ctx context.Context, v any) (res Result[any]) {
+		}).Recover(func(ctx context.Context, _ any, v any) (res Result[any]) {
 			return nil
 		})
 		p.Wait()
@@ -92,7 +80,7 @@ func TestPanicking(t *testing.T) {
 		if res == nil {
 			t.Fatalf("Res() = %v, want: non-nil", res)
 		}
-		if vv, ok := res.Err().(UncaughtPanic); !ok || vv.V() != panicValue {
+		if vv, ok := res.Err().(PanicError); !ok || vv.V != panicValue {
 			t.Fatalf("Res() got unexpected error: %v", res.Err())
 		}
 	})
@@ -103,7 +91,7 @@ func TestPanicking(t *testing.T) {
 			if v == nil {
 				t.Fatal("expected a panic, but none happened")
 			}
-			if vv, ok := v.(UncaughtPanic); !ok || vv.V() != panicValue {
+			if vv, ok := v.(PanicError); !ok || vv.V != panicValue {
 				t.Fatalf("got unexpected panic: %v", v)
 			}
 		}()
@@ -120,7 +108,7 @@ func TestPanicking(t *testing.T) {
 			if v == nil {
 				t.Fatal("expected a panic, but none happened")
 			}
-			if vv, ok := v.(UncaughtPanic); !ok || vv.V() != panicValue {
+			if vv, ok := v.(PanicError); !ok || vv.V != panicValue {
 				t.Fatalf("got unexpected panic: %v", v)
 			}
 		}()

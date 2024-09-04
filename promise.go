@@ -27,7 +27,7 @@ import (
 type genericPromise[T any] struct {
 	// group is a pointer to the promise group which this promise is part of,
 	// or nil, if it's part of the default group.
-	group *groupCore
+	group *Group[T]
 
 	// closed when this promise is resolved.
 	// its channel has one writer (one goroutine), which is the owner,
@@ -69,12 +69,7 @@ type extQueue[T any] struct {
 
 // extCall describes an extension call and how to communicate back to it.
 type extCall[T any] struct {
-	// idx is the index of this result's promise within the list of promises
-	// passed to the extension call.
-	idx int
-
-	// resChan is the channel used to send the result back to the extension
-	// call's promise.
+	// resChan is used to send the result back to the extension call's promise.
 	// this is a new, per extension call, unbuffered channel.
 	resChan chan<- IdxRes[T]
 
@@ -82,6 +77,10 @@ type extCall[T any] struct {
 	// promise has been resolved, so that the sending promise can return.
 	// this is typically extension call's promise's syncChan.
 	syncChan <-chan struct{}
+
+	// idx is the index of this result's promise within the list of promises
+	// passed to the extension call.
+	idx int
 }
 
 func (p *genericPromise[T]) Val() T {

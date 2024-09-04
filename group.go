@@ -35,43 +35,43 @@ type Group[T any] struct {
 }
 
 func NewGroup[T any](c ...*GroupConfig) *Group[T] {
-	pp := &Group[T]{}
+	g := &Group[T]{}
 
 	if len(c) != 0 && c[0] != nil {
 		if cb := c[0].UncaughtPanicHandler; cb != nil {
-			pp.core.uncaughtPanicHandler = cb
+			g.core.uncaughtPanicHandler = cb
 		}
 		if cb := c[0].UncaughtErrorHandler; cb != nil {
-			pp.core.uncaughtErrorHandler = cb
+			g.core.uncaughtErrorHandler = cb
 		}
 
 		if size := c[0].Size; size > 0 {
-			pp.core.reserveChan = make(chan struct{}, size)
+			g.core.reserveChan = make(chan struct{}, size)
 		}
 
 		if c[0].CancelAllCtxOnFailure {
-			pp.core.ctx, pp.core.cancel = context.WithCancel(context.Background())
+			g.core.ctx, g.core.cancel = context.WithCancel(context.Background())
 		}
 
 		if c[0].NeverCancelCallbackCtx && !c[0].CancelAllCtxOnFailure {
-			pp.core.neverCancelCallbackCtx = true
+			g.core.neverCancelCallbackCtx = true
 		}
 	}
 
-	return pp
+	return g
 }
 
 func (g *Group[T]) Chan(resChan chan Result[T]) Promise[T] {
-	return chanCall[T](&g.core, resChan)
+	return chanCall[T](g, resChan)
 }
 
-func chanCall[T any](gc *groupCore, resChan chan Result[T]) Promise[T] {
+func chanCall[T any](g *Group[T], resChan chan Result[T]) Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
 
-	gc.reserveGoroutine()
-	p := newPromInter[T](gc)
+	g.reserveGoroutine()
+	p := newPromInter[T](g)
 	go chanHandler(p, resChan)
 	return p
 }
@@ -83,10 +83,10 @@ func chanHandler[T any](p *genericPromise[T], resChan chan Result[T]) {
 }
 
 func (g *Group[T]) Ctx(ctx context.Context) Promise[T] {
-	return ctxCall[T](&g.core, ctx)
+	return ctxCall[T](g, ctx)
 }
 
-func ctxCall[T any](gc *groupCore, ctx context.Context) Promise[T] {
+func ctxCall[T any](g *Group[T], ctx context.Context) Promise[T] {
 	if ctx == nil || ctx.Done() == nil {
 		// since this ctx value will never be closed, the equivalent outcome would
 		// be a Promise that's never resolved.
@@ -94,56 +94,56 @@ func ctxCall[T any](gc *groupCore, ctx context.Context) Promise[T] {
 		return newPromBlocking[T]()
 	}
 
-	return newPromCtx[T](gc, ctx)
+	return newPromCtx[T](g, ctx)
 }
 
 func (g *Group[T]) Go(fun func()) Promise[T] {
-	return goCall[T](&g.core, fun)
+	return goCall[T](g, fun)
 }
 
-func goCall[T any](gc *groupCore, fun goCallback[T, T]) Promise[T] {
-	if fun == nil {
+func goCall[T any](g *Group[T], cb goCallback[T, T]) Promise[T] {
+	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 
-	gc.reserveGoroutine()
-	p := newPromInter[T](gc)
-	ctx, cancel := gc.callbackCtx(p.syncCtx)
-	go runCallback[T, T](p, fun, nil, false, true, true, ctx, cancel)
+	g.reserveGoroutine()
+	p := newPromInter[T](g)
+	ctx, cancel := g.callbackCtx(p.syncCtx)
+	go runCallback[T, T](p, cb, nil, false, true, true, ctx, cancel)
 	return p
 }
 
 func (g *Group[T]) GoErr(fun func() error) Promise[T] {
-	return goErrCall[T](&g.core, fun)
+	return goErrCall[T](g, fun)
 }
 
-func goErrCall[T any](gc *groupCore, fun goErrCallback[T, T]) Promise[T] {
-	if fun == nil {
+func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) Promise[T] {
+	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 
-	gc.reserveGoroutine()
-	p := newPromInter[T](gc)
-	ctx, cancel := gc.callbackCtx(p.syncCtx)
-	go runCallback[T, T](p, fun, nil, true, true, true, ctx, cancel)
+	g.reserveGoroutine()
+	p := newPromInter[T](g)
+	ctx, cancel := g.callbackCtx(p.syncCtx)
+	go runCallback[T, T](p, cb, nil, true, true, true, ctx, cancel)
 	return p
 }
 
 func (g *Group[T]) GoRes(fun func(ctx context.Context) Result[T]) Promise[T] {
-	return goResCall[T](&g.core, fun)
+	return goResCall[T](g, fun)
 }
 
 func goResCall[T any](
-	gc *groupCore,
+	g *Group[T],
 	fun goResCallback[T, T],
 ) Promise[T] {
 	if fun == nil {
 		panic(nilCallbackPanicMsg)
 	}
 
-	gc.reserveGoroutine()
-	p := newPromInter[T](gc)
-	ctx, cancel := gc.callbackCtx(p.syncCtx)
+	g.reserveGoroutine()
+	p := newPromInter[T](g)
+	ctx, cancel := g.callbackCtx(p.syncCtx)
 	go runCallback[T, T](p, fun, nil, true, true, true, ctx, cancel)
 	return p
 }
@@ -153,18 +153,18 @@ func (g *Group[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) Promise[T] {
-	return delayCall[T](&g.core, res, d, cond...)
+	return delayCall[T](g, res, d, cond...)
 }
 
 func delayCall[T any](
-	gc *groupCore,
+	g *Group[T],
 	res Result[T],
 	d time.Duration,
 	cond ...DelayCond,
 ) Promise[T] {
 	flags := getDelayFlags(cond)
-	gc.reserveGoroutine()
-	p := newPromInter[T](gc)
+	g.reserveGoroutine()
+	p := newPromInter[T](g)
 	go delayHandler(p, res, d, flags)
 	return p
 }
@@ -181,21 +181,21 @@ func delayHandler[T any](
 }
 
 func (g *Group[T]) Wrap(res Result[T]) Promise[T] {
-	return wrapCall[T](&g.core, res)
+	return wrapCall[T](g, res)
 }
 
-func wrapCall[T any](gc *groupCore, res Result[T]) Promise[T] {
-	p := newPromSync[T](gc)
+func wrapCall[T any](g *Group[T], res Result[T]) Promise[T] {
+	p := newPromSync[T](g)
 	p.resolveToResSync(res)
 	return p
 }
 
 func (g *Group[T]) Panic(v any) Promise[T] {
-	return panicCall[T](&g.core, v)
+	return panicCall[T](g, v)
 }
 
-func panicCall[T any](gc *groupCore, v any) Promise[T] {
-	p := newPromSync[T](gc)
+func panicCall[T any](g *Group[T], v any) Promise[T] {
+	p := newPromSync[T](g)
 	p.panicSync(promisePanickedResult[T]{v: v})
 	return p
 }
@@ -219,25 +219,25 @@ type groupCore struct {
 	cancel context.CancelFunc
 }
 
-func (gc *groupCore) reserveGoroutine() {
-	if gc == nil {
+func (g *Group[T]) reserveGoroutine() {
+	if g == nil {
 		return
 	}
 	// add to the wait group before waiting, to make sure that this goroutine
 	// reservation is accounted for.
-	gc.wg.Add(1)
-	if gc.reserveChan != nil {
-		gc.reserveChan <- struct{}{}
+	g.core.wg.Add(1)
+	if g.core.reserveChan != nil {
+		g.core.reserveChan <- struct{}{}
 	}
 }
 
-func (gc *groupCore) freeGoroutine() {
-	if gc == nil {
+func (g *Group[T]) freeGoroutine() {
+	if g == nil {
 		return
 	}
-	gc.wg.Done()
-	if gc.reserveChan != nil {
-		<-gc.reserveChan
+	g.core.wg.Done()
+	if g.core.reserveChan != nil {
+		<-g.core.reserveChan
 	}
 }
 
@@ -246,15 +246,15 @@ func noop() {}
 // callbackCtx returns the effective Context for a callback, and its CancelFunc,
 // if one is needed.
 // syncCtx should be a non-closed Context.
-func (gc *groupCore) callbackCtx(syncCtx context.Context) (context.Context, context.CancelFunc) {
-	if gc == nil {
+func (g *Group[T]) callbackCtx(syncCtx context.Context) (context.Context, context.CancelFunc) {
+	if g == nil {
 		if syncCtx != nil {
 			return syncCtx, noop
 		}
 		return context.WithCancel(context.Background())
 	}
-	if gc.ctx == nil || gc.neverCancelCallbackCtx {
+	if g.core.ctx == nil || g.core.neverCancelCallbackCtx {
 		return context.Background(), noop
 	}
-	return context.WithCancel(gc.ctx)
+	return context.WithCancel(g.core.ctx)
 }

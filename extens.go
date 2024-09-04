@@ -114,7 +114,7 @@ loop:
 					resChan = make(chan IdxRes[T])
 				}
 				// update the queue with this extension call.
-				updateExtQCall(&extQ, idx, resChan, nextProm.syncCtx.Done())
+				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
 				// send the updated queue back for either another extension call,
 				// or the currProm's resolving logic.
 				currProm.extsChan <- extQ
@@ -137,7 +137,7 @@ loop:
 				if resChan == nil {
 					resChan = make(chan IdxRes[T])
 				}
-				updateExtQCall(&extQ, idx, resChan, nextProm.syncCtx.Done())
+				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
 				currProm.extsChan <- extQ
 			default:
 				logr.Println("non-blocking block default case")
@@ -415,7 +415,7 @@ loop:
 				)
 
 				// update the queue with this extension call.
-				updateExtQCall(&extQ, idx, resChan, nextProm.syncCtx.Done())
+				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
 
 				logr.Println(
 					"non-blocking block extQ case prev queue valid",
@@ -512,7 +512,7 @@ loop:
 					len(extQ.extra),
 				)
 
-				updateExtQCall(&extQ, idx, resChan, nextProm.syncCtx.Done())
+				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
 
 				logr.Println(
 					"blocking block extQ case new queue valid",
@@ -623,16 +623,16 @@ loop:
 	}
 }
 
-func updateExtQCall[T any](
+func addExtCallToQ[T any](
 	q *extQueue[T],
-	idx int,
 	resChan chan IdxRes[T],
 	syncChan <-chan struct{},
+	idx int,
 ) {
 	call := extCall[T]{
-		idx:      idx,
 		resChan:  resChan,
 		syncChan: syncChan,
+		idx:      idx,
 	}
 	if !q.valid {
 		q.valid = true
