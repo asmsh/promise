@@ -38,7 +38,7 @@ import (
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Chan[T any](resChan chan Result[T]) Promise[T] {
+func Chan[T any](resChan <-chan Result[T]) Promise[T] {
 	return chanCall[T](nil, resChan)
 }
 

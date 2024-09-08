@@ -77,7 +77,7 @@ func (g *Group[T]) Chan(resChan chan Result[T]) Promise[T] {
 	return chanCall[T](g, resChan)
 }
 
-func chanCall[T any](g *Group[T], resChan chan Result[T]) Promise[T] {
+func chanCall[T any](g *Group[T], resChan <-chan Result[T]) Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
@@ -88,7 +88,7 @@ func chanCall[T any](g *Group[T], resChan chan Result[T]) Promise[T] {
 	return p
 }
 
-func chanHandler[T any](p *genericPromise[T], resChan chan Result[T]) {
+func chanHandler[T any](p *genericPromise[T], resChan <-chan Result[T]) {
 	defer p.group.freeGoroutine()
 	res := <-resChan
 	resolveToRes(p, res)
