@@ -220,9 +220,13 @@ type groupCore struct {
 	uncaughtPanicHandler func(v any)
 	uncaughtErrorHandler func(v error)
 
-	wg          sync.WaitGroup
+	// wg is used for the basic WaitAll() method.
+	wg sync.WaitGroup
+
+	// reserveChan is used for limiting concurrency.
 	reserveChan chan struct{}
 
+	// flags for options...
 	neverCancelCallbackCtx bool
 	onetimeResultHandling  bool
 
