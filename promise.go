@@ -143,9 +143,10 @@ func (p *genericPromise[T]) resCall() Result[T] {
 	// or an erroneous one.
 	validHandle := p.setChainHandled()
 
-	// TODO: support one-time promise, based on the group options.
 	// if the promise isn't a one-time promise, all handle calls will be valid
-	validHandle = true
+	if !p.isOnetimePromise() {
+		validHandle = true
+	}
 
 	// if the promise result has been used, return the expected error
 	if !validHandle {

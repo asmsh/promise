@@ -88,9 +88,10 @@ func handleFollow[PrevT, NextT any](
 	// use the actual result of the promise or reject with an erroneous one.
 	validHandle := prevProm.setChainHandled()
 
-	// TODO: support one-time promise, based on the group options.
 	// if the promise isn't a one-time promise, all handle calls will be valid
-	validHandle = true
+	if !prevProm.isOnetimePromise() {
+		validHandle = true
+	}
 
 	// if the promise result has been used, either return or resolve with the expected error
 	if !validHandle {
@@ -322,6 +323,13 @@ func handleExtCall[T any](call extCall[T], res Result[T]) bool {
 	case <-call.syncChan:
 		return false
 	}
+}
+
+func (p *genericPromise[T]) isOnetimePromise() bool {
+	if p.group == nil {
+		return false
+	}
+	return p.group.core.onetimeResultHandling
 }
 
 func (p *genericPromise[T]) uncaughtPanicHandler() {

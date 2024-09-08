@@ -28,6 +28,14 @@ type GroupConfig struct {
 	// If CancelAllCtxOnFailure is true, this will be set to false.
 	// The default behavior is always canceling the callbacks' [context.Context] value.
 	NeverCancelCallbackCtx bool
+
+	// OnetimeResultHandling is used to enforce that the Result value returned from
+	// any callback is passed around only one-time and only to a single goroutine.
+	// Any further attempt to use the Result value will return an erroneous Result
+	// value with its Err method returning an ErrPromiseConsumed error.
+	// The value might be passed around as an argument to another callback, or by
+	// returning it from the Result.GetRes method.
+	OnetimeResultHandling bool
 }
 
 type Group[T any] struct {
@@ -55,6 +63,10 @@ func NewGroup[T any](c ...*GroupConfig) *Group[T] {
 
 		if c[0].NeverCancelCallbackCtx && !c[0].CancelAllCtxOnFailure {
 			g.core.neverCancelCallbackCtx = true
+		}
+
+		if c[0].OnetimeResultHandling {
+			g.core.onetimeResultHandling = true
 		}
 	}
 
@@ -212,6 +224,7 @@ type groupCore struct {
 	reserveChan chan struct{}
 
 	neverCancelCallbackCtx bool
+	onetimeResultHandling  bool
 
 	// ctx will be non-nil if the Group is meant to close all Context values
 	// once any Promise that's created using it is rejected or panicked.
