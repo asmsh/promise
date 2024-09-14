@@ -232,6 +232,7 @@ type groupCore struct {
 
 	// ctx will be non-nil if the Group is meant to close all Context values
 	// once any Promise that's created using it is rejected or panicked.
+	// if neverCancelCallbackCtx is true, these 2 fields will be unset.
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -258,20 +259,36 @@ func (g *Group[T]) freeGoroutine() {
 	}
 }
 
-func noop() {}
+func noop() {
+	// do nothing
+}
 
 // callbackCtx returns the effective Context for a callback, and its CancelFunc,
-// if one is needed.
-// syncCtx should be a non-closed Context.
+// if one is required, given the promise's syncCtx value.
+// syncCtx should be a non-closed Context, or nil.
 func (g *Group[T]) callbackCtx(syncCtx context.Context) (context.Context, context.CancelFunc) {
-	if g == nil {
+	// default scenario, either no Group or a Group with default behavior.
+	// we return the syncCtx with no cancellation, if one is provided,
+	// otherwise we return Background with cancellation.
+	if g == nil || (g.core.ctx == nil && !g.core.neverCancelCallbackCtx) {
 		if syncCtx != nil {
 			return syncCtx, noop
 		}
 		return context.WithCancel(context.Background())
 	}
-	if g.core.ctx == nil || g.core.neverCancelCallbackCtx {
+
+	// there's a Group, if it's requested to never cancel callback Context,
+	// then we return early with Background and no cancellation.
+	if g.core.neverCancelCallbackCtx {
 		return context.Background(), noop
 	}
-	return context.WithCancel(g.core.ctx)
+
+	// there's a Group with a group Context, so create the Context to be returned,
+	// and arrange to close it when the promise's syncCtx is closed, if provided.
+	ctx, cancel := context.WithCancel(g.core.ctx)
+	if syncCtx != nil {
+		context.AfterFunc(syncCtx, cancel)
+	}
+
+	return ctx, cancel
 }
