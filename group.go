@@ -156,7 +156,7 @@ func (g *Group[T]) freeGoroutine() {
 	}
 }
 
-func noop() {
+func noopCancelFunc() {
 	// do nothing
 }
 
@@ -168,24 +168,27 @@ func (g *Group[T]) callbackCtx(syncCtx context.Context) (context.Context, contex
 	// we return the syncCtx with no cancellation, if one is provided,
 	// otherwise we return Background with cancellation.
 	if g == nil || (g.core.ctx == nil && !g.core.neverCancelCallbackCtx) {
-		if syncCtx != nil {
-			return syncCtx, noop
+		if syncCtx == nil {
+			return newSyncCtx(), nil
 		}
-		return context.WithCancel(context.Background())
+		return syncCtx, noopCancelFunc
 	}
 
 	// there's a Group, if it's requested to never cancel callback Context,
 	// then we return early with Background and no cancellation.
 	if g.core.neverCancelCallbackCtx {
-		return context.Background(), noop
+		return context.Background(), noopCancelFunc
 	}
 
 	// there's a Group with a group Context, so create the Context to be returned,
 	// and arrange to close it when the promise's syncCtx is closed, if provided.
-	ctx, cancel := context.WithCancel(g.core.ctx)
-	if syncCtx != nil {
-		context.AfterFunc(syncCtx, cancel)
+	if syncCtx == nil {
+		return context.WithCancel(g.core.ctx)
 	}
 
+	// TODO: these 2 context calls can be replaced by a JoinContext that will be
+	//  cancelled when any of them is cancelled.
+	ctx, cancel := context.WithCancel(g.core.ctx)
+	context.AfterFunc(syncCtx, cancel)
 	return ctx, cancel
 }

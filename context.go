@@ -19,16 +19,44 @@ import (
 	"time"
 )
 
-type syncCtx struct {
-	syncChan chan struct{}
+var closedChan = make(chan struct{})
+
+func init() {
+	close(closedChan)
 }
 
-func (s syncCtx) Deadline() (deadline time.Time, ok bool) { return }
-func (s syncCtx) Done() <-chan struct{}                   { return s.syncChan }
-func (s syncCtx) Err() error                              { return nil }
-func (s syncCtx) Value(any) any                           { return nil }
-
-func closeSyncCtx(ctx context.Context) {
-	s := ctx.(syncCtx)
-	close(s.syncChan)
+func newSyncCtx() context.Context {
+	return syncCtx{syncChan: make(chan struct{})}
 }
+
+func cancelSyncCtx(ctx context.Context) {
+	sc := ctx.(syncCtx)
+	// Note: no need to arrange for this close call to be executed
+	// only once, as, from current usage, this cancelSyncCtx func
+	// is only used from one goroutine, the runCallbackHandler, so
+	// that's taken care of.
+	close(sc.syncChan)
+}
+
+func newClosedSyncCtx() context.Context {
+	return syncCtx{syncChan: closedChan}
+}
+
+// syncCtx is a sync context.Context value, which doesn't
+// require a separate goroutine.
+// It's similar to context.cancelCtx, without any connection
+// or knowledge between it and any possible children.
+// It is used to manage the Promise's resolve logic,
+// or only to be passed to callbacks if the Promise has no
+// syncCtx value.
+// If it's used for a Promise, its syncChan is closed once
+// the Promise is resolved.
+// If it's used for callbacks, its syncChan is closed once
+// the callback returns.
+type syncCtx struct{ syncChan chan struct{} }
+
+func (sc syncCtx) Deadline() (deadline time.Time, ok bool) { return }
+func (sc syncCtx) Done() <-chan struct{}                   { return sc.syncChan }
+func (sc syncCtx) Err() error                              { return nil }
+func (sc syncCtx) Value(any) any                           { return nil }
+func (sc syncCtx) String() string                          { return "syncCtx" }

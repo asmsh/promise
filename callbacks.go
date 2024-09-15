@@ -29,17 +29,17 @@ type recoverCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevRe
 type finallyCallback[PrevResT, NewResT any] func(ctx context.Context)
 type callbackCallback[PrevResT, NewResT any] func(ctx context.Context, res Result[PrevResT])
 
-func (cb goCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
+func (cb goCallback[PrevResT, NewResT]) call(context.Context, Result[PrevResT]) Result[NewResT] {
 	cb()
 	return nil
 }
-func (cb goErrCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
+func (cb goErrCallback[PrevResT, NewResT]) call(context.Context, Result[PrevResT]) Result[NewResT] {
 	if err := cb(); err != nil {
 		return Err[NewResT](err)
 	}
 	return nil
 }
-func (cb goResCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
+func (cb goResCallback[PrevResT, NewResT]) call(ctx context.Context, _ Result[PrevResT]) Result[NewResT] {
 	return cb(ctx)
 }
 func (cb thenCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
@@ -51,7 +51,7 @@ func (cb catchCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[
 func (cb recoverCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
 	return cb(ctx, res.Val(), res.(panicResult).getPanicV())
 }
-func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
+func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, _ Result[PrevResT]) Result[NewResT] {
 	cb(ctx)
 	return nil
 }
@@ -86,8 +86,14 @@ func runCallbackHandler[PrevValT, NewValT any](
 		defer handleReturns(p, prevRes, newResP)
 	}
 
-	// make sure we close the context once we return from the callback
-	defer cancel()
+	// make sure we close the context once we return from the callback.
+	// if cancel is nil, then the Context is a syncCtx created specifically
+	// for this callback handler.
+	if cancel != nil {
+		defer cancel()
+	} else {
+		defer cancelSyncCtx(ctx)
+	}
 
 	// run the callback and extract the result
 	newRes := cb.call(ctx, getFinalRes(prevRes))

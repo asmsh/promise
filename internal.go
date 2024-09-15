@@ -248,7 +248,7 @@ func resolveToPanickedRes[T any](
 	// all waiting calls.
 	p.res = res
 	p.resolveState.Store(uint32(Panicked))
-	closeSyncCtx(p.syncCtx)
+	cancelSyncCtx(p.syncCtx)
 
 	handleExtCalls(p)
 
@@ -267,7 +267,7 @@ func resolveToRejectedRes[T any](
 ) {
 	p.res = res
 	p.resolveState.Store(uint32(Rejected))
-	closeSyncCtx(p.syncCtx)
+	cancelSyncCtx(p.syncCtx)
 
 	handleExtCalls(p)
 
@@ -286,7 +286,7 @@ func resolveToFulfilledRes[T any](
 ) {
 	p.res = res
 	p.resolveState.Store(uint32(Fulfilled))
-	closeSyncCtx(p.syncCtx)
+	cancelSyncCtx(p.syncCtx)
 
 	handleExtCalls(p)
 }
@@ -401,7 +401,7 @@ func newPromInter[T any](g *Group[T]) *genericPromise[T] {
 
 	return &genericPromise[T]{
 		group:    g,
-		syncCtx:  syncCtx{syncChan: make(chan struct{})},
+		syncCtx:  newSyncCtx(),
 		extsChan: extsChan,
 	}
 }
@@ -418,18 +418,12 @@ func newPromCtx[T any](g *Group[T], ctx context.Context) *genericPromise[T] {
 	}
 }
 
-var closedChan = make(chan struct{})
-
-func init() {
-	close(closedChan)
-}
-
 // newPromSync creates a new genericPromise which is resolved synchronously,
 // just after it's created.
 func newPromSync[T any](g *Group[T]) *genericPromise[T] {
 	return &genericPromise[T]{
 		group:   g,
-		syncCtx: syncCtx{syncChan: closedChan},
+		syncCtx: newClosedSyncCtx(),
 		// not needed, since sync promises are resolved directly(synchronously)
 		// after created, so any extension call will depend on the syncChan.
 		extsChan: nil,
