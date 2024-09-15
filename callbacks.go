@@ -60,7 +60,7 @@ func (cb callbackCallback[PrevResT, NewResT]) call(ctx context.Context, res Resu
 	return nil
 }
 
-func runCallback[PrevValT, NewValT any](
+func runCallbackHandler[PrevValT, NewValT any](
 	p *genericPromise[NewValT],
 	cb callbackFunc[PrevValT, NewValT],
 	prevRes Result[PrevValT],

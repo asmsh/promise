@@ -77,87 +77,20 @@ func (g *Group[T]) Chan(resChan chan Result[T]) Promise[T] {
 	return chanCall[T](g, resChan)
 }
 
-func chanCall[T any](g *Group[T], resChan <-chan Result[T]) Promise[T] {
-	if resChan == nil {
-		panic(nilResChanPanicMsg)
-	}
-
-	g.reserveGoroutine()
-	p := newPromInter[T](g)
-	go chanHandler(p, resChan)
-	return p
-}
-
-func chanHandler[T any](p *genericPromise[T], resChan <-chan Result[T]) {
-	defer p.group.freeGoroutine()
-	res := <-resChan
-	resolveToRes(p, res)
-}
-
 func (g *Group[T]) Ctx(ctx context.Context) Promise[T] {
 	return ctxCall[T](g, ctx)
-}
-
-func ctxCall[T any](g *Group[T], ctx context.Context) Promise[T] {
-	if ctx == nil || ctx.Done() == nil {
-		// since this ctx value will never be closed, the equivalent outcome would
-		// be a Promise that's never resolved.
-		// so, return that equivalent value without creating any unneeded resources.
-		return newPromBlocking[T]()
-	}
-
-	return newPromCtx[T](g, ctx)
 }
 
 func (g *Group[T]) Go(fun func()) Promise[T] {
 	return goCall[T](g, fun)
 }
 
-func goCall[T any](g *Group[T], cb goCallback[T, T]) Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	g.reserveGoroutine()
-	p := newPromInter[T](g)
-	ctx, cancel := g.callbackCtx(p.syncCtx)
-	go runCallback[T, T](p, cb, nil, false, true, true, ctx, cancel)
-	return p
-}
-
 func (g *Group[T]) GoErr(fun func() error) Promise[T] {
 	return goErrCall[T](g, fun)
 }
 
-func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	g.reserveGoroutine()
-	p := newPromInter[T](g)
-	ctx, cancel := g.callbackCtx(p.syncCtx)
-	go runCallback[T, T](p, cb, nil, true, true, true, ctx, cancel)
-	return p
-}
-
 func (g *Group[T]) GoRes(fun func(ctx context.Context) Result[T]) Promise[T] {
 	return goResCall[T](g, fun)
-}
-
-func goResCall[T any](
-	g *Group[T],
-	fun goResCallback[T, T],
-) Promise[T] {
-	if fun == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	g.reserveGoroutine()
-	p := newPromInter[T](g)
-	ctx, cancel := g.callbackCtx(p.syncCtx)
-	go runCallback[T, T](p, fun, nil, true, true, true, ctx, cancel)
-	return p
 }
 
 func (g *Group[T]) Delay(
@@ -168,48 +101,12 @@ func (g *Group[T]) Delay(
 	return delayCall[T](g, res, d, cond...)
 }
 
-func delayCall[T any](
-	g *Group[T],
-	res Result[T],
-	d time.Duration,
-	cond ...DelayCond,
-) Promise[T] {
-	flags := getDelayFlags(cond)
-	g.reserveGoroutine()
-	p := newPromInter[T](g)
-	go delayHandler(p, res, d, flags)
-	return p
-}
-
-// handles rejection and fulfillment only
-func delayHandler[T any](
-	p *genericPromise[T],
-	res Result[T],
-	dd time.Duration,
-	flags delayFlags,
-) {
-	defer p.group.freeGoroutine()
-	resolveToResWithDelay(p, res, dd, flags)
-}
-
 func (g *Group[T]) Wrap(res Result[T]) Promise[T] {
 	return wrapCall[T](g, res)
 }
 
-func wrapCall[T any](g *Group[T], res Result[T]) Promise[T] {
-	p := newPromSync[T](g)
-	p.resolveToResSync(res)
-	return p
-}
-
 func (g *Group[T]) Panic(v any) Promise[T] {
 	return panicCall[T](g, v)
-}
-
-func panicCall[T any](g *Group[T], v any) Promise[T] {
-	p := newPromSync[T](g)
-	p.panicSync(promisePanickedResult[T]{v: v})
-	return p
 }
 
 func (g *Group[T]) Wait() {
