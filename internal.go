@@ -414,6 +414,7 @@ func newPromCtx[T any](g *Group[T], ctx context.Context) *genericPromise[T] {
 		group:    g,
 		syncCtx:  ctx,
 		extsChan: extsChan,
+		res:      ctxResult[T]{ctx: ctx},
 	}
 }
 
