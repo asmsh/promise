@@ -171,6 +171,34 @@ var promiseBenchs = []promiseBench{
 	{stressed: true, callFollow: false, callWait: false, callRes: true, name: "stressed_res-only"},
 }
 
+func BenchmarkPromise_Callback(b *testing.B) {
+	b.Run("", func(b *testing.B) {
+		for _, bc := range promiseBenchs {
+			if bc.stressed {
+				continue
+			}
+
+			b.Run(bc.name, func(b *testing.B) {
+				prom := getSuccessBenchmarkPromise()
+				b.ReportAllocs()
+				b.ResetTimer()
+
+				for i := 0; i < b.N; i++ {
+					prom.Callback(func(ctx context.Context, res Result[any]) {
+
+					})
+					if bc.callWait {
+						prom.Wait()
+					}
+					if bc.callRes {
+						prom.Res()
+					}
+				}
+			})
+		}
+	})
+}
+
 func BenchmarkPromise_Then(b *testing.B) {
 	b.Run("no-res", func(b *testing.B) {
 		for _, bc := range promiseBenchs {
