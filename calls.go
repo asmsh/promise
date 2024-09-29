@@ -40,7 +40,10 @@ func chanHandler[T any](p *genericPromise[T], resChan <-chan Result[T]) {
 }
 
 func ctxCall[T any](g *Group[T], ctx context.Context) Promise[T] {
-	if ctx == nil || ctx.Done() == nil {
+	if ctx == nil {
+		panic(nilCtxPanicMsg)
+	}
+	if ctx.Done() == nil {
 		// since this ctx value will never be closed, the equivalent outcome would
 		// be a Promise that's never resolved.
 		// so, return that equivalent value without creating any unneeded resources.

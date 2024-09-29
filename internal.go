@@ -23,8 +23,9 @@ import (
 
 // panic messages
 const (
-	nilCallbackPanicMsg = "promise: the provided callback is nil"
-	nilResChanPanicMsg  = "promise: the provided resChan is nil"
+	nilResChanPanicMsg  = "promise: the provided channel value is nil"
+	nilCtxPanicMsg      = "promise: the provided Context value is nil"
+	nilCallbackPanicMsg = "promise: the provided function value is nil"
 )
 
 const (
