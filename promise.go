@@ -241,7 +241,7 @@ func delayFollowHandler[T any](
 }
 
 func (p *genericPromise[T]) Then(
-	thenCb func(ctx context.Context, val T) Result[T],
+	thenCb func(ctx context.Context, res Result[T]) Result[T],
 ) Promise[T] {
 	if thenCb == nil {
 		panic(nilCallbackPanicMsg)
@@ -261,7 +261,7 @@ func (p *genericPromise[T]) Then(
 func thenFollowHandler[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
-	cb thenCallback[T, T],
+	cb followCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
@@ -288,7 +288,7 @@ func thenFollowHandler[T any](
 }
 
 func (p *genericPromise[T]) Catch(
-	catchCb func(ctx context.Context, val T, err error) Result[T],
+	catchCb func(ctx context.Context, res Result[T]) Result[T],
 ) Promise[T] {
 	if catchCb == nil {
 		panic(nilCallbackPanicMsg)
@@ -308,7 +308,7 @@ func (p *genericPromise[T]) Catch(
 func catchFollowHandler[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
-	cb catchCallback[T, T],
+	cb followCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
@@ -331,7 +331,7 @@ func catchFollowHandler[T any](
 }
 
 func (p *genericPromise[T]) Recover(
-	recoverCb func(ctx context.Context, val T, v any) Result[T],
+	recoverCb func(ctx context.Context, res Result[T]) Result[T],
 ) Promise[T] {
 	if recoverCb == nil {
 		panic(nilCallbackPanicMsg)
@@ -351,7 +351,7 @@ func (p *genericPromise[T]) Recover(
 func recoverFollowHandler[T any](
 	prevProm *genericPromise[T],
 	nextProm *genericPromise[T],
-	cb recoverCallback[T, T],
+	cb followCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {

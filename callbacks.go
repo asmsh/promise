@@ -23,9 +23,7 @@ type callbackFunc[PrevResT, NewResT any] interface {
 type goCallback[PrevResT, NewResT any] func()
 type goErrCallback[PrevResT, NewResT any] func() error
 type goResCallback[PrevResT, NewResT any] func(ctx context.Context) Result[NewResT]
-type thenCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT) Result[NewResT]
-type catchCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT, err error) Result[NewResT]
-type recoverCallback[PrevResT, NewResT any] func(ctx context.Context, val PrevResT, v any) Result[NewResT]
+type followCallback[PrevResT, NewResT any] func(ctx context.Context, res Result[PrevResT]) Result[NewResT]
 type finallyCallback[PrevResT, NewResT any] func(ctx context.Context)
 type callbackCallback[PrevResT, NewResT any] func(ctx context.Context, res Result[PrevResT])
 
@@ -42,14 +40,8 @@ func (cb goErrCallback[PrevResT, NewResT]) call(context.Context, Result[PrevResT
 func (cb goResCallback[PrevResT, NewResT]) call(ctx context.Context, _ Result[PrevResT]) Result[NewResT] {
 	return cb(ctx)
 }
-func (cb thenCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
-	return cb(ctx, res.Val())
-}
-func (cb catchCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
-	return cb(ctx, res.Val(), res.Err())
-}
-func (cb recoverCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
-	return cb(ctx, res.Val(), res.(panicResult).getPanicV())
+func (cb followCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
+	return cb(ctx, res)
 }
 func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, _ Result[PrevResT]) Result[NewResT] {
 	cb(ctx)
