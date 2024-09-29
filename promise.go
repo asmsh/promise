@@ -196,7 +196,7 @@ func callbackFollowHandler[T any](
 	prevProm.wait()
 
 	// run the callback with the actual promise result
-	runCallbackHandler[T, T](nil, cb, prevProm.res, false, false, false, ctx, cancel)
+	runCallbackHandler[T, T](nil, cb, prevProm.res, false, false, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Delay(
@@ -284,7 +284,7 @@ func thenFollowHandler[T any](
 	}
 
 	// run the callback with the actual promise result
-	runCallbackHandler[T, T](nextProm, cb, res, true, false, true, ctx, cancel)
+	runCallbackHandler[T, T](nextProm, cb, res, true, true, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Catch(
@@ -327,7 +327,7 @@ func catchFollowHandler[T any](
 	res, _ := handleFollow(prevProm, nextProm, false)
 
 	// run the callback with the actual promise result
-	runCallbackHandler[T, T](nextProm, cb, res, true, false, true, ctx, cancel)
+	runCallbackHandler[T, T](nextProm, cb, res, true, true, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Recover(
@@ -374,7 +374,7 @@ func recoverFollowHandler[T any](
 	}
 
 	// run the callback with the actual promise result
-	runCallbackHandler[T, T](nextProm, cb, res, true, true, true, ctx, cancel)
+	runCallbackHandler[T, T](nextProm, cb, res, true, true, ctx, cancel)
 }
 
 func (p *genericPromise[T]) Finally(
@@ -409,5 +409,5 @@ func finallyFollowHandler[T any](
 ) {
 	defer prevProm.group.freeGoroutine()
 	prevProm.wait()
-	runCallbackHandler[T, T](nextProm, cb, prevProm.res, false, false, true, ctx, cancel)
+	runCallbackHandler[T, T](nextProm, cb, prevProm.res, false, true, ctx, cancel)
 }

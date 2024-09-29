@@ -65,7 +65,6 @@ func runCallbackHandler[PrevValT, NewValT any](
 	cb callbackFunc[PrevValT, NewValT],
 	prevRes Result[PrevValT],
 	supportNewResult bool,
-	freeAfterDone bool,
 	supportHandleReturns bool,
 	ctx context.Context,
 	cancel context.CancelFunc,
@@ -74,11 +73,6 @@ func runCallbackHandler[PrevValT, NewValT any](
 	var newResP *Result[NewValT]
 	if supportNewResult {
 		newResP = new(Result[NewValT])
-	}
-
-	// make sure we free this goroutine reservation if it's required
-	if freeAfterDone {
-		defer p.group.freeGoroutine()
 	}
 
 	// defer the return handler to handle panics and runtime.Goexit calls

@@ -58,8 +58,18 @@ func goCall[T any](g *Group[T], cb goCallback[T, T]) Promise[T] {
 	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	ctx, cancel := g.callbackCtx(p.syncCtx)
-	go runCallbackHandler[T, T](p, cb, nil, false, true, true, ctx, cancel)
+	go goHandler(p, cb, ctx, cancel)
 	return p
+}
+
+func goHandler[T any](
+	p *genericPromise[T],
+	cb goCallback[T, T],
+	ctx context.Context,
+	cancel context.CancelFunc,
+) {
+	defer p.group.freeGoroutine()
+	runCallbackHandler[T, T](p, cb, nil, false, true, ctx, cancel)
 }
 
 func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) Promise[T] {
@@ -70,8 +80,18 @@ func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) Promise[T] {
 	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	ctx, cancel := g.callbackCtx(p.syncCtx)
-	go runCallbackHandler[T, T](p, cb, nil, true, true, true, ctx, cancel)
+	go goErrHandler(p, cb, ctx, cancel)
 	return p
+}
+
+func goErrHandler[T any](
+	p *genericPromise[T],
+	cb goErrCallback[T, T],
+	ctx context.Context,
+	cancel context.CancelFunc,
+) {
+	defer p.group.freeGoroutine()
+	runCallbackHandler[T, T](p, cb, nil, true, true, ctx, cancel)
 }
 
 func goResCall[T any](
@@ -85,8 +105,18 @@ func goResCall[T any](
 	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	ctx, cancel := g.callbackCtx(p.syncCtx)
-	go runCallbackHandler[T, T](p, cb, nil, true, true, true, ctx, cancel)
+	go goResHandler(p, cb, ctx, cancel)
 	return p
+}
+
+func goResHandler[T any](
+	p *genericPromise[T],
+	cb goResCallback[T, T],
+	ctx context.Context,
+	cancel context.CancelFunc,
+) {
+	defer p.group.freeGoroutine()
+	runCallbackHandler[T, T](p, cb, nil, true, true, ctx, cancel)
 }
 
 func delayCall[T any](
