@@ -42,10 +42,10 @@ type Group[T any] struct {
 	core groupCore
 }
 
-func NewGroup[T any](c ...*GroupConfig) *Group[T] {
+func NewGroup[T any](c ...GroupConfig) *Group[T] {
 	g := &Group[T]{}
 
-	if len(c) != 0 && c[0] != nil {
+	if len(c) != 0 {
 		if cb := c[0].UncaughtPanicHandler; cb != nil {
 			g.core.uncaughtPanicHandler = cb
 		}
