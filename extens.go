@@ -536,7 +536,7 @@ loop:
 		// get the number of pending promises against the initially provided list.
 		pending := len(p) - len(resArr)
 
-		logr.Println("pending promises", pending)
+		logr.Println("pending promises", pending, "resState", resState)
 
 		if pending != 0 {
 			logr.Println("waiting for pending promises", pending)
