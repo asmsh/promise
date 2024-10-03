@@ -347,37 +347,6 @@ loop:
 					"resState",
 					resState,
 				)
-			case extQ := <-currProm.extsChan:
-				logr.Println("non-blocking block extQ case")
-
-				// the promise is not resolved yet...
-				// create the res chan if it's not already created.
-				if resChan == nil {
-					logr.Println("non-blocking block extQ case new chan")
-
-					resChan = make(chan IdxRes[T])
-				}
-
-				logr.Println(
-					"non-blocking block extQ case prev queue valid",
-					extQ.valid,
-					"len",
-					len(extQ.extra),
-				)
-
-				// update the queue with this extension call.
-				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
-
-				logr.Println(
-					"non-blocking block extQ case prev queue valid",
-					extQ.valid,
-					"len",
-					len(extQ.extra),
-				)
-
-				// send the updated queue back for either another extension call,
-				// or to be included in the currProm's resolving logic.
-				currProm.extsChan <- extQ
 			default:
 				logr.Println("non-blocking block default case")
 
@@ -407,6 +376,8 @@ loop:
 			case extQ := <-currProm.extsChan:
 				logr.Println("blocking block extQ case")
 
+				// the promise is not resolved yet...
+				// create the res chan if it's not already created.
 				if resChan == nil {
 					logr.Println("blocking block extQ case new chan")
 
@@ -420,6 +391,7 @@ loop:
 					len(extQ.extra),
 				)
 
+				// update the queue with this extension call.
 				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
 
 				logr.Println(
@@ -429,6 +401,8 @@ loop:
 					len(extQ.extra),
 				)
 
+				// send the updated queue back for either another extension call,
+				// or to be included in the currProm's resolving logic.
 				currProm.extsChan <- extQ
 			}
 		}
