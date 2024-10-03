@@ -538,6 +538,13 @@ loop:
 
 		logr.Println("pending promises", pending, "resState", resState)
 
+		// if there are no pending promises and no result state computed, then it
+		// must be a Join call, which means the result state expected is Fulfilled.
+		if pending == 0 && resState == unknown {
+			resState = Fulfilled
+		}
+
+		// otherwise, wait until a matching result is received.
 		if pending != 0 {
 			logr.Println("waiting for pending promises", pending)
 
