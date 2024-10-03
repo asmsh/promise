@@ -326,6 +326,7 @@ loop:
 		// promises, without being stuck(blocked) on the first one we encounter.
 		blocking := loopCnt > len(p)
 
+		var syncRes IdxRes[T]
 		if !blocking {
 			logr.Println("non-blocking block")
 
@@ -334,68 +335,18 @@ loop:
 				logr.Println("non-blocking block syncChan case")
 
 				// the promise is resolved...
-				// create a result value based on the current promise,
-				// and add it to the result array.
-				res := IdxRes[T]{
+				// create a result value based on the current promise.
+				syncRes = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
-				resArr = append(resArr, res)
 
 				logr.Println(
 					"non-blocking block syncChan case with res.state",
-					res.State(),
+					syncRes.State(),
 					"resState",
 					resState,
 				)
-
-				// get the final promise's state, based on the previous resState and
-				// the recent resolved promise's state, using the selected mode rules.
-				if allSuccess {
-					newResState := getAllResState(res.State(), resState)
-
-					logr.Println(
-						"non-blocking block syncChan allSuccess res.state",
-						res.State(),
-						"prevResState",
-						resState,
-						"newResState",
-						newResState,
-					)
-
-					resState = newResState
-
-					// stop, if we found the target break state based on the current flags.
-					// note: for the allSuccess case, we can only continue if the waitAll
-					// flag is not set, or the recent resolved promise got resolved to
-					// anything but Rejected.
-					// note: by default, we won't break on Panicked states, as it will be
-					// used only to alter the final state.
-					if !waitAll && res.State() == Rejected {
-						logr.Println("non-blocking block syncChan allSuccess break")
-
-						break loop
-					}
-				}
-				if anySuccess {
-					newResState := getAnyResState(res.State(), resState)
-
-					logr.Println(
-						"non-blocking block syncChan anySuccess res.state",
-						res.State(),
-						"prevResState",
-						resState,
-						"newResState",
-						newResState,
-					)
-
-					resState = newResState
-					if !waitAll && res.State() == Fulfilled {
-						logr.Println("non-blocking block syncChan anySuccess break")
-
-						break loop
-					}
-				}
 			case extQ := <-currProm.extsChan:
 				logr.Println("non-blocking block extQ case")
 
@@ -442,60 +393,17 @@ loop:
 			case <-currProm.syncCtx.Done():
 				logr.Println("blocking block syncChan case")
 
-				res := IdxRes[T]{
+				syncRes = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
-				resArr = append(resArr, res)
 
 				logr.Println(
 					"blocking block syncChan case with res.state",
-					res.State(),
+					syncRes.State(),
 					"resState",
 					resState,
 				)
-
-				if allSuccess {
-					newResState := getAllResState(res.State(), resState)
-
-					logr.Println(
-						"blocking block syncChan allSuccess res.state",
-						res.State(),
-						"prevResState",
-						resState,
-						"newResState",
-						newResState,
-					)
-
-					resState = newResState
-					if !waitAll && res.State() == Rejected {
-						logr.Println("blocking block syncChan allSuccess break")
-
-						break loop
-					}
-				}
-				if anySuccess {
-					// update the final state, based on the previous and new ones.
-					newResState := getAnyResState(res.State(), resState)
-
-					logr.Println(
-						"blocking block syncChan anySuccess res.state",
-						res.State(),
-						"prevResState",
-						resState,
-						"newResState",
-						newResState,
-					)
-
-					resState = newResState
-
-					// the new state is Fulfilled, and it's requested not to wait all, break.
-					if !waitAll && res.State() == Fulfilled {
-						logr.Println("blocking block syncChan anySuccess break")
-
-						break loop
-					}
-				}
 			case extQ := <-currProm.extsChan:
 				logr.Println("blocking block extQ case")
 
@@ -522,6 +430,60 @@ loop:
 				)
 
 				currProm.extsChan <- extQ
+			}
+		}
+
+		// if the promise was resolved via the sync chan, update the result fields.
+		if syncRes.Result != nil {
+			// add it to the result array.
+			resArr = append(resArr, syncRes)
+
+			// get the final promise's state, based on the previous resState and
+			// the recent resolved promise's state, using the selected mode rules.
+			if allSuccess {
+				newResState := getAllResState(syncRes.State(), resState)
+
+				logr.Println(
+					"block syncChan allSuccess res.state",
+					syncRes.State(),
+					"prevResState",
+					resState,
+					"newResState",
+					newResState,
+				)
+
+				resState = newResState
+
+				// stop, if we found the target break state based on the current flags.
+				// note: for the allSuccess case, we can only continue if the waitAll
+				// flag is not set, or the recent resolved promise got resolved to
+				// anything but Rejected.
+				// note: by default, we won't break on Panicked states, as it will be
+				// used only to alter the final state.
+				if !waitAll && syncRes.State() == Rejected {
+					logr.Println("block syncChan allSuccess break")
+
+					break loop
+				}
+			}
+			if anySuccess {
+				newResState := getAnyResState(syncRes.State(), resState)
+
+				logr.Println(
+					"block syncChan anySuccess res.state",
+					syncRes.State(),
+					"prevResState",
+					resState,
+					"newResState",
+					newResState,
+				)
+
+				resState = newResState
+				if !waitAll && syncRes.State() == Fulfilled {
+					logr.Println("block syncChan anySuccess break")
+
+					break loop
+				}
 			}
 		}
 	}
