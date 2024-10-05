@@ -91,15 +91,35 @@ loop:
 		// promises, without being stuck(blocked) on the first one we encounter.
 		blocking := loopCnt > len(p)
 
-		if blocking {
+		if !blocking {
+			logr.Println("non-blocking block")
+
+			select {
+			case <-currProm.syncCtx.Done():
+				logr.Println("non-blocking block syncChan case")
+
+				// the promise is resolved...
+				// create a result value based on the current promise.
+				res = IdxRes[T]{
+					Idx:    idx,
+					Result: getFinalRes(currProm.res),
+				}
+				break loop
+			default:
+				logr.Println("non-blocking block default case")
+
+				// This would happen when the promise is not resolved yet, and there's
+				// another extension call that owns the extQueue value.
+				// Re-put the index in the randIdx source, to re-visit this case later.
+				randIdx.Put(idx)
+			}
+		} else {
 			logr.Println("blocking block")
 
 			select {
 			case <-currProm.syncCtx.Done():
 				logr.Println("blocking block syncChan case")
 
-				// the promise is resolved...
-				// create a result value based on the current promise.
 				res = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
@@ -118,34 +138,6 @@ loop:
 				// send the updated queue back for either another extension call,
 				// or the currProm's resolving logic.
 				currProm.extsChan <- extQ
-			}
-		} else {
-			logr.Println("non-blocking block")
-
-			select {
-			case <-currProm.syncCtx.Done():
-				logr.Println("non-blocking block syncChan case")
-
-				res = IdxRes[T]{
-					Idx:    idx,
-					Result: getFinalRes(currProm.res),
-				}
-				break loop
-			case extQ := <-currProm.extsChan:
-				logr.Println("non-blocking block extQ case")
-
-				if resChan == nil {
-					resChan = make(chan IdxRes[T])
-				}
-				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
-				currProm.extsChan <- extQ
-			default:
-				logr.Println("non-blocking block default case")
-
-				// This would happen when the promise is not resolved yet, and there's
-				// another extension call that owns the extQueue value.
-				// Re-put the index in the randIdx source, to re-visit this case later.
-				randIdx.Put(idx)
 			}
 		}
 	}
