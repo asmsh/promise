@@ -33,7 +33,7 @@ func (l logger) Println(v ...any) {
 }
 
 var logr = logger{
-	enabled: false,
+	//enabled: true,
 	l: func() *log.Logger {
 		return log.New(os.Stderr, "", log.Lmicroseconds)
 	}(),
@@ -131,12 +131,30 @@ loop:
 				// the promise is not resolved yet...
 				// create the res chan if it's not already created.
 				if resChan == nil {
+					logr.Println("blocking block extQ case new chan")
+
 					resChan = make(chan IdxRes[T])
 				}
+
+				logr.Println(
+					"blocking block extQ case prev queue valid",
+					extQ.valid,
+					"len",
+					len(extQ.extra),
+				)
+
 				// update the queue with this extension call.
 				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
+
+				logr.Println(
+					"blocking block extQ case new queue valid",
+					extQ.valid,
+					"len",
+					len(extQ.extra),
+				)
+
 				// send the updated queue back for either another extension call,
-				// or the currProm's resolving logic.
+				// or to be included in the currProm's resolving logic.
 				currProm.extsChan <- extQ
 			}
 		}
