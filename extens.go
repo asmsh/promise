@@ -59,7 +59,7 @@ func selectCall[T any](p ...Promise[T]) Promise[IdxRes[T]] {
 }
 
 func selectHandler[T any](
-	nextProm *genericPromise[IdxRes[T]],
+	newProm *genericPromise[IdxRes[T]],
 	p []Promise[T],
 ) {
 	// resChan is populated lazily, only if it's needed.
@@ -144,7 +144,7 @@ loop:
 				)
 
 				// update the queue with this extension call.
-				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
+				addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
 
 				logr.Println(
 					"blocking block extQ case new queue valid",
@@ -173,17 +173,17 @@ loop:
 		logr.Println("idx", res.Idx, "Panicked")
 
 		res := panickedResultSingleIdxRes[T]{res}
-		resolveToPanickedRes(nextProm, res)
+		resolveToPanickedRes(newProm, res)
 	case Rejected:
 		logr.Println("idx", res.Idx, "Rejected")
 
 		res := rejectedResultSingleIdxRes[T]{res}
-		resolveToRejectedRes(nextProm, res)
+		resolveToRejectedRes(newProm, res)
 	case Fulfilled:
 		logr.Println("idx", res.Idx, "Fulfilled")
 
 		res := fulfilledResultSingleIdxRes[T]{res}
-		resolveToFulfilledRes(nextProm, res)
+		resolveToFulfilledRes(newProm, res)
 	}
 }
 
@@ -287,7 +287,7 @@ func joinCall[T any](p []Promise[T]) Promise[[]IdxRes[T]] {
 }
 
 func joinHandler[T any](
-	nextProm *genericPromise[[]IdxRes[T]],
+	newProm *genericPromise[[]IdxRes[T]],
 	p []Promise[T],
 	waitAll bool,
 	allSuccess bool,
@@ -336,7 +336,7 @@ loop:
 		// promises, without being stuck(blocked) on the first one we encounter.
 		blocking := loopCnt > len(p)
 
-		var syncRes IdxRes[T]
+		var res IdxRes[T]
 		if !blocking {
 			logr.Println("non-blocking block")
 
@@ -346,14 +346,14 @@ loop:
 
 				// the promise is resolved...
 				// create a result value based on the current promise.
-				syncRes = IdxRes[T]{
+				res = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
 
 				logr.Println(
 					"non-blocking block syncChan case with res.state",
-					syncRes.State(),
+					res.State(),
 					"resState",
 					resState,
 				)
@@ -372,14 +372,14 @@ loop:
 			case <-currProm.syncCtx.Done():
 				logr.Println("blocking block syncChan case")
 
-				syncRes = IdxRes[T]{
+				res = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
 
 				logr.Println(
 					"blocking block syncChan case with res.state",
-					syncRes.State(),
+					res.State(),
 					"resState",
 					resState,
 				)
@@ -402,7 +402,7 @@ loop:
 				)
 
 				// update the queue with this extension call.
-				addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
+				addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
 
 				logr.Println(
 					"blocking block extQ case new queue valid",
@@ -418,18 +418,18 @@ loop:
 		}
 
 		// if the promise was resolved via the sync chan, update the result fields.
-		if syncRes.Result != nil {
+		if res.Result != nil {
 			// add it to the result array.
-			resArr = append(resArr, syncRes)
+			resArr = append(resArr, res)
 
 			// get the final promise's state, based on the previous resState and
 			// the recent resolved promise's state, using the selected mode rules.
 			if allSuccess {
-				newResState := getAllResState(syncRes.State(), resState)
+				newResState := getAllResState(res.State(), resState)
 
 				logr.Println(
 					"block syncChan allSuccess res.state",
-					syncRes.State(),
+					res.State(),
 					"prevResState",
 					resState,
 					"newResState",
@@ -444,18 +444,18 @@ loop:
 				// anything but Rejected.
 				// note: by default, we won't break on Panicked states, as it will be
 				// used only to alter the final state.
-				if !waitAll && syncRes.State() == Rejected {
+				if !waitAll && res.State() == Rejected {
 					logr.Println("block syncChan allSuccess break")
 
 					break loop
 				}
 			}
 			if anySuccess {
-				newResState := getAnyResState(syncRes.State(), resState)
+				newResState := getAnyResState(res.State(), resState)
 
 				logr.Println(
 					"block syncChan anySuccess res.state",
-					syncRes.State(),
+					res.State(),
 					"prevResState",
 					resState,
 					"newResState",
@@ -463,7 +463,7 @@ loop:
 				)
 
 				resState = newResState
-				if !waitAll && syncRes.State() == Fulfilled {
+				if !waitAll && res.State() == Fulfilled {
 					logr.Println("block syncChan anySuccess break")
 
 					break loop
@@ -566,13 +566,13 @@ loop:
 	switch resState {
 	case Panicked:
 		res := panickedResultMultiIdxRes[T]{resArr}
-		resolveToPanickedRes(nextProm, res)
+		resolveToPanickedRes(newProm, res)
 	case Rejected:
 		res := rejectedResultMultiIdxRes[T]{resArr}
-		resolveToRejectedRes(nextProm, res)
+		resolveToRejectedRes(newProm, res)
 	case Fulfilled:
 		res := fulfilledResultMultiIdxRes[T]{resArr}
-		resolveToFulfilledRes(nextProm, res)
+		resolveToFulfilledRes(newProm, res)
 	}
 }
 

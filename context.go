@@ -29,10 +29,10 @@ func newSyncCtx() context.Context {
 	return syncCtx{syncChan: make(chan struct{})}
 }
 
-func cancelSyncCtx(ctx context.Context) {
+func closeSyncCtx(ctx context.Context) {
 	sc := ctx.(syncCtx)
 	// Note: no need to arrange for this close call to be executed
-	// only once, as, from current usage, this cancelSyncCtx func
+	// only once, as, from current usage, this closeSyncCtx func
 	// is only used from one goroutine, the runCallbackHandler, so
 	// that's taken care of.
 	close(sc.syncChan)

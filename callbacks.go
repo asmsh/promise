@@ -78,7 +78,7 @@ func runCallbackHandler[PrevValT, NewValT any](
 	if cancel != nil {
 		defer cancel()
 	} else {
-		defer cancelSyncCtx(ctx)
+		defer closeSyncCtx(ctx)
 	}
 
 	// run the callback and extract the result

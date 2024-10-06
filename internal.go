@@ -249,7 +249,7 @@ func resolveToPanickedRes[T any](
 	// all waiting calls.
 	p.res = res
 	p.resolveState.Store(uint32(Panicked))
-	cancelSyncCtx(p.syncCtx)
+	closeSyncCtx(p.syncCtx)
 
 	handleExtCalls(p)
 
@@ -268,7 +268,7 @@ func resolveToRejectedRes[T any](
 ) {
 	p.res = res
 	p.resolveState.Store(uint32(Rejected))
-	cancelSyncCtx(p.syncCtx)
+	closeSyncCtx(p.syncCtx)
 
 	handleExtCalls(p)
 
@@ -287,7 +287,7 @@ func resolveToFulfilledRes[T any](
 ) {
 	p.res = res
 	p.resolveState.Store(uint32(Fulfilled))
-	cancelSyncCtx(p.syncCtx)
+	closeSyncCtx(p.syncCtx)
 
 	handleExtCalls(p)
 }
