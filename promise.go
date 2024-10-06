@@ -29,24 +29,25 @@ type genericPromise[T any] struct {
 	// or nil, if it's part of the default group.
 	group *Group[T]
 
+	// initiated lazily, by the first extension call.
+	// this is sent on by the different extension calls.
+	// it's never closed.
+	extChanP atomic.Pointer[chan extQueue[T]]
+
 	// closed when this promise is resolved.
 	// its channel has one writer (one goroutine), which is the owner,
 	// which will close it, but can have multiple readers (chain promises).
 	syncCtx context.Context
 
-	// this is sent on by the different extension calls.
-	// it's never closed.
-	extsChan chan extQueue[T]
-
 	// holds the result of the promise.
-	// written once, before the syncChan channel is closed.
+	// written once, before the syncCtx channel is closed.
 	//
-	// don't read it unless the syncChan is known to be closed.
+	// don't read it unless the syncCtx is known to be closed.
 	res Result[T]
 
 	// resolveState holds the state of this promise.
 	// once the promise is resolved, it will be non-zero.
-	// written once, before the syncChan channel is closed.
+	// written once, before the syncCtx channel is closed.
 	resolveState atomic.Uint32
 
 	// chainStatus holds the status of this promise's chain.
@@ -57,6 +58,17 @@ type genericPromise[T any] struct {
 
 // extQueue wil be owned, at any time, by a single goroutine.
 type extQueue[T any] struct {
+	// initState is the state value at the time this queue was created.
+	// note: the reason for this field is, during extension calls,
+	// if the promise was resolved while creating this extQueue's chan,
+	// the two select cases for the blocking scenario might be available
+	// at the same time.
+	// because the syncCtx.chan will be closed, and the extQ value will
+	// be available only to this goroutine, at the same time.
+	// so we need a way to still detect if the promise was resolved and
+	// read its result sync, otherwise its result would be lost.
+	initState State
+
 	// whether the call value is valid or not.
 	valid bool
 

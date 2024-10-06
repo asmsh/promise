@@ -60,6 +60,25 @@ func (p *genericPromise[T]) setChainHandled() (validHandle bool) {
 	return oldChain != chainStatusHandled
 }
 
+func (p *genericPromise[T]) extsChan() chan extQueue[T] {
+	extChanP := p.extChanP.Load()
+	if extChanP != nil {
+		return *extChanP
+	}
+	// initiate the queue value, even though the chan might not be used after all,
+	// because if we initiated it after the CAS below, it might be available to some
+	// call and make that call block until we initiate it.
+	extChan := make(chan extQueue[T], 1)
+	extChan <- extQueue[T]{
+		initState: State(p.resolveState.Load()),
+	}
+	if p.extChanP.CompareAndSwap(nil, &extChan) {
+		return extChan
+	}
+	extChanP = p.extChanP.Load()
+	return *extChanP
+}
+
 // wait waits for the promise p to be resolved, by either blocking on receiving
 // from the syncChan, or by using the resolveState value of the promise.
 func (p *genericPromise[T]) wait() State {
@@ -78,6 +97,74 @@ func (p *genericPromise[T]) wait() State {
 	s = p.resolveState.Load()
 	return State(s)
 }
+
+func (p *genericPromise[T]) isOnetimePromise() bool {
+	if p.group == nil {
+		return false
+	}
+	return p.group.core.onetimeResultHandling
+}
+
+func (p *genericPromise[T]) uncaughtPanicHandler() {
+	if p.group == nil {
+		return
+	}
+
+	// if it's request to cancel all the promises of the group on
+	// uncaught panics, call the cancel function before the handler.
+	if p.group.core.cancel != nil {
+		p.group.core.cancel()
+	}
+
+	// call the handler if one is provided
+	if p.group.core.uncaughtPanicHandler != nil {
+		p.group.core.uncaughtPanicHandler(p.res.(panicResult).getPanicV())
+	}
+}
+
+func (p *genericPromise[T]) uncaughtErrorHandler() {
+	if p.group == nil {
+		return
+	}
+
+	// if it's request to cancel all the promises of the group on
+	// uncaught errors, call the cancel function before the handler.
+	if p.group.core.cancel != nil {
+		p.group.core.cancel()
+	}
+
+	// call the handler if one is provided
+	if p.group.core.uncaughtErrorHandler != nil {
+		p.group.core.uncaughtErrorHandler(p.res.Err())
+	}
+}
+
+func (p *genericPromise[T]) resolveToResSync(res Result[T]) {
+	if res != nil && res.Err() != nil {
+		p.rejectSync(res)
+	} else {
+		p.fulfillSync(res)
+	}
+}
+
+func (p *genericPromise[T]) panicSync(res Result[T]) {
+	p.res = res
+	p.resolveState.Store(uint32(Panicked))
+}
+
+func (p *genericPromise[T]) rejectSync(res Result[T]) {
+	p.res = res
+	p.resolveState.Store(uint32(Rejected))
+}
+
+func (p *genericPromise[T]) fulfillSync(res Result[T]) {
+	p.res = res
+	p.resolveState.Store(uint32(Fulfilled))
+}
+
+func (p *genericPromise[T]) privateImplementation() {}
+
+func (p *genericPromise[T]) impl() *genericPromise[T] { return p }
 
 func handleFollow[PrevT, NextT any](
 	prevProm *genericPromise[PrevT],
@@ -293,7 +380,11 @@ func resolveToFulfilledRes[T any](
 }
 
 func handleExtCalls[T any](p *genericPromise[T]) (handled bool) {
-	extQ := <-p.extsChan
+	extChanP := p.extChanP.Load()
+	if extChanP == nil {
+		return false
+	}
+	extQ := <-*extChanP
 
 	// handle not having any extension calls
 	if !extQ.valid {
@@ -326,96 +417,20 @@ func handleExtCall[T any](call extCall[T], res Result[T]) bool {
 	}
 }
 
-func (p *genericPromise[T]) isOnetimePromise() bool {
-	if p.group == nil {
-		return false
-	}
-	return p.group.core.onetimeResultHandling
-}
-
-func (p *genericPromise[T]) uncaughtPanicHandler() {
-	if p.group == nil {
-		return
-	}
-
-	// if it's request to cancel all the promises of the group on
-	// uncaught panics, call the cancel function before the handler.
-	if p.group.core.cancel != nil {
-		p.group.core.cancel()
-	}
-
-	// call the handler if one is provided
-	if p.group.core.uncaughtPanicHandler != nil {
-		p.group.core.uncaughtPanicHandler(p.res.(panicResult).getPanicV())
-	}
-}
-
-func (p *genericPromise[T]) uncaughtErrorHandler() {
-	if p.group == nil {
-		return
-	}
-
-	// if it's request to cancel all the promises of the group on
-	// uncaught errors, call the cancel function before the handler.
-	if p.group.core.cancel != nil {
-		p.group.core.cancel()
-	}
-
-	// call the handler if one is provided
-	if p.group.core.uncaughtErrorHandler != nil {
-		p.group.core.uncaughtErrorHandler(p.res.Err())
-	}
-}
-
-func (p *genericPromise[T]) resolveToResSync(res Result[T]) {
-	if res != nil && res.Err() != nil {
-		p.rejectSync(res)
-	} else {
-		p.fulfillSync(res)
-	}
-}
-
-func (p *genericPromise[T]) panicSync(res Result[T]) {
-	p.res = res
-	p.resolveState.Store(uint32(Panicked))
-}
-
-func (p *genericPromise[T]) rejectSync(res Result[T]) {
-	p.res = res
-	p.resolveState.Store(uint32(Rejected))
-}
-
-func (p *genericPromise[T]) fulfillSync(res Result[T]) {
-	p.res = res
-	p.resolveState.Store(uint32(Fulfilled))
-}
-
-func (p *genericPromise[T]) privateImplementation() {}
-
-func (p *genericPromise[T]) impl() *genericPromise[T] { return p }
-
 // newPromInter creates a new genericPromise which is resolved internally,
 // using an internal allocated channel.
 func newPromInter[T any](g *Group[T]) *genericPromise[T] {
-	extsChan := make(chan extQueue[T], 1)
-	extsChan <- extQueue[T]{}
-
 	return &genericPromise[T]{
-		group:    g,
-		syncCtx:  newSyncCtx(),
-		extsChan: extsChan,
+		group:   g,
+		syncCtx: newSyncCtx(),
 	}
 }
 
 func newPromCtx[T any](g *Group[T], ctx context.Context) *genericPromise[T] {
-	extsChan := make(chan extQueue[T], 1)
-	extsChan <- extQueue[T]{}
-
 	return &genericPromise[T]{
-		group:    g,
-		syncCtx:  ctx,
-		extsChan: extsChan,
-		res:      ctxResult[T]{ctx: ctx},
+		group:   g,
+		syncCtx: ctx,
+		res:     ctxResult[T]{ctx: ctx},
 	}
 }
 
@@ -425,9 +440,8 @@ func newPromSync[T any](g *Group[T]) *genericPromise[T] {
 	return &genericPromise[T]{
 		group:   g,
 		syncCtx: newClosedSyncCtx(),
-		// not needed, since sync promises are resolved directly(synchronously)
+		// no other fields are needed, since sync promises are resolved directly
 		// after created, so any extension call will depend on the syncChan.
-		extsChan: nil,
 	}
 }
 

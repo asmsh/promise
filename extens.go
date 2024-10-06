@@ -15,9 +15,10 @@
 package promise
 
 import (
-	"github.com/asmsh/promise/internal/uniquerand"
 	"log"
 	"os"
+
+	"github.com/asmsh/promise/internal/uniquerand"
 )
 
 type logger struct {
@@ -125,8 +126,20 @@ loop:
 					Result: getFinalRes(currProm.res),
 				}
 				break loop
-			case extQ := <-currProm.extsChan:
+			case extQ := <-currProm.extsChan():
 				logr.Println("blocking block extQ case")
+
+				// make sure to check the state again and get the sync result,
+				// in case the promise is resolved...
+				if extQ.initState != unknown {
+					logr.Println("blocking block extQ case sync res")
+
+					res = IdxRes[T]{
+						Idx:    idx,
+						Result: getFinalRes(currProm.res),
+					}
+					break loop
+				}
 
 				// the promise is not resolved yet...
 				// create the res chan if it's not already created.
@@ -155,7 +168,7 @@ loop:
 
 				// send the updated queue back for either another extension call,
 				// or to be included in the currProm's resolving logic.
-				currProm.extsChan <- extQ
+				currProm.extsChan() <- extQ
 			}
 		}
 	}
@@ -383,37 +396,55 @@ loop:
 					"resState",
 					resState,
 				)
-			case extQ := <-currProm.extsChan:
+			case extQ := <-currProm.extsChan():
 				logr.Println("blocking block extQ case")
 
-				// the promise is not resolved yet...
-				// create the res chan if it's not already created.
-				if resChan == nil {
-					logr.Println("blocking block extQ case new chan")
+				// make sure to check the state again and get the sync result,
+				// in case the promise is resolved...
+				if extQ.initState != unknown {
+					logr.Println("blocking block extQ case sync res")
 
-					resChan = make(chan IdxRes[T])
+					res = IdxRes[T]{
+						Idx:    idx,
+						Result: getFinalRes(currProm.res),
+					}
+
+					logr.Println(
+						"blocking block extQ case with sync res.state",
+						res.State(),
+						"resState",
+						resState,
+					)
+				} else {
+					// the promise is not resolved yet...
+					// create the res chan if it's not already created.
+					if resChan == nil {
+						logr.Println("blocking block extQ case new chan")
+
+						resChan = make(chan IdxRes[T])
+					}
+
+					logr.Println(
+						"blocking block extQ case prev queue valid",
+						extQ.valid,
+						"len",
+						len(extQ.extra),
+					)
+
+					// update the queue with this extension call.
+					addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
+
+					logr.Println(
+						"blocking block extQ case new queue valid",
+						extQ.valid,
+						"len",
+						len(extQ.extra),
+					)
 				}
-
-				logr.Println(
-					"blocking block extQ case prev queue valid",
-					extQ.valid,
-					"len",
-					len(extQ.extra),
-				)
-
-				// update the queue with this extension call.
-				addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
-
-				logr.Println(
-					"blocking block extQ case new queue valid",
-					extQ.valid,
-					"len",
-					len(extQ.extra),
-				)
 
 				// send the updated queue back for either another extension call,
 				// or to be included in the currProm's resolving logic.
-				currProm.extsChan <- extQ
+				currProm.extsChan() <- extQ
 			}
 		}
 
