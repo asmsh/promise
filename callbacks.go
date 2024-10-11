@@ -41,14 +41,14 @@ func (cb goResCallback[PrevResT, NewResT]) call(ctx context.Context, _ Result[Pr
 	return cb(ctx)
 }
 func (cb followCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
-	return cb(ctx, res)
+	return cb(ctx, getFinalRes(res))
 }
 func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, _ Result[PrevResT]) Result[NewResT] {
 	cb(ctx)
 	return nil
 }
 func (cb callbackCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
-	cb(ctx, res)
+	cb(ctx, getFinalRes(res))
 	return nil
 }
 
@@ -82,7 +82,7 @@ func runCallbackHandler[PrevValT, NewValT any](
 	}
 
 	// run the callback and extract the result
-	newRes := cb.call(ctx, getFinalRes(prevRes))
+	newRes := cb.call(ctx, prevRes)
 
 	// if the callback doesn't support Result returning, return early, as
 	// the rest of the logic isn't relevant anymore.
