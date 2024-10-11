@@ -105,6 +105,11 @@ loop:
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
+
+				logr.Println(
+					"non-blocking block syncChan case with res.state",
+					res.State(),
+				)
 				break loop
 			default:
 				logr.Println("non-blocking block default case")
@@ -125,6 +130,11 @@ loop:
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
+
+				logr.Println(
+					"blocking block syncChan case with res.state",
+					res.State(),
+				)
 				break loop
 			case extQ := <-currProm.extsChan():
 				logr.Println("blocking block extQ case")
@@ -138,6 +148,11 @@ loop:
 						Idx:    idx,
 						Result: getFinalRes(currProm.res),
 					}
+
+					logr.Println(
+						"blocking block extQ case with sync res.state",
+						res.State(),
+					)
 					break loop
 				}
 
@@ -448,7 +463,7 @@ loop:
 			}
 		}
 
-		// if the promise was resolved via the sync chan, update the result fields.
+		// if the promise was resolved synchronously, update the result fields.
 		if res.Result != nil {
 			// add it to the result array.
 			resArr = append(resArr, res)
