@@ -110,7 +110,6 @@ loop:
 					"non-blocking block syncChan case with res.state",
 					res.State(),
 				)
-				break loop
 			default:
 				logr.Println("non-blocking block default case")
 
@@ -135,7 +134,6 @@ loop:
 					"blocking block syncChan case with res.state",
 					res.State(),
 				)
-				break loop
 			case extQ := <-currProm.extsChan():
 				logr.Println("blocking block extQ case")
 
@@ -153,38 +151,42 @@ loop:
 						"blocking block extQ case with sync res.state",
 						res.State(),
 					)
-					break loop
+				} else {
+					// the promise is not resolved yet...
+					// create the res chan if it's not already created.
+					if resChan == nil {
+						logr.Println("blocking block extQ case new chan")
+
+						resChan = make(chan IdxRes[T])
+					}
+
+					logr.Println(
+						"blocking block extQ case prev queue valid",
+						extQ.valid,
+						"len",
+						len(extQ.extra),
+					)
+
+					// update the queue with this extension call.
+					addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
+
+					logr.Println(
+						"blocking block extQ case new queue valid",
+						extQ.valid,
+						"len",
+						len(extQ.extra),
+					)
 				}
-
-				// the promise is not resolved yet...
-				// create the res chan if it's not already created.
-				if resChan == nil {
-					logr.Println("blocking block extQ case new chan")
-
-					resChan = make(chan IdxRes[T])
-				}
-
-				logr.Println(
-					"blocking block extQ case prev queue valid",
-					extQ.valid,
-					"len",
-					len(extQ.extra),
-				)
-
-				// update the queue with this extension call.
-				addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
-
-				logr.Println(
-					"blocking block extQ case new queue valid",
-					extQ.valid,
-					"len",
-					len(extQ.extra),
-				)
 
 				// send the updated queue back for either another extension call,
 				// or to be included in the currProm's resolving logic.
 				currProm.extsChan() <- extQ
 			}
+		}
+
+		// if the promise was resolved synchronously, break and use its result.
+		if res.Result != nil {
+			break loop
 		}
 	}
 
