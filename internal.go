@@ -110,6 +110,8 @@ func (p *genericPromise[T]) uncaughtPanicHandler() {
 		return
 	}
 
+	debug(p, startUncaughtPanicHandler)
+
 	// if it's request to cancel all the promises of the group on
 	// uncaught panics, call the cancel function before the handler.
 	if p.group.core.cancel != nil {
@@ -118,6 +120,7 @@ func (p *genericPromise[T]) uncaughtPanicHandler() {
 
 	// call the handler if one is provided
 	if p.group.core.uncaughtPanicHandler != nil {
+		debug(p, callUncaughtPanicHandler)
 		p.group.core.uncaughtPanicHandler(p.res.(panicResult).getPanicV())
 	}
 }
@@ -127,6 +130,8 @@ func (p *genericPromise[T]) uncaughtErrorHandler() {
 		return
 	}
 
+	debug(p, startUncaughtErrorHandler)
+
 	// if it's request to cancel all the promises of the group on
 	// uncaught errors, call the cancel function before the handler.
 	if p.group.core.cancel != nil {
@@ -135,6 +140,7 @@ func (p *genericPromise[T]) uncaughtErrorHandler() {
 
 	// call the handler if one is provided
 	if p.group.core.uncaughtErrorHandler != nil {
+		debug(p, callUncaughtErrorHandler)
 		p.group.core.uncaughtErrorHandler(p.res.Err())
 	}
 }
@@ -332,6 +338,7 @@ func resolveToPanickedRes[T any](
 	p *genericPromise[T],
 	res Result[T],
 ) {
+	debug(p, resolve, resolvePanicked)
 	// save the result, set the resolve status, and close the syncChan to unblock
 	// all waiting calls.
 	p.res = res
@@ -353,6 +360,8 @@ func resolveToRejectedRes[T any](
 	p *genericPromise[T],
 	res Result[T],
 ) {
+	debug(p, resolve, resolveRejected)
+
 	p.res = res
 	p.resolveState.Store(uint32(Rejected))
 	closeSyncCtx(p.syncCtx)
@@ -372,6 +381,7 @@ func resolveToFulfilledRes[T any](
 	p *genericPromise[T],
 	res Result[T],
 ) {
+	debug(p, resolve, resolveFulfilled)
 	p.res = res
 	p.resolveState.Store(uint32(Fulfilled))
 	closeSyncCtx(p.syncCtx)
@@ -380,11 +390,15 @@ func resolveToFulfilledRes[T any](
 }
 
 func handleExtCalls[T any](p *genericPromise[T]) (handled bool) {
+	debug(p, startExtCall)
 	extChanP := p.extChanP.Load()
 	if extChanP == nil {
+		debug(p, missingExtChan)
 		return false
 	}
+	debug(p, foundExtChan)
 	extQ := <-*extChanP
+	debug(p, foundExtQueue)
 
 	// handle not having any extension calls
 	if !extQ.valid {
@@ -402,6 +416,7 @@ func handleExtCalls[T any](p *genericPromise[T]) (handled bool) {
 		handled = handleExtCall(call, res) || handled
 	}
 
+	debug(p, endExtCall)
 	return handled
 }
 

@@ -29,6 +29,7 @@ func chanCall[T any](g *Group[T], resChan <-chan Result[T]) Promise[T] {
 
 	g.reserveGoroutine()
 	p := newPromInter[T](g)
+	debug(p, startHandler, startConstrHandler, startConstrChanHandler)
 	go chanHandler(p, resChan)
 	return p
 }
@@ -37,6 +38,7 @@ func chanHandler[T any](p *genericPromise[T], resChan <-chan Result[T]) {
 	defer p.group.freeGoroutine()
 	res := <-resChan
 	resolveToRes(p, res)
+	debug(p, endHandler, endConstrHandler, endConstrChanHandler)
 }
 
 func ctxCall[T any](g *Group[T], ctx context.Context) Promise[T] {
@@ -61,6 +63,7 @@ func goCall[T any](g *Group[T], cb goCallback[T, T]) Promise[T] {
 	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	ctx, cancel := g.callbackCtx(p.syncCtx)
+	debug(p, startHandler, startConstrHandler, startConstrGoHandler)
 	go goHandler(p, cb, ctx, cancel)
 	return p
 }
@@ -73,6 +76,7 @@ func goHandler[T any](
 ) {
 	defer p.group.freeGoroutine()
 	runCallbackHandler[T, T](p, cb, nil, false, true, ctx, cancel)
+	debug(p, endHandler, endConstrHandler, endConstrGoHandler)
 }
 
 func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) Promise[T] {
@@ -83,6 +87,7 @@ func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) Promise[T] {
 	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	ctx, cancel := g.callbackCtx(p.syncCtx)
+	debug(p, startHandler, startConstrHandler, startConstrGoErrHandler)
 	go goErrHandler(p, cb, ctx, cancel)
 	return p
 }
@@ -95,6 +100,7 @@ func goErrHandler[T any](
 ) {
 	defer p.group.freeGoroutine()
 	runCallbackHandler[T, T](p, cb, nil, true, true, ctx, cancel)
+	debug(p, endHandler, endConstrHandler, endConstrGoErrHandler)
 }
 
 func goResCall[T any](
@@ -108,6 +114,7 @@ func goResCall[T any](
 	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	ctx, cancel := g.callbackCtx(p.syncCtx)
+	debug(p, startHandler, startConstrHandler, startConstrGoResHandler)
 	go goResHandler(p, cb, ctx, cancel)
 	return p
 }
@@ -120,6 +127,7 @@ func goResHandler[T any](
 ) {
 	defer p.group.freeGoroutine()
 	runCallbackHandler[T, T](p, cb, nil, true, true, ctx, cancel)
+	debug(p, endHandler, endConstrHandler, endConstrGoResHandler)
 }
 
 func delayCall[T any](
@@ -131,6 +139,7 @@ func delayCall[T any](
 	flags := getDelayFlags(cond)
 	g.reserveGoroutine()
 	p := newPromInter[T](g)
+	debug(p, startHandler, startConstrHandler, startConstrDelayHandler)
 	go delayHandler(p, res, d, flags)
 	return p
 }
@@ -144,6 +153,7 @@ func delayHandler[T any](
 ) {
 	defer p.group.freeGoroutine()
 	resolveToResWithDelay(p, res, dd, flags)
+	debug(p, endHandler, endConstrHandler, endConstrDelayHandler)
 }
 
 func wrapCall[T any](g *Group[T], res Result[T]) Promise[T] {

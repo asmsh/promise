@@ -114,6 +114,8 @@ func (g *Group[T]) Wait() {
 }
 
 type groupCore struct {
+	debugCB func([]debugEvent)
+
 	uncaughtPanicHandler func(v any)
 	uncaughtErrorHandler func(v error)
 
