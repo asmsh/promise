@@ -330,30 +330,25 @@ func resolveToResWithDelay[T any](
 	}
 }
 
-// if called from handleInvalidFollow, then it will be called once on the
-// same promise, by design.
-// if called from handleReturns, then it will be called once on the same
-// promise, as it's called on return, and that can happen once.
 func resolveToPanickedRes[T any](
 	p *genericPromise[T],
 	res Result[T],
 ) {
 	debug(p, resolve, resolvePanicked)
-	// save the result, set the resolve status, and close the syncChan to unblock
-	// all waiting calls.
+	// save the result before executing any callbacks.
 	p.res = res
-	p.resolveState.Store(uint32(Panicked))
-	closeSyncCtx(p.syncCtx)
-
-	handleExtCalls(p)
-
-	// if the promise is panicked, and the chain is empty (no follow, read
-	// or wait calls), execute the default uncaught panic handling logic.
-	// otherwise, delay the handling of the uncaught panic to the last call
-	// in the chain.
 	if p.chainStatus.Load() == chainStatusEmpty {
+		// if the chain is empty (no follow, read or wait calls), execute
+		// the uncaught panic logic.
+		// otherwise, it will be delayed until the last call in the chain.
 		p.uncaughtPanicHandler()
 	}
+	// resolve with the Panicked status.
+	p.resolveState.Store(uint32(Panicked))
+	closeSyncCtx(p.syncCtx) // unblocks all calls waiting on p.
+	handleExtCalls(p)       // handles all extension calls that involve p.
+	// note: any code that gets added after closeSyncCtx and handleExtCalls
+	// isn't guaranteed to be executed without extra wait arrangements.
 }
 
 func resolveToRejectedRes[T any](
@@ -361,20 +356,13 @@ func resolveToRejectedRes[T any](
 	res Result[T],
 ) {
 	debug(p, resolve, resolveRejected)
-
 	p.res = res
-	p.resolveState.Store(uint32(Rejected))
-	closeSyncCtx(p.syncCtx)
-
-	handleExtCalls(p)
-
-	// if the promise is rejected, and the chain is empty (no follow, read
-	// or wait calls), execute the default uncaught panic handling logic.
-	// otherwise, delay the handling of the uncaught error to the last call
-	// in the chain.
 	if p.chainStatus.Load() == chainStatusEmpty {
 		p.uncaughtErrorHandler()
 	}
+	p.resolveState.Store(uint32(Rejected))
+	closeSyncCtx(p.syncCtx)
+	handleExtCalls(p)
 }
 
 func resolveToFulfilledRes[T any](
@@ -385,7 +373,6 @@ func resolveToFulfilledRes[T any](
 	p.res = res
 	p.resolveState.Store(uint32(Fulfilled))
 	closeSyncCtx(p.syncCtx)
-
 	handleExtCalls(p)
 }
 

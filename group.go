@@ -148,6 +148,8 @@ func (g *Group[T]) reserveGoroutine() {
 	}
 }
 
+// note: if the program is exiting, this call might not be executed,
+// so no important clean up or logic should be included here.
 func (g *Group[T]) freeGoroutine() {
 	if g == nil {
 		return
