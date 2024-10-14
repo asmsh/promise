@@ -12,17 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build enable_promise_debug
-
 package promise
 
-func debug[T any](p *Promise[T], de ...debugEvent) {
-	if p.group == nil {
-		return
-	}
+type State int
 
-	// call the handler if one is provided
-	if p.group.core.debugCB != nil {
-		p.group.core.debugCB(de)
+const (
+	// the order here matters
+	unknown State = iota
+	Fulfilled
+	Rejected
+	Panicked
+)
+
+func (s State) String() string {
+	switch s {
+	case Fulfilled:
+		return "fulfilled"
+	case Rejected:
+		return "rejected"
+	case Panicked:
+		return "panicked"
+	default:
+		return "<unknown>"
 	}
 }

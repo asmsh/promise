@@ -38,11 +38,11 @@ import (
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Chan[T any](resChan <-chan Result[T]) Promise[T] {
+func Chan[T any](resChan <-chan Result[T]) *Promise[T] {
 	return chanCall[T](nil, resChan)
 }
 
-func Ctx(ctx context.Context) Promise[any] {
+func Ctx(ctx context.Context) *Promise[any] {
 	return ctxCall[any](nil, ctx)
 }
 
@@ -60,11 +60,11 @@ func Ctx(ctx context.Context) Promise[any] {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Go(fun func()) Promise[any] {
+func Go(fun func()) *Promise[any] {
 	return goCall[any](nil, fun)
 }
 
-func GoErr(fun func() error) Promise[any] {
+func GoErr(fun func() error) *Promise[any] {
 	return goErrCall[any](nil, fun)
 }
 
@@ -89,7 +89,7 @@ func GoErr(fun func() error) Promise[any] {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func GoRes[T any](fun func(ctx context.Context) Result[T]) Promise[T] {
+func GoRes[T any](fun func(ctx context.Context) Result[T]) *Promise[T] {
 	return goResCall[T](nil, fun)
 }
 
@@ -112,7 +112,7 @@ func GoRes[T any](fun func(ctx context.Context) Result[T]) Promise[T] {
 // call) before the end of the promise's chain, or the promise result is not
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) Promise[T] {
+func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) *Promise[T] {
 	return delayCall[T](nil, res, d, cond...)
 }
 
@@ -129,7 +129,7 @@ func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) Promise[T] 
 // error, but all subsequent promises in any promise chain derived from it will,
 // until the error is caught on each of these chains(by a Catch call), or the
 // promise result is read(by a Res call).
-func Wrap[T any](res Result[T]) Promise[T] {
+func Wrap[T any](res Result[T]) *Promise[T] {
 	return wrapCall[T](nil, res)
 }
 
@@ -141,6 +141,6 @@ func Wrap[T any](res Result[T]) Promise[T] {
 // All subsequent promises in any promise chain derived from the returned
 // promise needs to call Recover, before the end of each promise's chain,
 // otherwise all these promise will re-panic(with the passed value, v).
-func Panic[T any](v any) Promise[T] {
+func Panic[T any](v any) *Promise[T] {
 	return panicCall[T](nil, v)
 }

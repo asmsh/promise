@@ -21,10 +21,11 @@ import (
 	"time"
 )
 
-// genericPromise is the default implementation of the Promise interface
+// Promise represents some asynchronous work (a goroutine).
 //
 // The zero value will block forever on any calls.
-type genericPromise[T any] struct {
+// It implements the [Result] interface
+type Promise[T any] struct {
 	// group is a pointer to the promise group which this promise is part of,
 	// or nil, if it's part of the default group.
 	group *Group[T]
@@ -95,33 +96,33 @@ type extCall[T any] struct {
 	idx int
 }
 
-func (p *genericPromise[T]) Val() T {
+func (p *Promise[T]) Val() T {
 	return p.Res().Val()
 }
 
-func (p *genericPromise[T]) Err() error {
+func (p *Promise[T]) Err() error {
 	return p.Res().Err()
 }
 
-func (p *genericPromise[T]) State() State {
+func (p *Promise[T]) State() State {
 	return p.Res().State()
 }
 
 // String will block until the promise is resolved.
-func (p *genericPromise[T]) String() string {
+func (p *Promise[T]) String() string {
 	return fmt.Sprintf("%v", p.Res())
 }
 
-func (p *genericPromise[T]) Wait() {
+func (p *Promise[T]) Wait() {
 	p.regChainWait()
 	p.waitCall()
 }
 
-func (p *genericPromise[T]) WaitChan() <-chan struct{} {
+func (p *Promise[T]) WaitChan() <-chan struct{} {
 	return p.syncCtx.Done()
 }
 
-func (p *genericPromise[T]) waitCall() {
+func (p *Promise[T]) waitCall() {
 	// wait the promise to be resolved
 	s := p.wait()
 
@@ -140,12 +141,12 @@ func (p *genericPromise[T]) waitCall() {
 	}
 }
 
-func (p *genericPromise[T]) Res() Result[T] {
+func (p *Promise[T]) Res() Result[T] {
 	p.regChainRead()
 	return p.resCall()
 }
 
-func (p *genericPromise[T]) resCall() Result[T] {
+func (p *Promise[T]) resCall() Result[T] {
 	// wait the promise to be resolved
 	p.wait()
 
@@ -179,7 +180,7 @@ func getFinalRes[T any](res Result[T]) Result[T] {
 	return res
 }
 
-func (p *genericPromise[T]) Callback(
+func (p *Promise[T]) Callback(
 	cb func(ctx context.Context, res Result[T]),
 ) {
 	if cb == nil {
@@ -197,7 +198,7 @@ func (p *genericPromise[T]) Callback(
 }
 
 func callbackFollowHandler[T any](
-	prevProm *genericPromise[T],
+	prevProm *Promise[T],
 	cb callbackCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
@@ -213,10 +214,10 @@ func callbackFollowHandler[T any](
 	debug(prevProm, endHandler, endFollowHandler, endCallbackFollowHandler)
 }
 
-func (p *genericPromise[T]) Delay(
+func (p *Promise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
-) Promise[T] {
+) *Promise[T] {
 	if p.syncCtx == nil {
 		return newPromBlocking[T]()
 	}
@@ -232,8 +233,8 @@ func (p *genericPromise[T]) Delay(
 
 // delay creates Promise values with the same type
 func delayFollowHandler[T any](
-	prevProm *genericPromise[T],
-	nextProm *genericPromise[T],
+	prevProm *Promise[T],
+	nextProm *Promise[T],
 	dd time.Duration,
 	flags delayFlags,
 ) {
@@ -256,9 +257,9 @@ func delayFollowHandler[T any](
 	debug(prevProm, endHandler, endFollowHandler, endDelayFollowHandler)
 }
 
-func (p *genericPromise[T]) Then(
+func (p *Promise[T]) Then(
 	thenCb func(ctx context.Context, res Result[T]) Result[T],
-) Promise[T] {
+) *Promise[T] {
 	if thenCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -276,8 +277,8 @@ func (p *genericPromise[T]) Then(
 }
 
 func thenFollowHandler[T any](
-	prevProm *genericPromise[T],
-	nextProm *genericPromise[T],
+	prevProm *Promise[T],
+	nextProm *Promise[T],
 	cb followCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
@@ -305,9 +306,9 @@ func thenFollowHandler[T any](
 	debug(prevProm, endHandler, endFollowHandler, endThenFollowHandler)
 }
 
-func (p *genericPromise[T]) Catch(
+func (p *Promise[T]) Catch(
 	catchCb func(ctx context.Context, res Result[T]) Result[T],
-) Promise[T] {
+) *Promise[T] {
 	if catchCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -325,8 +326,8 @@ func (p *genericPromise[T]) Catch(
 }
 
 func catchFollowHandler[T any](
-	prevProm *genericPromise[T],
-	nextProm *genericPromise[T],
+	prevProm *Promise[T],
+	nextProm *Promise[T],
 	cb followCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
@@ -350,9 +351,9 @@ func catchFollowHandler[T any](
 	debug(prevProm, endHandler, endFollowHandler, endCatchFollowHandler)
 }
 
-func (p *genericPromise[T]) Recover(
+func (p *Promise[T]) Recover(
 	recoverCb func(ctx context.Context, res Result[T]) Result[T],
-) Promise[T] {
+) *Promise[T] {
 	if recoverCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -370,8 +371,8 @@ func (p *genericPromise[T]) Recover(
 }
 
 func recoverFollowHandler[T any](
-	prevProm *genericPromise[T],
-	nextProm *genericPromise[T],
+	prevProm *Promise[T],
+	nextProm *Promise[T],
 	cb followCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
@@ -399,9 +400,9 @@ func recoverFollowHandler[T any](
 	debug(prevProm, endHandler, endFollowHandler, endRecoverFollowHandler)
 }
 
-func (p *genericPromise[T]) Finally(
+func (p *Promise[T]) Finally(
 	finallyCb func(ctx context.Context),
-) Promise[T] {
+) *Promise[T] {
 	if finallyCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -424,8 +425,8 @@ func (p *genericPromise[T]) Finally(
 // possible to call it on a panicked promise and return a fulfilled promise,
 // and the panic will be dismissed implicitly, which is something we don't want.
 func finallyFollowHandler[T any](
-	prevProm *genericPromise[T],
-	nextProm *genericPromise[T],
+	prevProm *Promise[T],
+	nextProm *Promise[T],
 	cb finallyCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,

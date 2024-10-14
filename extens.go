@@ -45,11 +45,11 @@ var logr = logger{
 // It doesn't wait for all passed Promise values to resolve.
 // The resulting IdxRes value holds the Result value of the resolved Promise.
 // The original order of the IdxRes's Promise can be retrieved from its Idx field.
-func Select[T any](p ...Promise[T]) Promise[IdxRes[T]] {
+func Select[T any](p ...*Promise[T]) *Promise[IdxRes[T]] {
 	return selectCall[T](p...)
 }
 
-func selectCall[T any](p ...Promise[T]) Promise[IdxRes[T]] {
+func selectCall[T any](p ...*Promise[T]) *Promise[IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[IdxRes[T]](nil)
 	}
@@ -60,8 +60,8 @@ func selectCall[T any](p ...Promise[T]) Promise[IdxRes[T]] {
 }
 
 func selectHandler[T any](
-	newProm *genericPromise[IdxRes[T]],
-	p []Promise[T],
+	newProm *Promise[IdxRes[T]],
+	ps []*Promise[T],
 ) {
 	// resChan is populated lazily, only if it's needed.
 	var resChan chan IdxRes[T]
@@ -75,14 +75,14 @@ func selectHandler[T any](
 	// randIdx responsible for returning a random, unique, index in the provided
 	// list of promises.
 	var randIdx uniquerand.Int
-	randIdx.Reset(len(p))
+	randIdx.Reset(len(ps))
 
 loop:
 	for idx, ok := randIdx.Get(); ok; idx, ok = randIdx.Get() {
-		currProm := p[idx].impl()
+		currProm := ps[idx]
 		loopCnt++
 
-		logr.Println("idx", idx, "loopCnt", loopCnt, "of length", len(p))
+		logr.Println("idx", idx, "loopCnt", loopCnt, "of length", len(ps))
 
 		// Select with non-blocking or with blocking, based on whether we might be
 		// interested to check other promises for potential immediate resolution.
@@ -90,7 +90,7 @@ loop:
 		// we might end up in an (almost) infinite loop.
 		// Non-blocking gives us the benefit of catching other possibly resolved
 		// promises, without being stuck(blocked) on the first one we encounter.
-		blocking := loopCnt > len(p)
+		blocking := loopCnt > len(ps)
 
 		if !blocking {
 			logr.Println("non-blocking block")
@@ -229,7 +229,7 @@ loop:
 // The resulting IdxRes slice holds the Result values of the Promise values passed
 // up to when the returned Promise was resolved.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
-func All[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
+func All[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return allCall(false, p)
 }
 
@@ -243,17 +243,17 @@ func All[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 //
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
-func AllWait[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
+func AllWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return allCall(true, p)
 }
 
-func allCall[T any](waitAll bool, p []Promise[T]) Promise[[]IdxRes[T]] {
-	if len(p) == 0 {
+func allCall[T any](waitAll bool, ps []*Promise[T]) *Promise[[]IdxRes[T]] {
+	if len(ps) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
 	nextProm := newPromInter[[]IdxRes[T]](nil)
-	go joinHandler(nextProm, p, waitAll, true, false)
+	go joinHandler(nextProm, ps, waitAll, true, false)
 	return nextProm
 }
 
@@ -268,7 +268,7 @@ func allCall[T any](waitAll bool, p []Promise[T]) Promise[[]IdxRes[T]] {
 // The resulting IdxRes slice holds the Result values of the Promise values passed
 // up to when the returned Promise was resolved.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
-func Any[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
+func Any[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return anyCall(false, p)
 }
 
@@ -281,17 +281,17 @@ func Any[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
 //
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
-func AnyWait[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
+func AnyWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return anyCall(true, p)
 }
 
-func anyCall[T any](waitAll bool, p []Promise[T]) Promise[[]IdxRes[T]] {
-	if len(p) == 0 {
+func anyCall[T any](waitAll bool, ps []*Promise[T]) *Promise[[]IdxRes[T]] {
+	if len(ps) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
 	nextProm := newPromInter[[]IdxRes[T]](nil)
-	go joinHandler(nextProm, p, waitAll, false, true)
+	go joinHandler(nextProm, ps, waitAll, false, true)
 	return nextProm
 }
 
@@ -302,23 +302,23 @@ func anyCall[T any](waitAll bool, p []Promise[T]) Promise[[]IdxRes[T]] {
 //
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
-func Join[T any](p ...Promise[T]) Promise[[]IdxRes[T]] {
+func Join[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return joinCall(p)
 }
 
-func joinCall[T any](p []Promise[T]) Promise[[]IdxRes[T]] {
-	if len(p) == 0 {
+func joinCall[T any](ps []*Promise[T]) *Promise[[]IdxRes[T]] {
+	if len(ps) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
 	nextProm := newPromInter[[]IdxRes[T]](nil)
-	go joinHandler(nextProm, p, true, false, false)
+	go joinHandler(nextProm, ps, true, false, false)
 	return nextProm
 }
 
 func joinHandler[T any](
-	newProm *genericPromise[[]IdxRes[T]],
-	p []Promise[T],
+	newProm *Promise[[]IdxRes[T]],
+	ps []*Promise[T],
 	waitAll bool,
 	allSuccess bool,
 	anySuccess bool,
@@ -327,7 +327,7 @@ func joinHandler[T any](
 	var resChan chan IdxRes[T]
 
 	// resArr and resState, collectively, represent the resolve result.
-	resArr := make([]IdxRes[T], 0, len(p))
+	resArr := make([]IdxRes[T], 0, len(ps))
 	resState := unknown
 
 	// loopCnt records how many iterations happened in the loop below
@@ -336,7 +336,7 @@ func joinHandler[T any](
 	// randIdx responsible for returning a random, unique, index in the provided
 	// list of promises.
 	var randIdx uniquerand.Int
-	randIdx.Reset(len(p))
+	randIdx.Reset(len(ps))
 
 	logr.Println(
 		"join with: waitAll",
@@ -353,10 +353,10 @@ func joinHandler[T any](
 	// or arrange for a notification once a promise is resolved.
 loop:
 	for idx, ok := randIdx.Get(); ok; idx, ok = randIdx.Get() {
-		currProm := p[idx].impl()
+		currProm := ps[idx]
 		loopCnt++
 
-		logr.Println("loop with: idx", idx, "loopCnt", loopCnt, "of length", len(p))
+		logr.Println("loop with: idx", idx, "loopCnt", loopCnt, "of length", len(ps))
 
 		// Select with non-blocking or with blocking, based on whether we might be
 		// interested to check other promises for potential immediate resolution.
@@ -364,7 +364,7 @@ loop:
 		// we might end up in an (almost) infinite loop.
 		// Non-blocking gives us the benefit of catching other possibly resolved
 		// promises, without being stuck(blocked) on the first one we encounter.
-		blocking := loopCnt > len(p)
+		blocking := loopCnt > len(ps)
 
 		var res IdxRes[T]
 		if !blocking {
@@ -528,7 +528,7 @@ loop:
 		// the waitAll flag is set, no promise got resolved by the wait logic above,
 		// or the resolved promise(s) didn't meet the requirements set by the flags...
 		// get the number of pending promises against the initially provided list.
-		pending := len(p) - len(resArr)
+		pending := len(ps) - len(resArr)
 
 		logr.Println("pending promises", pending, "resState", resState)
 

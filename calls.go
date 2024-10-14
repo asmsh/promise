@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-func chanCall[T any](g *Group[T], resChan <-chan Result[T]) Promise[T] {
+func chanCall[T any](g *Group[T], resChan <-chan Result[T]) *Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
@@ -34,14 +34,14 @@ func chanCall[T any](g *Group[T], resChan <-chan Result[T]) Promise[T] {
 	return p
 }
 
-func chanHandler[T any](p *genericPromise[T], resChan <-chan Result[T]) {
+func chanHandler[T any](p *Promise[T], resChan <-chan Result[T]) {
 	defer p.group.freeGoroutine()
 	res := <-resChan
 	resolveToRes(p, res)
 	debug(p, endHandler, endConstrHandler, endConstrChanHandler)
 }
 
-func ctxCall[T any](g *Group[T], ctx context.Context) Promise[T] {
+func ctxCall[T any](g *Group[T], ctx context.Context) *Promise[T] {
 	if ctx == nil {
 		panic(nilCtxPanicMsg)
 	}
@@ -55,7 +55,7 @@ func ctxCall[T any](g *Group[T], ctx context.Context) Promise[T] {
 	return newPromCtx[T](g, ctx)
 }
 
-func goCall[T any](g *Group[T], cb goCallback[T, T]) Promise[T] {
+func goCall[T any](g *Group[T], cb goCallback[T, T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -69,7 +69,7 @@ func goCall[T any](g *Group[T], cb goCallback[T, T]) Promise[T] {
 }
 
 func goHandler[T any](
-	p *genericPromise[T],
+	p *Promise[T],
 	cb goCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
@@ -79,7 +79,7 @@ func goHandler[T any](
 	debug(p, endHandler, endConstrHandler, endConstrGoHandler)
 }
 
-func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) Promise[T] {
+func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -93,7 +93,7 @@ func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) Promise[T] {
 }
 
 func goErrHandler[T any](
-	p *genericPromise[T],
+	p *Promise[T],
 	cb goErrCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
@@ -106,7 +106,7 @@ func goErrHandler[T any](
 func goResCall[T any](
 	g *Group[T],
 	cb goResCallback[T, T],
-) Promise[T] {
+) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -120,7 +120,7 @@ func goResCall[T any](
 }
 
 func goResHandler[T any](
-	p *genericPromise[T],
+	p *Promise[T],
 	cb goResCallback[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
@@ -135,7 +135,7 @@ func delayCall[T any](
 	res Result[T],
 	d time.Duration,
 	cond ...DelayCond,
-) Promise[T] {
+) *Promise[T] {
 	flags := getDelayFlags(cond)
 	g.reserveGoroutine()
 	p := newPromInter[T](g)
@@ -146,7 +146,7 @@ func delayCall[T any](
 
 // handles rejection and fulfillment only
 func delayHandler[T any](
-	p *genericPromise[T],
+	p *Promise[T],
 	res Result[T],
 	dd time.Duration,
 	flags delayFlags,
@@ -156,13 +156,13 @@ func delayHandler[T any](
 	debug(p, endHandler, endConstrHandler, endConstrDelayHandler)
 }
 
-func wrapCall[T any](g *Group[T], res Result[T]) Promise[T] {
+func wrapCall[T any](g *Group[T], res Result[T]) *Promise[T] {
 	p := newPromSync[T](g)
 	p.resolveToResSync(res)
 	return p
 }
 
-func panicCall[T any](g *Group[T], v any) Promise[T] {
+func panicCall[T any](g *Group[T], v any) *Promise[T] {
 	p := newPromSync[T](g)
 	p.panicSync(promisePanickedResult[T]{v: v})
 	return p

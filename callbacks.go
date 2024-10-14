@@ -53,7 +53,7 @@ func (cb callbackCallback[PrevResT, NewResT]) call(ctx context.Context, res Resu
 }
 
 func runCallbackHandler[PrevValT, NewValT any](
-	p *genericPromise[NewValT],
+	p *Promise[NewValT],
 	cb callbackFunc[PrevValT, NewValT],
 	prevRes Result[PrevValT],
 	supportNewResult bool,

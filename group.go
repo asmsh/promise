@@ -73,23 +73,23 @@ func NewGroup[T any](c ...GroupConfig) *Group[T] {
 	return g
 }
 
-func (g *Group[T]) Chan(resChan chan Result[T]) Promise[T] {
+func (g *Group[T]) Chan(resChan chan Result[T]) *Promise[T] {
 	return chanCall[T](g, resChan)
 }
 
-func (g *Group[T]) Ctx(ctx context.Context) Promise[T] {
+func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	return ctxCall[T](g, ctx)
 }
 
-func (g *Group[T]) Go(fun func()) Promise[T] {
+func (g *Group[T]) Go(fun func()) *Promise[T] {
 	return goCall[T](g, fun)
 }
 
-func (g *Group[T]) GoErr(fun func() error) Promise[T] {
+func (g *Group[T]) GoErr(fun func() error) *Promise[T] {
 	return goErrCall[T](g, fun)
 }
 
-func (g *Group[T]) GoRes(fun func(ctx context.Context) Result[T]) Promise[T] {
+func (g *Group[T]) GoRes(fun func(ctx context.Context) Result[T]) *Promise[T] {
 	return goResCall[T](g, fun)
 }
 
@@ -97,15 +97,15 @@ func (g *Group[T]) Delay(
 	res Result[T],
 	d time.Duration,
 	cond ...DelayCond,
-) Promise[T] {
+) *Promise[T] {
 	return delayCall[T](g, res, d, cond...)
 }
 
-func (g *Group[T]) Wrap(res Result[T]) Promise[T] {
+func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 	return wrapCall[T](g, res)
 }
 
-func (g *Group[T]) Panic(v any) Promise[T] {
+func (g *Group[T]) Panic(v any) *Promise[T] {
 	return panicCall[T](g, v)
 }
 

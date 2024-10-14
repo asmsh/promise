@@ -24,7 +24,7 @@ func BenchmarkChan(b *testing.B) {
 	resChan := make(chan Result[any], 1)
 
 	b.Run("", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -36,7 +36,7 @@ func BenchmarkChan(b *testing.B) {
 
 func BenchmarkGo(b *testing.B) {
 	b.Run("", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -48,7 +48,7 @@ func BenchmarkGo(b *testing.B) {
 
 func BenchmarkGoErr(b *testing.B) {
 	b.Run("nil error", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -60,7 +60,7 @@ func BenchmarkGoErr(b *testing.B) {
 	})
 
 	b.Run("non-ptr error", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -72,7 +72,7 @@ func BenchmarkGoErr(b *testing.B) {
 	})
 
 	b.Run("ptr error", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -86,7 +86,7 @@ func BenchmarkGoErr(b *testing.B) {
 
 func BenchmarkGoRes(b *testing.B) {
 	b.Run("empty result", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -98,7 +98,7 @@ func BenchmarkGoRes(b *testing.B) {
 	})
 
 	b.Run("value result", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -110,7 +110,7 @@ func BenchmarkGoRes(b *testing.B) {
 	})
 
 	b.Run("nil-error result", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -122,7 +122,7 @@ func BenchmarkGoRes(b *testing.B) {
 	})
 
 	b.Run("non-nil-error result", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -136,7 +136,7 @@ func BenchmarkGoRes(b *testing.B) {
 
 func BenchmarkDelay(b *testing.B) {
 	b.Run("empty result with no conditions", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -146,7 +146,7 @@ func BenchmarkDelay(b *testing.B) {
 	})
 
 	b.Run("empty result with conditions", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -156,7 +156,7 @@ func BenchmarkDelay(b *testing.B) {
 	})
 
 	b.Run("non-empty success result with conditions", func(b *testing.B) {
-		var p Promise[string]
+		var p *Promise[string]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -166,7 +166,7 @@ func BenchmarkDelay(b *testing.B) {
 	})
 
 	b.Run("non-empty failed result with conditions", func(b *testing.B) {
-		var p Promise[string]
+		var p *Promise[string]
 		var err = newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -179,7 +179,7 @@ func BenchmarkDelay(b *testing.B) {
 
 func BenchmarkWrap(b *testing.B) {
 	b.Run("empty result", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -189,7 +189,7 @@ func BenchmarkWrap(b *testing.B) {
 	})
 
 	b.Run("non-empty success result", func(b *testing.B) {
-		var p Promise[string]
+		var p *Promise[string]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -199,7 +199,7 @@ func BenchmarkWrap(b *testing.B) {
 	})
 
 	b.Run("non-empty failed result", func(b *testing.B) {
-		var p Promise[string]
+		var p *Promise[string]
 		var err = newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -212,7 +212,7 @@ func BenchmarkWrap(b *testing.B) {
 
 func BenchmarkPanic(b *testing.B) {
 	b.Run("nil val", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
@@ -222,7 +222,7 @@ func BenchmarkPanic(b *testing.B) {
 	})
 
 	b.Run("non-nil val", func(b *testing.B) {
-		var p Promise[any]
+		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {

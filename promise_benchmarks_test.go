@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-func getErrorBenchmarkPromise() Promise[any] {
+func getErrorBenchmarkPromise() *Promise[any] {
 	prom := GoRes(func(ctx context.Context) Result[any] {
 		time.Sleep(1 * time.Millisecond)
 		return Err[any](newStrError())
@@ -29,7 +29,7 @@ func getErrorBenchmarkPromise() Promise[any] {
 	return prom
 }
 
-func getSuccessBenchmarkPromise(res ...any) Promise[any] {
+func getSuccessBenchmarkPromise(res ...any) *Promise[any] {
 	var resVal any
 	if len(res) > 0 {
 		resVal = res[0]

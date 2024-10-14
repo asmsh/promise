@@ -16,7 +16,7 @@
 
 package promise
 
-func debug[T any](*genericPromise[T], ...debugEvent) {
+func debug[T any](*Promise[T], ...debugEvent) {
 	// default implementation doesn't need any debugging.
 	// only enabled for testing via the enable_promise_debug build tag.
 }
