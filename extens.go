@@ -18,7 +18,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/asmsh/promise/internal/uniquerand"
+	"github.com/asmsh/uniquerand"
 )
 
 type logger struct {
