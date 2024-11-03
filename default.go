@@ -132,15 +132,3 @@ func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) *Promise[T]
 func Wrap[T any](res Result[T]) *Promise[T] {
 	return wrapCall[T](nil, res)
 }
-
-// Panic returns a GoPromise that's resolved to panicked, synchronously, and
-// whose result is the passed value, v.
-//
-// The passed value, v, is only accessible from a Recover callback.
-//
-// All subsequent promises in any promise chain derived from the returned
-// promise needs to call Recover, before the end of each promise's chain,
-// otherwise all these promise will re-panic(with the passed value, v).
-func Panic[T any](v any) *Promise[T] {
-	return panicCall[T](nil, v)
-}

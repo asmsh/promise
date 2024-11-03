@@ -209,25 +209,3 @@ func BenchmarkWrap(b *testing.B) {
 		_ = p
 	})
 }
-
-func BenchmarkPanic(b *testing.B) {
-	b.Run("nil val", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = Panic[any](nil)
-		}
-		_ = p
-	})
-
-	b.Run("non-nil val", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = Panic[any]("golang")
-		}
-		_ = p
-	})
-}

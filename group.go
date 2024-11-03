@@ -105,10 +105,6 @@ func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 	return wrapCall[T](g, res)
 }
 
-func (g *Group[T]) Panic(v any) *Promise[T] {
-	return panicCall[T](g, v)
-}
-
 func (g *Group[T]) Wait() {
 	g.core.wg.Wait()
 }

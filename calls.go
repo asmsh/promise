@@ -157,13 +157,5 @@ func delayHandler[T any](
 }
 
 func wrapCall[T any](g *Group[T], res Result[T]) *Promise[T] {
-	p := newPromSync[T](g)
-	p.resolveToResSync(res)
-	return p
-}
-
-func panicCall[T any](g *Group[T], v any) *Promise[T] {
-	p := newPromSync[T](g)
-	p.panicSync(promisePanickedResult[T]{v: v})
-	return p
+	return newPromSync[T](g, res)
 }

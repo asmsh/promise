@@ -14,7 +14,9 @@
 
 package promise
 
-type State int
+import "fmt"
+
+type State uint32
 
 const (
 	// the order here matters
@@ -33,6 +35,6 @@ func (s State) String() string {
 	case Panicked:
 		return "panicked"
 	default:
-		return "<unknown>"
+		return fmt.Sprintf("<unknown>(%d)", s)
 	}
 }

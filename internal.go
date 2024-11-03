@@ -17,7 +17,6 @@ package promise
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -146,26 +145,19 @@ func (p *Promise[T]) uncaughtErrorHandler() {
 }
 
 func (p *Promise[T]) resolveToResSync(res Result[T]) {
-	if res != nil && res.Err() != nil {
-		p.rejectSync(res)
-	} else {
-		p.fulfillSync(res)
+	if res == nil {
+		p.resolveState.Store(uint32(Fulfilled))
+		return
 	}
-}
 
-func (p *Promise[T]) panicSync(res Result[T]) {
+	state := res.State()
+	switch state {
+	case Panicked, Rejected, Fulfilled:
+	default:
+		panic("promise: unexpected Result state: " + state.String())
+	}
 	p.res = res
-	p.resolveState.Store(uint32(Panicked))
-}
-
-func (p *Promise[T]) rejectSync(res Result[T]) {
-	p.res = res
-	p.resolveState.Store(uint32(Rejected))
-}
-
-func (p *Promise[T]) fulfillSync(res Result[T]) {
-	p.res = res
-	p.resolveState.Store(uint32(Fulfilled))
+	p.resolveState.Store(uint32(state))
 }
 
 func handleFollow[PrevT, NextT any](
@@ -284,7 +276,7 @@ func resolveToRes[T any](p *Promise[T], res Result[T]) {
 	case Fulfilled:
 		resolveToFulfilledRes(p, res)
 	default:
-		panic(fmt.Sprintf("promise: internal: unexpected Result state: '%s'", s))
+		panic("promise: unexpected Result state: " + s.String())
 	}
 }
 
@@ -322,7 +314,7 @@ func resolveToResWithDelay[T any](
 		}
 		resolveToFulfilledRes(p, res)
 	default:
-		panic(fmt.Sprintf("promise: internal: unexpected Result state: '%s'", s))
+		panic("promise: unexpected Result state: " + s.String())
 	}
 }
 
@@ -432,15 +424,17 @@ func newPromCtx[T any](g *Group[T], ctx context.Context) *Promise[T] {
 	}
 }
 
-// newPromSync creates a new Promise which is resolved synchronously,
-// just after it's created.
-func newPromSync[T any](g *Group[T]) *Promise[T] {
-	return &Promise[T]{
+// newPromSync returns a new Promise which is resolved synchronously and
+// immediately to the provided [Result] value.
+func newPromSync[T any](g *Group[T], res Result[T]) *Promise[T] {
+	p := &Promise[T]{
 		group:   g,
 		syncCtx: newClosedSyncCtx(),
 		// no other fields are needed, since sync promises are resolved directly
 		// after created, so any extension call will depend on the syncChan.
 	}
+	p.resolveToResSync(res)
+	return p
 }
 
 // newPromBlocking returns a promise that will never be resolved.

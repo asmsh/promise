@@ -38,6 +38,10 @@ func Err[T any](err error) Result[T] {
 	return errResult[T]{err: err}
 }
 
+func Panic[T any](v any) Result[T] {
+	return promisePanickedResult[T]{v: v}
+}
+
 func ValErr[T any](val T, err error) Result[T] {
 	return valErrResult[T]{val: val, err: err}
 }
