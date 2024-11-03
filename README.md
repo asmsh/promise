@@ -2,6 +2,8 @@
 
 *Fast, lightweight, and lock-free promises for Go... the Go way*
 
+## NOTE: this branch is still a work in progress, and the below guide is not up to date.
+
 ## Features
 
 * Fast and low memory overhead implementation
