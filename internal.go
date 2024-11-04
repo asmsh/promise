@@ -89,7 +89,7 @@ func (p *Promise[T]) wait() State {
 	}
 
 	// wait until the promise is resolved.
-	// the chan will always be closed by the previous promise,
+	// the Context will be closed by the previous promise,
 	// after setting the res and status fields as expected.
 	<-p.syncCtx.Done()
 

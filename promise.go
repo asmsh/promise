@@ -219,7 +219,11 @@ func (p *Promise[T]) Delay(
 	cond ...DelayCond,
 ) *Promise[T] {
 	if p.syncCtx == nil {
-		return newPromBlocking[T]()
+		// since the syncCtx is nil, this promise will never be resolved,
+		// so no point in allocating a new value.
+		// note: this can only happen if the promise is created by passing a
+		// Context value that's never canceled(nil Done) to the Ctx constructor.
+		return p
 	}
 
 	p.regChainRead()
@@ -264,7 +268,7 @@ func (p *Promise[T]) Then(
 		panic(nilCallbackPanicMsg)
 	}
 	if p.syncCtx == nil {
-		return newPromBlocking[T]()
+		return p
 	}
 
 	p.regChainRead()
@@ -313,7 +317,7 @@ func (p *Promise[T]) Catch(
 		panic(nilCallbackPanicMsg)
 	}
 	if p.syncCtx == nil {
-		return newPromBlocking[T]()
+		return p
 	}
 
 	p.regChainRead()
@@ -358,7 +362,7 @@ func (p *Promise[T]) Recover(
 		panic(nilCallbackPanicMsg)
 	}
 	if p.syncCtx == nil {
-		return newPromBlocking[T]()
+		return p
 	}
 
 	p.regChainRead()
@@ -407,7 +411,7 @@ func (p *Promise[T]) Finally(
 		panic(nilCallbackPanicMsg)
 	}
 	if p.syncCtx == nil {
-		return newPromBlocking[T]()
+		return p
 	}
 
 	p.regChainRead()
