@@ -253,11 +253,11 @@ func delayFollowHandler[T any](
 		if flags.onError {
 			time.Sleep(dd)
 		}
-		resolveToRejectedRes(nextProm, res)
+		nextProm.resolveToRejectedRes(res)
 		return
 	}
 
-	resolveToResWithDelay(nextProm, res, dd, flags)
+	nextProm.resolveToResWithDelay(res, dd, flags)
 	debug(prevProm, endHandler, endFollowHandler, endDelayFollowHandler)
 }
 
@@ -292,7 +292,7 @@ func thenFollowHandler[T any](
 
 	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
 	if s != Fulfilled {
-		resolveToRes(nextProm, prevProm.res)
+		nextProm.resolveToRes(prevProm.res)
 		return
 	}
 
@@ -341,7 +341,7 @@ func catchFollowHandler[T any](
 
 	// 'Catch' can handle only the 'Rejected' state, so return otherwise
 	if s != Rejected {
-		resolveToRes(nextProm, prevProm.res)
+		nextProm.resolveToRes(prevProm.res)
 		return
 	}
 
@@ -386,7 +386,7 @@ func recoverFollowHandler[T any](
 
 	// 'Recover' can handle only the 'Panicked' state, so return otherwise
 	if s != Panicked {
-		resolveToRes(nextProm, prevProm.res)
+		nextProm.resolveToRes(prevProm.res)
 		return
 	}
 

@@ -202,18 +202,15 @@ loop:
 	case Panicked:
 		logr.Println("idx", res.Idx, "Panicked")
 
-		res := panickedResultSingleIdxRes[T]{res}
-		resolveToPanickedRes(newProm, res)
+		newProm.resolveToPanickedRes(panickedResultSingleIdxRes[T]{res})
 	case Rejected:
 		logr.Println("idx", res.Idx, "Rejected")
 
-		res := rejectedResultSingleIdxRes[T]{res}
-		resolveToRejectedRes(newProm, res)
+		newProm.resolveToRejectedRes(rejectedResultSingleIdxRes[T]{res})
 	case Fulfilled:
 		logr.Println("idx", res.Idx, "Fulfilled")
 
-		res := fulfilledResultSingleIdxRes[T]{res}
-		resolveToFulfilledRes(newProm, res)
+		newProm.resolveToFulfilledRes(fulfilledResultSingleIdxRes[T]{res})
 	}
 }
 
@@ -613,14 +610,11 @@ loop:
 	// resolve the next promise as expected, based on the final resState.
 	switch resState {
 	case Panicked:
-		res := panickedResultMultiIdxRes[T]{resArr}
-		resolveToPanickedRes(newProm, res)
+		newProm.resolveToPanickedRes(panickedResultMultiIdxRes[T]{resArr})
 	case Rejected:
-		res := rejectedResultMultiIdxRes[T]{resArr}
-		resolveToRejectedRes(newProm, res)
+		newProm.resolveToRejectedRes(rejectedResultMultiIdxRes[T]{resArr})
 	case Fulfilled:
-		res := fulfilledResultMultiIdxRes[T]{resArr}
-		resolveToFulfilledRes(newProm, res)
+		newProm.resolveToFulfilledRes(fulfilledResultMultiIdxRes[T]{resArr})
 	}
 }
 

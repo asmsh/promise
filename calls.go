@@ -37,7 +37,7 @@ func chanCall[T any](g *Group[T], resChan <-chan Result[T]) *Promise[T] {
 func chanHandler[T any](p *Promise[T], resChan <-chan Result[T]) {
 	defer p.group.freeGoroutine()
 	res := <-resChan
-	resolveToRes(p, res)
+	p.resolveToRes(res)
 	debug(p, endHandler, endConstrHandler, endConstrChanHandler)
 }
 
@@ -152,7 +152,7 @@ func delayHandler[T any](
 	flags delayFlags,
 ) {
 	defer p.group.freeGoroutine()
-	resolveToResWithDelay(p, res, dd, flags)
+	p.resolveToResWithDelay(res, dd, flags)
 	debug(p, endHandler, endConstrHandler, endConstrDelayHandler)
 }
 

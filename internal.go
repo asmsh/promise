@@ -143,6 +143,108 @@ func (p *Promise[T]) uncaughtErrorHandler() {
 		p.group.core.uncaughtErrorHandler(p.res.Err())
 	}
 }
+func (p *Promise[T]) resolveToRes(res Result[T]) {
+	// res will be nil after a Finally callback on a Promise with nil Result,
+	// after a callback that doesn't support returning Result, or when it's
+	// explicitly returned from a callback that supports returning Result.
+	if res == nil {
+		p.resolveToFulfilledRes(nil)
+		return
+	}
+
+	// resolve the provided Promise to the provided Result, accordingly.
+	// Note: if res is a Promise value, the State call will block until that
+	// Promise is resolved.
+	switch s := res.State(); s {
+	case Panicked:
+		p.resolveToPanickedRes(res)
+	case Rejected:
+		p.resolveToRejectedRes(res)
+	case Fulfilled:
+		p.resolveToFulfilledRes(res)
+	default:
+		panic("promise: unexpected Result state: " + s.String())
+	}
+}
+func (p *Promise[T]) resolveToResWithDelay(
+	res Result[T],
+	dd time.Duration,
+	flags delayFlags,
+) {
+	if res == nil {
+		if flags.onSuccess {
+			time.Sleep(dd)
+		}
+		p.resolveToFulfilledRes(nil)
+		return
+	}
+
+	switch s := res.State(); s {
+	case Panicked:
+		// a rejected state is considered a failure
+		if flags.onError {
+			time.Sleep(dd)
+		}
+		p.resolveToPanickedRes(res)
+	case Rejected:
+		// a rejected state is considered a failure
+		if flags.onError {
+			time.Sleep(dd)
+		}
+		p.resolveToRejectedRes(res)
+	case Fulfilled:
+		// a fulfilled state is considered a success
+		if flags.onSuccess {
+			time.Sleep(dd)
+		}
+		p.resolveToFulfilledRes(res)
+	default:
+		panic("promise: unexpected Result state: " + s.String())
+	}
+}
+
+func (p *Promise[T]) resolveToPanickedRes(
+	res Result[T],
+) {
+	debug(p, resolve, resolvePanicked)
+	// save the result before executing any callbacks.
+	p.res = res
+	if p.chainStatus.Load() == chainStatusEmpty {
+		// if the chain is empty (no follow, read or wait calls), execute
+		// the uncaught panic logic.
+		// otherwise, it will be delayed until the last call in the chain.
+		p.uncaughtPanicHandler()
+	}
+	// resolve with the Panicked status.
+	p.resolveState.Store(uint32(Panicked))
+	closeSyncCtx(p.syncCtx) // unblocks all calls waiting on p.
+	handleExtCalls(p)       // handles all extension calls that involve p.
+	// note: any code that gets added after closeSyncCtx and handleExtCalls
+	// isn't guaranteed to be executed without extra wait arrangements.
+}
+
+func (p *Promise[T]) resolveToRejectedRes(
+	res Result[T],
+) {
+	debug(p, resolve, resolveRejected)
+	p.res = res
+	if p.chainStatus.Load() == chainStatusEmpty {
+		p.uncaughtErrorHandler()
+	}
+	p.resolveState.Store(uint32(Rejected))
+	closeSyncCtx(p.syncCtx)
+	handleExtCalls(p)
+}
+
+func (p *Promise[T]) resolveToFulfilledRes(
+	res Result[T],
+) {
+	debug(p, resolve, resolveFulfilled)
+	p.res = res
+	p.resolveState.Store(uint32(Fulfilled))
+	closeSyncCtx(p.syncCtx)
+	handleExtCalls(p)
+}
 
 func (p *Promise[T]) resolveToResSync(res Result[T]) {
 	if res == nil {
@@ -178,7 +280,7 @@ func handleFollow[PrevT, NextT any](
 	// if the promise result has been used, either return or resolve with the expected error
 	if !validHandle {
 		if resolveOnErr {
-			resolveToRejectedRes[NextT](nextProm, errPromiseConsumedResult[NextT]{})
+			nextProm.resolveToRejectedRes(errPromiseConsumedResult[NextT]{})
 			return nil, false
 		}
 		return errPromiseConsumedResult[PrevT]{}, false
@@ -211,7 +313,7 @@ func handleReturns[PrevResT, NewResT any](
 	}
 
 	// resolve the provided Promise to the new Result value.
-	resolveToRes[NewResT](p, newRes)
+	p.resolveToRes(newRes)
 }
 
 func getEffectiveNewRes[PrevResT, NewResT any](
@@ -254,114 +356,6 @@ func getEffectiveNewRes[PrevResT, NewResT any](
 	// TODO: this can't happen in the current implementation,
 	//  as all type parameters used so far is the same type.
 	return Err[NewResT](errors.New("TODO: unexpected"))
-}
-
-func resolveToRes[T any](p *Promise[T], res Result[T]) {
-	// res will be nil after a Finally callback on a Promise with nil Result,
-	// after a callback that doesn't support returning Result, or when it's
-	// explicitly returned from a callback that supports returning Result.
-	if res == nil {
-		resolveToFulfilledRes(p, nil)
-		return
-	}
-
-	// resolve the provided Promise to the provided Result, accordingly.
-	// Note: if res is a Promise value, the State call will block until that
-	// Promise is resolved.
-	switch s := res.State(); s {
-	case Panicked:
-		resolveToPanickedRes(p, res)
-	case Rejected:
-		resolveToRejectedRes(p, res)
-	case Fulfilled:
-		resolveToFulfilledRes(p, res)
-	default:
-		panic("promise: unexpected Result state: " + s.String())
-	}
-}
-
-func resolveToResWithDelay[T any](
-	p *Promise[T],
-	res Result[T],
-	dd time.Duration,
-	flags delayFlags,
-) {
-	if res == nil {
-		if flags.onSuccess {
-			time.Sleep(dd)
-		}
-		resolveToFulfilledRes(p, nil)
-		return
-	}
-
-	switch s := res.State(); s {
-	case Panicked:
-		// a rejected state is considered a failure
-		if flags.onError {
-			time.Sleep(dd)
-		}
-		resolveToPanickedRes(p, res)
-	case Rejected:
-		// a rejected state is considered a failure
-		if flags.onError {
-			time.Sleep(dd)
-		}
-		resolveToRejectedRes(p, res)
-	case Fulfilled:
-		// a fulfilled state is considered a success
-		if flags.onSuccess {
-			time.Sleep(dd)
-		}
-		resolveToFulfilledRes(p, res)
-	default:
-		panic("promise: unexpected Result state: " + s.String())
-	}
-}
-
-func resolveToPanickedRes[T any](
-	p *Promise[T],
-	res Result[T],
-) {
-	debug(p, resolve, resolvePanicked)
-	// save the result before executing any callbacks.
-	p.res = res
-	if p.chainStatus.Load() == chainStatusEmpty {
-		// if the chain is empty (no follow, read or wait calls), execute
-		// the uncaught panic logic.
-		// otherwise, it will be delayed until the last call in the chain.
-		p.uncaughtPanicHandler()
-	}
-	// resolve with the Panicked status.
-	p.resolveState.Store(uint32(Panicked))
-	closeSyncCtx(p.syncCtx) // unblocks all calls waiting on p.
-	handleExtCalls(p)       // handles all extension calls that involve p.
-	// note: any code that gets added after closeSyncCtx and handleExtCalls
-	// isn't guaranteed to be executed without extra wait arrangements.
-}
-
-func resolveToRejectedRes[T any](
-	p *Promise[T],
-	res Result[T],
-) {
-	debug(p, resolve, resolveRejected)
-	p.res = res
-	if p.chainStatus.Load() == chainStatusEmpty {
-		p.uncaughtErrorHandler()
-	}
-	p.resolveState.Store(uint32(Rejected))
-	closeSyncCtx(p.syncCtx)
-	handleExtCalls(p)
-}
-
-func resolveToFulfilledRes[T any](
-	p *Promise[T],
-	res Result[T],
-) {
-	debug(p, resolve, resolveFulfilled)
-	p.res = res
-	p.resolveState.Store(uint32(Fulfilled))
-	closeSyncCtx(p.syncCtx)
-	handleExtCalls(p)
 }
 
 func handleExtCalls[T any](p *Promise[T]) (handled bool) {
