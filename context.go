@@ -19,10 +19,12 @@ import (
 	"time"
 )
 
-var closedChan = make(chan struct{})
+var closedSyncCtx context.Context
 
 func init() {
+	closedChan := make(chan struct{})
 	close(closedChan)
+	closedSyncCtx = syncCtx{syncChan: closedChan}
 }
 
 func newSyncCtx() context.Context {
@@ -36,10 +38,6 @@ func closeSyncCtx(ctx context.Context) {
 	// is only used from one goroutine, the runCallbackHandler, so
 	// that's taken care of.
 	close(sc.syncChan)
-}
-
-func newClosedSyncCtx() context.Context {
-	return syncCtx{syncChan: closedChan}
 }
 
 // syncCtx is a sync context.Context value, which doesn't

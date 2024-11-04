@@ -429,7 +429,7 @@ func newPromCtx[T any](g *Group[T], ctx context.Context) *Promise[T] {
 func newPromSync[T any](g *Group[T], res Result[T]) *Promise[T] {
 	p := &Promise[T]{
 		group:   g,
-		syncCtx: newClosedSyncCtx(),
+		syncCtx: closedSyncCtx,
 		// no other fields are needed, since sync promises are resolved directly
 		// after created, so any extension call will depend on the syncChan.
 	}
