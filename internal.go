@@ -120,7 +120,7 @@ func (p *Promise[T]) uncaughtPanicHandler() {
 	// call the handler if one is provided
 	if p.group.core.uncaughtPanicHandler != nil {
 		debug(p, callUncaughtPanicHandler)
-		p.group.core.uncaughtPanicHandler(p.res.(panicResult).getPanicV())
+		p.group.core.uncaughtPanicHandler(getPanicVFromRes(p.res))
 	}
 }
 
@@ -252,13 +252,18 @@ func (p *Promise[T]) resolveToResSync(res Result[T]) {
 		return
 	}
 
+	p.res = res
 	state := res.State()
 	switch state {
-	case Panicked, Rejected, Fulfilled:
+	case Panicked:
+		p.uncaughtPanicHandler()
+	case Rejected:
+		p.uncaughtErrorHandler()
+	case Fulfilled:
+		// nothing special to be done.
 	default:
 		panic("promise: unexpected Result state: " + state.String())
 	}
-	p.res = res
 	p.resolveState.Store(uint32(state))
 }
 
@@ -305,7 +310,7 @@ func handleReturns[PrevResT, NewResT any](
 	var newRes Result[NewResT]
 	if v := recover(); v != nil {
 		// the callback panicked, create the appropriate Result value.
-		newRes = promisePanickedResult[NewResT]{v: v}
+		newRes = panicResult[NewResT]{v: v}
 	} else {
 		// the callback returned normally, called runtime.Goexit, or
 		// called panic with nil value.

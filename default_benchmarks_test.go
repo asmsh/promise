@@ -178,7 +178,7 @@ func BenchmarkDelay(b *testing.B) {
 }
 
 func BenchmarkWrap(b *testing.B) {
-	b.Run("empty result", func(b *testing.B) {
+	b.Run("nil result", func(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -188,7 +188,7 @@ func BenchmarkWrap(b *testing.B) {
 		_ = p
 	})
 
-	b.Run("non-empty success result", func(b *testing.B) {
+	b.Run("Fulfilled result", func(b *testing.B) {
 		var p *Promise[string]
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -198,13 +198,24 @@ func BenchmarkWrap(b *testing.B) {
 		_ = p
 	})
 
-	b.Run("non-empty failed result", func(b *testing.B) {
+	b.Run("Rejected result", func(b *testing.B) {
 		var p *Promise[string]
 		var err = newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			p = Wrap(Err[string](err))
+		}
+		_ = p
+	})
+
+	b.Run("Panicked result", func(b *testing.B) {
+		var p *Promise[string]
+		var err = newStrError()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			p = Wrap(Panic[string](err))
 		}
 		_ = p
 	})

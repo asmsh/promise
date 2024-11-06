@@ -26,48 +26,6 @@ import (
 // structure, using the error, errors.Unwrap, errors.Is and errors.As interfaces.
 // also to ensure consistent string conversion of the results.
 
-type panicResult interface {
-	getPanicV() any
-}
-
-// promisePanickedResult is a Result and error implementation for Panicked results
-// returned from all calls, except the All(and AllWait), Any(and AnyWait) or Join
-// extension calls.
-//
-// the purpose of this type is to reduce allocations when setting the Result of
-// the resolved promise, and implement the required logic to investigate the error
-// structure, using the error, errors.Unwrap, errors.Is and errors.As interfaces.
-type promisePanickedResult[T any] struct{ v any }
-
-func (r promisePanickedResult[T]) Val() (v T)   { return v }
-func (r promisePanickedResult[T]) Err() error   { return r }
-func (r promisePanickedResult[T]) State() State { return Panicked }
-func (r promisePanickedResult[T]) String() string {
-	// same error message & format as the PanicError
-	return fmt.Sprintf("panicked: %v", r.v)
-}
-func (r promisePanickedResult[T]) Error() string { return r.String() }
-func (r promisePanickedResult[T]) Is(target error) bool {
-	// make this error result implement the identity panic error value.
-	return target == ErrPromisePanicked
-}
-func (r promisePanickedResult[T]) Unwrap() error {
-	// try to return the panic value as an error value if it's really an error value.
-	if err, ok := r.v.(error); ok {
-		return err
-	}
-	return nil
-}
-func (r promisePanickedResult[T]) As(target any) bool {
-	// populate the expected target with panic value.
-	if perr, ok := target.(*PanicError); ok {
-		perr.V = r.v
-		return true
-	}
-	return false
-}
-func (r promisePanickedResult[T]) getPanicV() any { return r.v }
-
 // errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
 // it's used instead of saving the ErrPromiseConsumed error in a generic errResult value.
 type errPromiseConsumedResult[T any] struct{}
@@ -139,15 +97,15 @@ func (r panickedResultSingleIdxRes[T]) As(target any) bool {
 		// return on non-supported target types.
 		return false
 	case *PanicError:
-		perr.V = r.val.Result.(panicResult).getPanicV()
+		perr.V = r.PanicV()
 	case *IdxError:
 		perr.Idx = r.val.Idx
 		perr.Err = r.val.Err()
 	}
 	return true
 }
-func (r panickedResultSingleIdxRes[T]) getPanicV() any {
-	return r.val.Result.(panicResult).getPanicV()
+func (r panickedResultSingleIdxRes[T]) PanicV() any {
+	return getPanicVFromRes(r.val.Result)
 }
 
 // fulfilledResultMultiIdxRes is a Result implementation for Fulfilled results
@@ -210,13 +168,14 @@ func (r rejectedResultMultiIdxRes[T]) Error() string {
 	}
 
 	// find the first Rejected error and print it before any other errors.
-	fi := slices.IndexFunc(r.vals, func(ir IdxRes[T]) bool { return ir.State() == Rejected })
+	fr := r.firstRejectedRes()
 	errb := strings.Builder{}
 	errb.WriteString(r.State().String())
 	errb.WriteString(": ")
-	errb.WriteString(r.vals[fi].String())
+	errb.WriteString(fr.String())
 	for i, ir := range r.vals {
-		if ir.State() != Rejected || i == fi { // not Rejected, or already printed
+		// not Rejected, or already printed
+		if ir.State() != Rejected || i == fr.Idx {
 			continue
 		}
 		errb.WriteByte('\n')
@@ -245,15 +204,21 @@ func (r rejectedResultMultiIdxRes[T]) As(target any) bool {
 		// return on non-supported target types.
 		return false
 	case *IdxError:
-		// find the first panic error and save it in the target.
-		i := slices.IndexFunc(r.vals, func(ir IdxRes[T]) bool { return ir.State() == Rejected })
-		perr.Idx = r.vals[i].Idx
-		perr.Err = r.vals[i].Err()
+		fr := r.firstRejectedRes()
+		perr.Idx = fr.Idx
+		perr.Err = fr.Err()
 	case *MultiIdxError:
 		// include all errors.
 		perr.errs = r.Unwrap()
 	}
 	return true
+}
+func (r rejectedResultMultiIdxRes[T]) firstRejectedRes() IdxRes[T] {
+	// find the first Rejected Result.
+	// there must be at least one Result value, otherwise the whole result value
+	// wouldn't have been created, and that value has to be with Rejected State.
+	i := slices.IndexFunc(r.vals, func(ir IdxRes[T]) bool { return ir.State() == Rejected })
+	return r.vals[i]
 }
 
 // panickedResultMultiIdxRes is a Result and error implementation for panic
@@ -289,13 +254,14 @@ func (r panickedResultMultiIdxRes[T]) Error() string {
 	}
 
 	// find the first Panicked error and print it before any other errors.
-	fi := slices.IndexFunc(r.vals, func(ir IdxRes[T]) bool { return ir.State() == Panicked })
+	fr := r.firstPanickedRes()
 	errb := strings.Builder{}
 	errb.WriteString(r.State().String())
 	errb.WriteString(": ")
-	errb.WriteString(r.vals[fi].String())
+	errb.WriteString(fr.String())
 	for i, ir := range r.vals {
-		if ir.State() == Fulfilled || i == fi { // not Rejected nor Panicked, or already printed
+		// not Rejected nor Panicked, or already printed
+		if ir.State() == Fulfilled || i == fr.Idx {
 			continue
 		}
 		errb.WriteByte('\n')
@@ -328,22 +294,24 @@ func (r panickedResultMultiIdxRes[T]) As(target any) bool {
 		// return on non-supported target types.
 		return false
 	case *PanicError:
-		// find the first panic error and save it in the target.
-		i := slices.IndexFunc(r.vals, func(ir IdxRes[T]) bool { return ir.State() == Panicked })
-		perr.V = r.vals[i].Result.(panicResult).getPanicV()
+		perr.V = r.PanicV()
 	case *IdxError:
-		// find the first panic error and save it in the target.
-		i := slices.IndexFunc(r.vals, func(ir IdxRes[T]) bool { return ir.State() == Panicked })
-		perr.Idx = r.vals[i].Idx
-		perr.Err = r.vals[i].Err()
+		fr := r.firstPanickedRes()
+		perr.Idx = fr.Idx
+		perr.Err = fr.Err()
 	case *MultiIdxError:
 		// include all errors.
 		perr.errs = r.Unwrap()
 	}
 	return true
 }
-func (r panickedResultMultiIdxRes[T]) getPanicV() any {
-	// find the first panic error and save it in the target.
+func (r panickedResultMultiIdxRes[T]) PanicV() any {
+	return getPanicVFromRes(r.firstPanickedRes().Result)
+}
+func (r panickedResultMultiIdxRes[T]) firstPanickedRes() IdxRes[T] {
+	// find the first Panicked Result.
+	// there must be at least one Result value, otherwise the whole result value
+	// wouldn't have been created, and that value has to be with Panicked State.
 	i := slices.IndexFunc(r.vals, func(ir IdxRes[T]) bool { return ir.State() == Panicked })
-	return r.vals[i].Result.(panicResult).getPanicV()
+	return r.vals[i]
 }
