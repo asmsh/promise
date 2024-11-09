@@ -181,19 +181,16 @@ func (p *Promise[T]) resolveToResWithDelay(
 
 	switch s := res.State(); s {
 	case Panicked:
-		// a rejected state is considered a failure
-		if flags.onError {
+		if flags.onPanic {
 			time.Sleep(dd)
 		}
 		p.resolveToPanickedRes(res)
 	case Rejected:
-		// a rejected state is considered a failure
 		if flags.onError {
 			time.Sleep(dd)
 		}
 		p.resolveToRejectedRes(res)
 	case Fulfilled:
-		// a fulfilled state is considered a success
 		if flags.onSuccess {
 			time.Sleep(dd)
 		}
