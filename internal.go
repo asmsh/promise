@@ -428,6 +428,7 @@ func newPromCtx[T any](g *Group[T], ctx context.Context) *Promise[T] {
 // or for follow calls on such promises.
 func newPromBlocked[T any]() *Promise[T] {
 	return &Promise[T]{
+		syncCtx: neverClosedSyncCtx,
 		// no other fields need to be initialized, since this promise will never be resolved.
 	}
 }

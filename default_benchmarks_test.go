@@ -34,6 +34,31 @@ func BenchmarkChan(b *testing.B) {
 	})
 }
 
+func BenchmarkCtx(b *testing.B) {
+	b.Run("empty-ctx", func(b *testing.B) {
+		var p *Promise[any]
+		ctx := context.Background()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			p = Ctx(ctx)
+		}
+		_ = p
+	})
+
+	b.Run("non-empty-ctx", func(b *testing.B) {
+		var p *Promise[any]
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			p = Ctx(ctx)
+		}
+		_ = p
+	})
+}
+
 func BenchmarkGo(b *testing.B) {
 	b.Run("", func(b *testing.B) {
 		var p *Promise[any]

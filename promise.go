@@ -186,7 +186,7 @@ func (p *Promise[T]) Callback(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncCtx == nil {
+	if p.syncCtx == neverClosedSyncCtx {
 		return
 	}
 
@@ -218,7 +218,7 @@ func (p *Promise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) *Promise[T] {
-	if p.syncCtx == nil {
+	if p.syncCtx == neverClosedSyncCtx {
 		// since the syncCtx is nil, this promise will never be resolved,
 		// so no point in allocating a new value.
 		// note: this can only happen if the promise is created by passing a
@@ -267,7 +267,7 @@ func (p *Promise[T]) Then(
 	if thenCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncCtx == nil {
+	if p.syncCtx == neverClosedSyncCtx {
 		return p
 	}
 
@@ -316,7 +316,7 @@ func (p *Promise[T]) Catch(
 	if catchCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncCtx == nil {
+	if p.syncCtx == neverClosedSyncCtx {
 		return p
 	}
 
@@ -361,7 +361,7 @@ func (p *Promise[T]) Recover(
 	if recoverCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncCtx == nil {
+	if p.syncCtx == neverClosedSyncCtx {
 		return p
 	}
 
@@ -410,7 +410,7 @@ func (p *Promise[T]) Finally(
 	if finallyCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.syncCtx == nil {
+	if p.syncCtx == neverClosedSyncCtx {
 		return p
 	}
 

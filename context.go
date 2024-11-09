@@ -19,6 +19,7 @@ import (
 	"time"
 )
 
+var neverClosedSyncCtx context.Context = syncCtx{}
 var closedSyncCtx context.Context
 
 func init() {
