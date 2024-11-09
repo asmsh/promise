@@ -326,3 +326,25 @@ func (r panickedResultMultiIdxRes[T]) firstPanickedRes() IdxRes[T] {
 	i := slices.IndexFunc(r.vals, func(ir IdxRes[T]) bool { return ir.State() == Panicked })
 	return r.vals[i]
 }
+
+// errPromiseGroupDoneResult is a static error result that returns ErrPromiseGroupDone.
+// it's used instead of saving the ErrPromiseGroupDone error in a generic errResult value.
+type errPromiseGroupDoneResult[T any] struct{}
+
+func (r errPromiseGroupDoneResult[T]) Val() (v T)   { return v }
+func (r errPromiseGroupDoneResult[T]) Err() error   { return ErrPromiseGroupDone }
+func (r errPromiseGroupDoneResult[T]) State() State { return Rejected }
+func (r errPromiseGroupDoneResult[T]) String() string {
+	return fmt.Sprintf("rejected: %s", ErrPromiseGroupDone.Error())
+}
+
+// errPromiseGroupBusyResult is a static error result that returns ErrPromiseGroupBusy.
+// it's used instead of saving the ErrPromiseGroupBusy error in a generic errResult value.
+type errPromiseGroupBusyResult[T any] struct{}
+
+func (r errPromiseGroupBusyResult[T]) Val() (v T)   { return v }
+func (r errPromiseGroupBusyResult[T]) Err() error   { return ErrPromiseGroupBusy }
+func (r errPromiseGroupBusyResult[T]) State() State { return Rejected }
+func (r errPromiseGroupBusyResult[T]) String() string {
+	return fmt.Sprintf("rejected: %s", ErrPromiseGroupBusy.Error())
+}

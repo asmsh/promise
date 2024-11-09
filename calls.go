@@ -22,12 +22,21 @@ import (
 	"time"
 )
 
+func noopRegFunc() {
+	// do nothing
+}
+
 func chanCall[T any](g *Group[T], resChan <-chan Result[T]) *Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
+	if g.isWaiting() {
+		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	}
+	if !g.reserveGoroutine(noopRegFunc) {
+		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+	}
 
-	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	debug(p, startHandler, startConstrHandler, startConstrChanHandler)
 	go chanHandler(p, resChan)
@@ -60,8 +69,13 @@ func goCall[T any](g *Group[T], cb goCallback[T, T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if g.isWaiting() {
+		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	}
+	if !g.reserveGoroutine(noopRegFunc) {
+		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+	}
 
-	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	ctx, cancel := g.callbackCtx(p.syncCtx)
 	debug(p, startHandler, startConstrHandler, startConstrGoHandler)
@@ -84,8 +98,13 @@ func goErrCall[T any](g *Group[T], cb goErrCallback[T, T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if g.isWaiting() {
+		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	}
+	if !g.reserveGoroutine(noopRegFunc) {
+		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+	}
 
-	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	ctx, cancel := g.callbackCtx(p.syncCtx)
 	debug(p, startHandler, startConstrHandler, startConstrGoErrHandler)
@@ -111,8 +130,13 @@ func goResCall[T any](
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if g.isWaiting() {
+		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	}
+	if !g.reserveGoroutine(noopRegFunc) {
+		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+	}
 
-	g.reserveGoroutine()
 	p := newPromInter[T](g)
 	ctx, cancel := g.callbackCtx(p.syncCtx)
 	debug(p, startHandler, startConstrHandler, startConstrGoResHandler)
@@ -137,9 +161,15 @@ func delayCall[T any](
 	d time.Duration,
 	cond ...DelayCond,
 ) *Promise[T] {
-	flags := getDelayFlags(cond)
-	g.reserveGoroutine()
+	if g.isWaiting() {
+		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	}
+	if !g.reserveGoroutine(noopRegFunc) {
+		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+	}
+
 	p := newPromInter[T](g)
+	flags := getDelayFlags(cond)
 	debug(p, startHandler, startConstrHandler, startConstrDelayHandler)
 	go delayHandler(p, res, d, flags)
 	return p

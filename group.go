@@ -3,6 +3,7 @@ package promise
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -43,6 +44,12 @@ type GroupConfig struct {
 	// Otherwise, it will allow the creation of the [Promise], which will be a never
 	// resolved (blocked) promise, causing all follow promises to be blocked as well.
 	ErrorWhenCtxNilDone bool
+
+	// ErrorWhenGroupBusy, if true, will cause new calls to [Group.Chan], [Group.Delay],
+	// and all [Group.Go], to return a [Rejected] [Result] with [ErrPromiseGroupBusy],
+	// when the [Group] is currently handling promises that equals the [Size] value (if set).
+	// Otherwise, it will wait until there's a place for the new promise.
+	ErrorWhenGroupBusy bool
 }
 
 type Group[T any] struct {
@@ -78,6 +85,10 @@ func NewGroup[T any](c ...GroupConfig) *Group[T] {
 
 		if c[0].ErrorWhenCtxNilDone {
 			g.core.errorWhenCtxNilDone = true
+		}
+
+		if c[0].ErrorWhenGroupBusy {
+			g.core.errorWhenGroupBusy = true
 		}
 	}
 
@@ -116,7 +127,12 @@ func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 	return wrapCall[T](g, res)
 }
 
-func (g *Group[T]) Wait() {
+func (g *Group[T]) Wait(triggers ...func()) {
+	// execute the trigger functions to block the wait logic until they return.
+	for _, f := range triggers {
+		f()
+	}
+	g.core.waiting.Store(true) // blocks new calls from being started.
 	g.core.wg.Wait()
 }
 
@@ -129,6 +145,11 @@ type groupCore struct {
 	// wg is used for the basic WaitAll() method.
 	wg sync.WaitGroup
 
+	// waiting represents whether this group has entered the waiting
+	// mode or not.
+	// it can enter the waiting mode via one of the Wait methods.
+	waiting atomic.Bool
+
 	// reserveChan is used for limiting concurrency.
 	reserveChan chan struct{}
 
@@ -136,6 +157,7 @@ type groupCore struct {
 	neverCancelCallbackCtx bool
 	onetimeResultHandling  bool
 	errorWhenCtxNilDone    bool
+	errorWhenGroupBusy     bool
 
 	// ctx will be non-nil if the Group is meant to close all Context values
 	// once any Promise that's created using it is rejected or panicked.
@@ -144,16 +166,47 @@ type groupCore struct {
 	cancel context.CancelFunc
 }
 
-func (g *Group[T]) reserveGoroutine() {
+func (g *Group[T]) isWaiting() bool {
 	if g == nil {
-		return
+		return false
 	}
-	// add to the wait group before waiting, to make sure that this goroutine
-	// reservation is accounted for.
+	return g.core.waiting.Load()
+}
+
+func (g *Group[T]) reserveGoroutine(chainRegFunc func()) bool {
+	if g == nil {
+		// execute the register func and mark this reservation successful.
+		chainRegFunc()
+		return true
+	}
+
+	// make sure that this reservation is accounted for.
 	g.core.wg.Add(1)
-	if g.core.reserveChan != nil {
-		g.core.reserveChan <- struct{}{}
+
+	// no size limitation is set, so return early.
+	if g.core.reserveChan == nil {
+		chainRegFunc()
+		return true
 	}
+
+	// either block until a place is available, or return an error with no waiting.
+	if g.core.errorWhenGroupBusy {
+		select {
+		case g.core.reserveChan <- struct{}{}:
+			// since we entered this case, and this is a non-blocking select,
+			// this case will happen immediately.
+			chainRegFunc()
+			return true
+		default:
+			return false
+		}
+	}
+
+	// it's guaranteed to make a successful reservation in this flow (after waiting),
+	// execute the register func before waiting.
+	chainRegFunc()
+	g.core.reserveChan <- struct{}{}
+	return true
 }
 
 // note: if the program is exiting, this call might not be executed,

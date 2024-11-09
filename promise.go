@@ -186,12 +186,16 @@ func (p *Promise[T]) Callback(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if p.group.isWaiting() {
+		return
+	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return
 	}
+	if !p.group.reserveGoroutine(p.regChainRead) {
+		return
+	}
 
-	p.regChainRead()
-	p.group.reserveGoroutine()
 	ctx, cancel := p.group.callbackCtx(nil)
 	debug(p, startHandler, startFollowHandler, startCallbackFollowHandler)
 	go callbackFollowHandler(p, cb, ctx, cancel)
@@ -218,6 +222,9 @@ func (p *Promise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) *Promise[T] {
+	if p.group.isWaiting() {
+		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	}
 	if p.syncCtx == neverClosedSyncCtx {
 		// since the syncCtx is nil, this promise will never be resolved,
 		// so no point in allocating a new value.
@@ -225,11 +232,12 @@ func (p *Promise[T]) Delay(
 		// Context value that's never canceled(nil Done) to the Ctx constructor.
 		return p
 	}
+	if !p.group.reserveGoroutine(p.regChainRead) {
+		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+	}
 
-	p.regChainRead()
-	flags := getDelayFlags(cond)
-	p.group.reserveGoroutine()
 	nextProm := newPromInter[T](p.group)
+	flags := getDelayFlags(cond)
 	debug(p, startHandler, startFollowHandler, startDelayFollowHandler)
 	go delayFollowHandler(p, nextProm, d, flags)
 	return nextProm
@@ -267,12 +275,16 @@ func (p *Promise[T]) Then(
 	if thenCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if p.group.isWaiting() {
+		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p
 	}
+	if !p.group.reserveGoroutine(p.regChainRead) {
+		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+	}
 
-	p.regChainRead()
-	p.group.reserveGoroutine()
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := p.group.callbackCtx(nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
@@ -316,12 +328,16 @@ func (p *Promise[T]) Catch(
 	if catchCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if p.group.isWaiting() {
+		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p
 	}
+	if !p.group.reserveGoroutine(p.regChainRead) {
+		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+	}
 
-	p.regChainRead()
-	p.group.reserveGoroutine()
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := p.group.callbackCtx(nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startCatchFollowHandler)
@@ -361,12 +377,16 @@ func (p *Promise[T]) Recover(
 	if recoverCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if p.group.isWaiting() {
+		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p
 	}
+	if !p.group.reserveGoroutine(p.regChainRead) {
+		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+	}
 
-	p.regChainRead()
-	p.group.reserveGoroutine()
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := p.group.callbackCtx(nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startRecoverFollowHandler)
@@ -410,12 +430,16 @@ func (p *Promise[T]) Finally(
 	if finallyCb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	if p.group.isWaiting() {
+		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p
 	}
+	if !p.group.reserveGoroutine(p.regChainRead) {
+		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+	}
 
-	p.regChainRead()
-	p.group.reserveGoroutine()
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := p.group.callbackCtx(nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startFinallyFollowHandler)
