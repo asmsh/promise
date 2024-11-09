@@ -135,9 +135,9 @@ func (p *Promise[T]) waitCall() {
 	// so call the unhandled handlers if the state is one of a failure.
 	switch s {
 	case Rejected:
-		p.uncaughtErrorHandler()
+		p.unhandledError()
 	case Panicked:
-		p.uncaughtPanicHandler()
+		p.unhandledPanic()
 	}
 }
 

@@ -30,10 +30,10 @@ const (
 	missingExtChan
 	foundExtQueue
 
-	startUncaughtPanicHandler
-	callUncaughtPanicHandler
-	startUncaughtErrorHandler
-	callUncaughtErrorHandler
+	startUnhandledPanicLogic
+	callUnhandledPanicCallback
+	startUnhandledErrorLogic
+	callUnhandledErrorCallback
 
 	// handler = goroutine
 	// note: in a program that doesn't call the Group.WaitX methods,

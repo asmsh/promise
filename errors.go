@@ -13,14 +13,14 @@ var (
 
 	// ErrPromiseNilCtxDone returned via [Result.Err] from [Group.Ctx] when the
 	// [context.Context] value passed has a nil Done channel ([context.Context.Done]),
-	// and the [GroupConfig.ErrorWhenCtxNilDone] [Group] option is set to `ture`.
+	// and the [GroupConfig.NoNilCtxDoneChan] [Group] option is set to `ture`.
 	// This is a sync error that will happen before the [Promise] value is returned.
-	ErrPromiseNilCtxDone = errors.New("promise got nil as result")
+	ErrPromiseNilCtxDone = errors.New("promise cannot be created from a Context with nil Done chan")
 
 	// ErrPromiseGroupBusy returned via [Result.Err] from [Group.Chan], [Group.Delay],
 	// and all [Group.Go] calls, when the [Group] is currently handling promises that
 	// equals the [Group]'s assigned size ([GroupConfig.Size]),
-	// and the [GroupConfig.ErrorWhenGroupBusy] [Group] option is set to `ture`.
+	// and the [GroupConfig.NoWaitingBusyGroup] [Group] option is set to `ture`.
 	// This is a sync error that will happen before the [Promise] value is returned.
 	ErrPromiseGroupBusy = errors.New("group is busy with other work")
 

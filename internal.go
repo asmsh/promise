@@ -101,15 +101,15 @@ func (p *Promise[T]) isOnetimePromise() bool {
 	if p.group == nil {
 		return false
 	}
-	return p.group.core.onetimeResultHandling
+	return p.group.core.onetimeHandling
 }
 
-func (p *Promise[T]) uncaughtPanicHandler() {
+func (p *Promise[T]) unhandledPanic() {
 	if p.group == nil {
 		return
 	}
 
-	debug(p, startUncaughtPanicHandler)
+	debug(p, startUnhandledPanicLogic)
 
 	// if it's request to cancel all the promises of the group on
 	// uncaught panics, call the cancel function before the handler.
@@ -117,19 +117,19 @@ func (p *Promise[T]) uncaughtPanicHandler() {
 		p.group.core.cancel()
 	}
 
-	// call the handler if one is provided
-	if p.group.core.uncaughtPanicHandler != nil {
-		debug(p, callUncaughtPanicHandler)
-		p.group.core.uncaughtPanicHandler(getPanicVFromRes(p.res))
+	// call the callback if one is provided
+	if p.group.core.unhandledPanicCB != nil {
+		debug(p, callUnhandledPanicCallback)
+		p.group.core.unhandledPanicCB(getPanicVFromRes(p.res))
 	}
 }
 
-func (p *Promise[T]) uncaughtErrorHandler() {
+func (p *Promise[T]) unhandledError() {
 	if p.group == nil {
 		return
 	}
 
-	debug(p, startUncaughtErrorHandler)
+	debug(p, startUnhandledErrorLogic)
 
 	// if it's request to cancel all the promises of the group on
 	// uncaught errors, call the cancel function before the handler.
@@ -137,10 +137,10 @@ func (p *Promise[T]) uncaughtErrorHandler() {
 		p.group.core.cancel()
 	}
 
-	// call the handler if one is provided
-	if p.group.core.uncaughtErrorHandler != nil {
-		debug(p, callUncaughtErrorHandler)
-		p.group.core.uncaughtErrorHandler(p.res.Err())
+	// call the callback if one is provided
+	if p.group.core.unhandledErrorCB != nil {
+		debug(p, callUnhandledErrorCallback)
+		p.group.core.unhandledErrorCB(p.res.Err())
 	}
 }
 func (p *Promise[T]) resolveToRes(res Result[T]) {
@@ -208,9 +208,9 @@ func (p *Promise[T]) resolveToPanickedRes(
 	p.res = res
 	if p.chainStatus.Load() == chainStatusEmpty {
 		// if the chain is empty (no follow, read or wait calls), execute
-		// the uncaught panic logic.
+		// the unhandled panic logic.
 		// otherwise, it will be delayed until the last call in the chain.
-		p.uncaughtPanicHandler()
+		p.unhandledPanic()
 	}
 	// resolve with the Panicked status.
 	p.resolveState.Store(uint32(Panicked))
@@ -226,7 +226,7 @@ func (p *Promise[T]) resolveToRejectedRes(
 	debug(p, resolve, resolveRejected)
 	p.res = res
 	if p.chainStatus.Load() == chainStatusEmpty {
-		p.uncaughtErrorHandler()
+		p.unhandledError()
 	}
 	p.resolveState.Store(uint32(Rejected))
 	closeSyncCtx(p.syncCtx)
@@ -253,9 +253,9 @@ func (p *Promise[T]) resolveToResSync(res Result[T]) {
 	state := res.State()
 	switch state {
 	case Panicked:
-		p.uncaughtPanicHandler()
+		p.unhandledPanic()
 	case Rejected:
-		p.uncaughtErrorHandler()
+		p.unhandledError()
 	case Fulfilled:
 		// nothing special to be done.
 	default:

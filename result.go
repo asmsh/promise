@@ -48,7 +48,7 @@ func Panic[T any](v any) Result[T] {
 
 // resultPanicV must be implemented for any custom (from outside this package)
 // [Result] type that returns the [Panicked] [State].
-// it's required for retrieving the panic value when calling the [GroupConfig.UncaughtPanicHandler],
+// it's required for retrieving the panic value when calling the [GroupConfig.UnhandledPanicCB],
 // otherwise, a new [PanicError] is gonna be passed wrapping the original [Result]
 // value as its V field ([PanicError.V]).
 type resultPanicV interface {

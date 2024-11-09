@@ -47,16 +47,16 @@ var testsCases_Group_callbackCtx = []struct {
 		expectsNilCancel: true,
 	},
 	{
-		// when a Group is available with neverCancelCallbackCtx=false.
+		// when a Group is available with neverCancelCBCtx=false.
 		name:             "non-nil_group,nil_group_ctx,cancel-callback-ctx,nil_syncCtx",
 		g:                &Group[any]{core: groupCore{}},
 		expectedCtxName:  "syncCtx",
 		expectsNilCancel: true,
 	},
 	{
-		// when a Group is available with neverCancelCallbackCtx=true.
+		// when a Group is available with neverCancelCBCtx=true.
 		name:            "non-nil_group,nil_group_ctx,never-cancel-callback-ctx,nil_syncCtx",
-		g:               &Group[any]{core: groupCore{neverCancelCallbackCtx: true}},
+		g:               &Group[any]{core: groupCore{neverCancelCBCtx: true}},
 		expectedCtxName: "context.Background",
 	},
 	{
@@ -74,16 +74,16 @@ var testsCases_Group_callbackCtx = []struct {
 		expectedCtxName: "syncCtx",
 	},
 	{
-		// when a Group is available with neverCancelCallbackCtx=false.
+		// when a Group is available with neverCancelCBCtx=false.
 		name:            "non-nil_group,nil_group_ctx,cancel-callback-ctx,non-nil_syncCtx",
 		g:               &Group[any]{core: groupCore{}},
 		syncCtx:         syncCtx{syncChan: make(chan struct{})},
 		expectedCtxName: "syncCtx",
 	},
 	{
-		// when a Group is available with neverCancelCallbackCtx=true.
+		// when a Group is available with neverCancelCBCtx=true.
 		name:            "non-nil_group,nil_group_ctx,never-cancel-callback-ctx,non-nil_syncCtx",
-		g:               &Group[any]{core: groupCore{neverCancelCallbackCtx: true}},
+		g:               &Group[any]{core: groupCore{neverCancelCBCtx: true}},
 		syncCtx:         syncCtx{syncChan: make(chan struct{})},
 		expectedCtxName: "context.Background",
 	},

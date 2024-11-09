@@ -41,14 +41,14 @@ func (d debugEvent) String() string {
 		return "missingExtChan"
 	case foundExtQueue:
 		return "foundExtQueue"
-	case startUncaughtPanicHandler:
-		return "startUncaughtPanicHandler"
-	case callUncaughtPanicHandler:
-		return "callUncaughtPanicHandler"
-	case startUncaughtErrorHandler:
-		return "startUncaughtErrorHandler"
-	case callUncaughtErrorHandler:
-		return "callUncaughtErrorHandler"
+	case startUnhandledPanicLogic:
+		return "startUnhandledPanicLogic"
+	case callUnhandledPanicCallback:
+		return "callUnhandledPanicCallback"
+	case startUnhandledErrorLogic:
+		return "startUnhandledErrorLogic"
+	case callUnhandledErrorCallback:
+		return "callUnhandledErrorCallback"
 	case startHandler:
 		return "startHandler"
 	case endHandler:

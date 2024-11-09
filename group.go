@@ -7,91 +7,15 @@ import (
 	"time"
 )
 
-type GroupConfig struct {
-	UncaughtPanicHandler func(v any)
-	UncaughtErrorHandler func(v error)
-
-	// Size is the allowed number of goroutines which this group can run.
-	// This includes goroutines created for both, constructor calls(Go, GoRes, etc.)
-	// and follow calls(Then, Catch, etc.).
-	// If it's 0 or less, then the group size is unlimited.
-	Size int
-
-	// CancelAllCtxOnFailure, if true, will result in canceling all Context values
-	// passed to all callbacks, once any callback returns an error or cause a panic
-	// that's not caught or recovered, through Catch or Recover, respectively.
-	// The default behavior is never canceling the callbacks' [context.Context] value
-	// on any failures.
-	CancelAllCtxOnFailure bool
-
-	// NeverCancelCallbackCtx, if true, will result in passing a never canceled
-	// [context.Context] value to all callbacks.
-	// If CancelAllCtxOnFailure is true, this will be set to false.
-	// The default behavior is always canceling the callbacks' [context.Context] value.
-	NeverCancelCallbackCtx bool
-
-	// OnetimeResultHandling is used to enforce that the Result value returned from
-	// any callback is passed around only one-time and only to a single goroutine.
-	// Any further attempt to use the Result value will return an erroneous Result
-	// value with its Err method returning an ErrPromiseConsumed error.
-	// The value might be passed around as an argument to another callback, or by
-	// returning it from the Result.GetRes method.
-	OnetimeResultHandling bool
-
-	// ErrorWhenCtxNilDone, if true, will cause new calls to [Group.Ctx] to return a
-	// [Rejected] [Result] with [ErrPromiseNilCtxDone], when the [context.Context]
-	// value passed has a nil Done channel ([context.Context.Done]).
-	// Otherwise, it will allow the creation of the [Promise], which will be a never
-	// resolved (blocked) promise, causing all follow promises to be blocked as well.
-	ErrorWhenCtxNilDone bool
-
-	// ErrorWhenGroupBusy, if true, will cause new calls to [Group.Chan], [Group.Delay],
-	// and all [Group.Go], to return a [Rejected] [Result] with [ErrPromiseGroupBusy],
-	// when the [Group] is currently handling promises that equals the [Size] value (if set).
-	// Otherwise, it will wait until there's a place for the new promise.
-	ErrorWhenGroupBusy bool
-}
-
 type Group[T any] struct {
 	core groupCore
 }
 
-func NewGroup[T any](c ...GroupConfig) *Group[T] {
+func NewGroup[T any](opts ...GroupOption) *Group[T] {
 	g := &Group[T]{}
-
-	if len(c) != 0 {
-		if cb := c[0].UncaughtPanicHandler; cb != nil {
-			g.core.uncaughtPanicHandler = cb
-		}
-		if cb := c[0].UncaughtErrorHandler; cb != nil {
-			g.core.uncaughtErrorHandler = cb
-		}
-
-		if size := c[0].Size; size > 0 {
-			g.core.reserveChan = make(chan struct{}, size)
-		}
-
-		if c[0].CancelAllCtxOnFailure {
-			g.core.ctx, g.core.cancel = context.WithCancel(context.Background())
-		}
-
-		if c[0].NeverCancelCallbackCtx && !c[0].CancelAllCtxOnFailure {
-			g.core.neverCancelCallbackCtx = true
-		}
-
-		if c[0].OnetimeResultHandling {
-			g.core.onetimeResultHandling = true
-		}
-
-		if c[0].ErrorWhenCtxNilDone {
-			g.core.errorWhenCtxNilDone = true
-		}
-
-		if c[0].ErrorWhenGroupBusy {
-			g.core.errorWhenGroupBusy = true
-		}
+	for _, opt := range opts {
+		opt(&g.core)
 	}
-
 	return g
 }
 
@@ -222,7 +146,7 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	}
 	if ctx.Done() != nil {
 		return newPromCtx[T](g, ctx)
-	} else if g != nil && g.core.errorWhenCtxNilDone {
+	} else if g != nil && g.core.noNilCtxDoneChan {
 		return newPromSync[T](g, errPromiseCtxNilDoneResult[T]{})
 	}
 	// since this ctx value will never be closed, the equivalent outcome would
@@ -271,8 +195,8 @@ func (g *Group[T]) Wait(triggers ...func()) {
 type groupCore struct {
 	debugCB func([]debugEvent)
 
-	uncaughtPanicHandler func(v any)
-	uncaughtErrorHandler func(v error)
+	unhandledPanicCB func(any)
+	unhandledErrorCB func(error)
 
 	// wg is used for the basic WaitAll() method.
 	wg sync.WaitGroup
@@ -286,14 +210,14 @@ type groupCore struct {
 	reserveChan chan struct{}
 
 	// flags for options...
-	neverCancelCallbackCtx bool
-	onetimeResultHandling  bool
-	errorWhenCtxNilDone    bool
-	errorWhenGroupBusy     bool
+	neverCancelCBCtx   bool
+	onetimeHandling    bool
+	noNilCtxDoneChan   bool
+	noWaitingBusyGroup bool
 
 	// ctx will be non-nil if the Group is meant to close all Context values
 	// once any Promise that's created using it is rejected or panicked.
-	// if neverCancelCallbackCtx is true, these 2 fields will be unset.
+	// if neverCancelCBCtx is true, these 2 fields will be unset.
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -322,7 +246,7 @@ func (g *Group[T]) reserveGoroutine(chainRegFunc func()) bool {
 	}
 
 	// either block until a place is available, or return an error with no waiting.
-	if g.core.errorWhenGroupBusy {
+	if g.core.noWaitingBusyGroup {
 		select {
 		case g.core.reserveChan <- struct{}{}:
 			// since we entered this case, and this is a non-blocking select,
@@ -364,7 +288,7 @@ func (g *Group[T]) callbackCtx(syncCtx context.Context) (context.Context, contex
 	// default scenario, either no Group or a Group with default behavior.
 	// we return the syncCtx with no cancellation, if one is provided,
 	// otherwise we return Background with cancellation.
-	if g == nil || (g.core.ctx == nil && !g.core.neverCancelCallbackCtx) {
+	if g == nil || (g.core.ctx == nil && !g.core.neverCancelCBCtx) {
 		if syncCtx == nil {
 			return newSyncCtx(), nil
 		}
@@ -373,7 +297,7 @@ func (g *Group[T]) callbackCtx(syncCtx context.Context) (context.Context, contex
 
 	// there's a Group, if it's requested to never cancel callback Context,
 	// then we return early with Background and no cancellation.
-	if g.core.neverCancelCallbackCtx {
+	if g.core.neverCancelCBCtx {
 		return context.Background(), noopCancelFunc
 	}
 
