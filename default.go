@@ -19,38 +19,11 @@ import (
 	"time"
 )
 
-// Chan returns a GoPromise that's created using the provided resChan.
-//
-// The resChan must be a bi-directional chan(buffered or unbuffered), which is
-// used from the caller(creator) side to do only one of the following, either
-// send a Res value on it for one time, or just close it.
-//
-// When a Res value is sent on it, the returned promise will be resolved(and the
-// resChan is closed) to either rejected, or fulfilled, depending on whether the
-// last element in that sent Res value is a non-nil error, or not, respectively.
-// When the resChan is closed, the returned promise will be fulfilled, and its
-// result will be a nil Res value.
-//
-// If the resChan is not usd as described above, a panic will happen when it's
-// used, either on the caller side, or here, internally.
-//
-// If the returned promise is rejected, and the error is not caught(by a Catch
-// call) before the end of the promise's chain, or the promise result is not
-// read(by a Res call), a panic will happen with an error value of type
-// *UncaughtError, which has that uncaught error 'wrapped' inside it.
-func Chan[T any](resChan <-chan Result[T]) *Promise[T] {
-	return chanCall[T](nil, resChan)
-}
-
-func Ctx(ctx context.Context) *Promise[any] {
-	return ctxCall[any](nil, ctx)
-}
-
-// Go runs the provided function, fun, in a separate goroutine, and returns
+// Go runs the provided function, cb, in a separate goroutine, and returns
 // a GoPromise whose result is a nil Res value.
 //
 // The returned promise will be resolved to panicked, or fulfilled, depending
-// on whether fun caused a panic, or returned normally, respectively.
+// on whether cb caused a panic, or returned normally, respectively.
 //
 // If the callback called runtime.Goexit, the returned promise will be fulfilled
 // to 'nil'.
@@ -60,20 +33,20 @@ func Ctx(ctx context.Context) *Promise[any] {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func Go(fun func()) *Promise[any] {
-	return goCall[any](nil, fun)
+func Go(cb func()) *Promise[any] {
+	return (*Group[any]).Go(nil, cb)
 }
 
-func GoErr(fun func() error) *Promise[any] {
-	return goErrCall[any](nil, fun)
+func GoErr(cb func() error) *Promise[any] {
+	return (*Group[any]).GoErr(nil, cb)
 }
 
-// GoRes runs the provided function, fun, in a separate goroutine, and returns
-// a GoPromise whose result will be the Res value returned from fun.
+// GoRes runs the provided function, cb, in a separate goroutine, and returns
+// a GoPromise whose result will be the Res value returned from cb.
 //
 // The returned promise will be resolved to panicked, rejected, or fulfilled,
-// depending on whether fun caused a panic, fun returned a non-nil error as the
-// last element in the returned Res value, or fun returned a Res value which
+// depending on whether cb caused a panic, cb returned a non-nil error as the
+// last element in the returned Res value, or cb returned a Res value which
 // doesn't has a non-nil error as its last element, respectively.
 //
 // If the callback called runtime.Goexit, the returned promise will be fulfilled
@@ -89,8 +62,8 @@ func GoErr(fun func() error) *Promise[any] {
 // it will re-panic(with the same value passed to the original 'panic' call).
 //
 // It will panic if a nil function is passed.
-func GoRes[T any](fun func(ctx context.Context) Result[T]) *Promise[T] {
-	return goResCall[T](nil, fun)
+func GoRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
+	return (*Group[T]).GoRes(nil, cb)
 }
 
 // Delay returns a GoPromise that's resolved to the passed Res value, res,
@@ -113,7 +86,34 @@ func GoRes[T any](fun func(ctx context.Context) Result[T]) *Promise[T] {
 // read(by a Res call), a panic will happen with an error value of type
 // *UncaughtError, which has that uncaught error 'wrapped' inside it.
 func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) *Promise[T] {
-	return delayCall[T](nil, res, d, cond...)
+	return (*Group[T]).Delay(nil, res, d, cond...)
+}
+
+func Ctx(ctx context.Context) *Promise[any] {
+	return (*Group[any]).Ctx(nil, ctx)
+}
+
+// Chan returns a GoPromise that's created using the provided resChan.
+//
+// The resChan must be a bi-directional chan(buffered or unbuffered), which is
+// used from the caller(creator) side to do only one of the following, either
+// send a Res value on it for one time, or just close it.
+//
+// When a Res value is sent on it, the returned promise will be resolved(and the
+// resChan is closed) to either rejected, or fulfilled, depending on whether the
+// last element in that sent Res value is a non-nil error, or not, respectively.
+// When the resChan is closed, the returned promise will be fulfilled, and its
+// result will be a nil Res value.
+//
+// If the resChan is not usd as described above, a panic will happen when it's
+// used, either on the caller side, or here, internally.
+//
+// If the returned promise is rejected, and the error is not caught(by a Catch
+// call) before the end of the promise's chain, or the promise result is not
+// read(by a Res call), a panic will happen with an error value of type
+// *UncaughtError, which has that uncaught error 'wrapped' inside it.
+func Chan[T any](resChan <-chan Result[T]) *Promise[T] {
+	return (*Group[T]).Chan(nil, resChan)
 }
 
 // Wrap returns a GoPromise that's resolved, synchronously, to the provided
@@ -130,5 +130,5 @@ func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) *Promise[T]
 // until the error is caught on each of these chains(by a Catch call), or the
 // promise result is read(by a Res call).
 func Wrap[T any](res Result[T]) *Promise[T] {
-	return wrapCall[T](nil, res)
+	return (*Group[T]).Wrap(nil, res)
 }
