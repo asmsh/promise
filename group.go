@@ -36,6 +36,13 @@ type GroupConfig struct {
 	// The value might be passed around as an argument to another callback, or by
 	// returning it from the Result.GetRes method.
 	OnetimeResultHandling bool
+
+	// ErrorWhenCtxNilDone, if true, will cause new calls to [Group.Ctx] to return a
+	// [Rejected] [Result] with [ErrPromiseNilCtxDone], when the [context.Context]
+	// value passed has a nil Done channel ([context.Context.Done]).
+	// Otherwise, it will allow the creation of the [Promise], which will be a never
+	// resolved (blocked) promise, causing all follow promises to be blocked as well.
+	ErrorWhenCtxNilDone bool
 }
 
 type Group[T any] struct {
@@ -67,6 +74,10 @@ func NewGroup[T any](c ...GroupConfig) *Group[T] {
 
 		if c[0].OnetimeResultHandling {
 			g.core.onetimeResultHandling = true
+		}
+
+		if c[0].ErrorWhenCtxNilDone {
+			g.core.errorWhenCtxNilDone = true
 		}
 	}
 
@@ -124,6 +135,7 @@ type groupCore struct {
 	// flags for options...
 	neverCancelCallbackCtx bool
 	onetimeResultHandling  bool
+	errorWhenCtxNilDone    bool
 
 	// ctx will be non-nil if the Group is meant to close all Context values
 	// once any Promise that's created using it is rejected or panicked.

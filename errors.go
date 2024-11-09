@@ -16,6 +16,11 @@ var (
 	// TODO: check if we should introduce a new error to report returns via runtime.Goexit or nil panic
 	// quick way of returning typed Empty.
 	//	ErrPromiseNilResult = errors.New("promise got nil as result")
+
+	// ErrPromiseNilCtxDone returned via [Result.Err] from [Group.Ctx] when the
+	// [context.Context] value passed has a nil Done channel ([context.Context.Done]),
+	// and the [GroupConfig.ErrorWhenCtxNilDone] [Group] option is set to `ture`.
+	ErrPromiseNilCtxDone = errors.New("promise got nil as result")
 )
 
 // PanicError wraps a panic that got caught in a promise callback.

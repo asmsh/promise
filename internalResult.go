@@ -37,6 +37,17 @@ func (r errPromiseConsumedResult[T]) String() string {
 	return fmt.Sprintf("rejected: %s", ErrPromiseConsumed.Error())
 }
 
+// errPromiseCtxNilDoneResult is a static error result that returns ErrPromiseNilCtxDone.
+// it's used instead of saving the ErrPromiseNilCtxDone error in a generic errResult value.
+type errPromiseCtxNilDoneResult[T any] struct{}
+
+func (r errPromiseCtxNilDoneResult[T]) Val() (v T)   { return v }
+func (r errPromiseCtxNilDoneResult[T]) Err() error   { return ErrPromiseNilCtxDone }
+func (r errPromiseCtxNilDoneResult[T]) State() State { return Rejected }
+func (r errPromiseCtxNilDoneResult[T]) String() string {
+	return fmt.Sprintf("rejected: %s", ErrPromiseNilCtxDone.Error())
+}
+
 // fulfilledResultSingleIdxRes is a Result implementation for Fulfilled results
 // returned from the Select extension call.
 type fulfilledResultSingleIdxRes[T any] struct {

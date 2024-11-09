@@ -45,14 +45,15 @@ func ctxCall[T any](g *Group[T], ctx context.Context) *Promise[T] {
 	if ctx == nil {
 		panic(nilCtxPanicMsg)
 	}
-	if ctx.Done() == nil {
-		// since this ctx value will never be closed, the equivalent outcome would
-		// be a Promise that's never resolved.
-		// so, return that equivalent value without creating any unneeded resources.
-		return newPromBlocking[T]()
+	if ctx.Done() != nil {
+		return newPromCtx[T](g, ctx)
+	} else if g != nil && g.core.errorWhenCtxNilDone {
+		return newPromSync[T](g, errPromiseCtxNilDoneResult[T]{})
 	}
-
-	return newPromCtx[T](g, ctx)
+	// since this ctx value will never be closed, the equivalent outcome would
+	// be a Promise that's never resolved.
+	// so, return that equivalent value without creating any unneeded resources.
+	return newPromBlocked[T]()
 }
 
 func goCall[T any](g *Group[T], cb goCallback[T, T]) *Promise[T] {

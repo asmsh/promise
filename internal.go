@@ -423,6 +423,15 @@ func newPromCtx[T any](g *Group[T], ctx context.Context) *Promise[T] {
 	}
 }
 
+// newPromBlocked returns a promise that will never be resolved.
+// it's used for promises for Ctx calls with empty context.Context value,
+// or for follow calls on such promises.
+func newPromBlocked[T any]() *Promise[T] {
+	return &Promise[T]{
+		// no other fields need to be initialized, since this promise will never be resolved.
+	}
+}
+
 // newPromSync returns a new Promise which is resolved synchronously and
 // immediately to the provided [Result] value.
 func newPromSync[T any](g *Group[T], res Result[T]) *Promise[T] {
@@ -434,13 +443,4 @@ func newPromSync[T any](g *Group[T], res Result[T]) *Promise[T] {
 	}
 	p.resolveToResSync(res)
 	return p
-}
-
-// newPromBlocking returns a promise that will never be resolved.
-// it's used for promises for Ctx calls with empty context.Context value,
-// or for follow calls on such promises.
-func newPromBlocking[T any]() *Promise[T] {
-	return &Promise[T]{
-		// no other fields need to be initialized, since this promise will never be resolved.
-	}
 }
