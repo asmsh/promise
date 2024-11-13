@@ -143,6 +143,7 @@ func (p *Promise[T]) unhandledError() {
 		p.group.core.unhandledErrorCB(p.res.Err())
 	}
 }
+
 func (p *Promise[T]) resolveToRes(res Result[T]) {
 	// res will be nil after a Finally callback on a Promise with nil Result,
 	// after a callback that doesn't support returning Result, or when it's
@@ -166,6 +167,7 @@ func (p *Promise[T]) resolveToRes(res Result[T]) {
 		panic("promise: unexpected Result state: " + s.String())
 	}
 }
+
 func (p *Promise[T]) resolveToResWithDelay(
 	res Result[T],
 	dd time.Duration,

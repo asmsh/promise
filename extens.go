@@ -121,6 +121,7 @@ loop:
 		} else {
 			logr.Println("blocking block")
 
+			extsChan := currProm.extsChan()
 			select {
 			case <-currProm.syncCtx.Done():
 				logr.Println("blocking block syncChan case")
@@ -134,7 +135,7 @@ loop:
 					"blocking block syncChan case with res.state",
 					res.State(),
 				)
-			case extQ := <-currProm.extsChan():
+			case extQ := <-extsChan:
 				logr.Println("blocking block extQ case")
 
 				// make sure to check the state again and get the sync result,
@@ -180,7 +181,7 @@ loop:
 
 				// send the updated queue back for either another extension call,
 				// or to be included in the currProm's resolving logic.
-				currProm.extsChan() <- extQ
+				extsChan <- extQ
 			}
 		}
 
@@ -395,6 +396,7 @@ loop:
 		} else {
 			logr.Println("blocking block")
 
+			extsChan := currProm.extsChan()
 			select {
 			case <-currProm.syncCtx.Done():
 				logr.Println("blocking block syncChan case")
@@ -410,7 +412,7 @@ loop:
 					"resState",
 					resState,
 				)
-			case extQ := <-currProm.extsChan():
+			case extQ := <-extsChan:
 				logr.Println("blocking block extQ case")
 
 				// make sure to check the state again and get the sync result,
@@ -458,7 +460,7 @@ loop:
 
 				// send the updated queue back for either another extension call,
 				// or to be included in the currProm's resolving logic.
-				currProm.extsChan() <- extQ
+				extsChan <- extQ
 			}
 		}
 
