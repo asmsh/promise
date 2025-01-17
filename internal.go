@@ -363,10 +363,10 @@ func getEffectiveNewRes[PrevResT, NewResT any](
 }
 
 func handleExtCalls[T any](p *Promise[T]) (handled bool) {
-	debug(p, startExtCall)
+	debug(p, startHandleExtCalls)
 	extChanP := p.extChanP.Load()
 	if extChanP == nil {
-		debug(p, missingExtChan)
+		debug(p, missingExtChan, endHandleExtCalls)
 		return false
 	}
 	debug(p, foundExtChan)
@@ -375,6 +375,7 @@ func handleExtCalls[T any](p *Promise[T]) (handled bool) {
 
 	// handle not having any extension calls
 	if !extQ.valid {
+		debug(p, emptyExtQueue, endHandleExtCalls)
 		return false
 	}
 
@@ -387,9 +388,10 @@ func handleExtCalls[T any](p *Promise[T]) (handled bool) {
 	// handle having multiple extension calls
 	for _, call := range extQ.extra {
 		handled = handleExtCall(call, res) || handled
+		debug(p, doneHandleExtCall)
 	}
 
-	debug(p, endExtCall)
+	debug(p, endHandleExtCalls)
 	return handled
 }
 

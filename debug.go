@@ -24,11 +24,13 @@ const (
 	resolveRejected
 	resolvePanicked
 
-	startExtCall
-	endExtCall
+	startHandleExtCalls
+	endHandleExtCalls
 	foundExtChan
 	missingExtChan
 	foundExtQueue
+	emptyExtQueue
+	doneHandleExtCall
 
 	startUnhandledPanicLogic
 	callUnhandledPanicCallback

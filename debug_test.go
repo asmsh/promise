@@ -31,16 +31,20 @@ func (d debugEvent) String() string {
 		return "resolveRejected"
 	case resolvePanicked:
 		return "resolvePanicked"
-	case startExtCall:
-		return "startExtCall"
-	case endExtCall:
-		return "endExtCall"
+	case startHandleExtCalls:
+		return "startHandleExtCalls"
+	case endHandleExtCalls:
+		return "endHandleExtCalls"
 	case foundExtChan:
 		return "foundExtChan"
 	case missingExtChan:
 		return "missingExtChan"
 	case foundExtQueue:
 		return "foundExtQueue"
+	case emptyExtQueue:
+		return "emptyExtQueue"
+	case doneHandleExtCall:
+		return "doneHandleExtCall"
 	case startUnhandledPanicLogic:
 		return "startUnhandledPanicLogic"
 	case callUnhandledPanicCallback:
