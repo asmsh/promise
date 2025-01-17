@@ -15,30 +15,8 @@
 package promise
 
 import (
-	"log"
-	"os"
-
 	"github.com/asmsh/uniquerand"
 )
-
-type logger struct {
-	enabled bool
-	l       *log.Logger
-}
-
-func (l logger) Println(v ...any) {
-	if !l.enabled {
-		return
-	}
-	l.l.Println(v...)
-}
-
-var logr = logger{
-	//enabled: true,
-	l: func() *log.Logger {
-		return log.New(os.Stderr, "", log.Lmicroseconds)
-	}(),
-}
 
 // Select returns a Promise value that resolves to the first Promise that's
 // resolved from the Promise values passed.
@@ -82,8 +60,6 @@ loop:
 		currProm := ps[idx]
 		loopCnt++
 
-		logr.Println("idx", idx, "loopCnt", loopCnt, "of length", len(ps))
-
 		// Select with non-blocking or with blocking, based on whether we might be
 		// interested to check other promises for potential immediate resolution.
 		// Only do that if we haven't already looped over the list before, otherwise
@@ -93,90 +69,45 @@ loop:
 		blocking := loopCnt > len(ps)
 
 		if !blocking {
-			logr.Println("non-blocking block")
-
 			select {
 			case <-currProm.syncCtx.Done():
-				logr.Println("non-blocking block syncChan case")
-
 				// the promise is resolved...
 				// create a result value based on the current promise.
 				res = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
-
-				logr.Println(
-					"non-blocking block syncChan case with res.state",
-					res.State(),
-				)
 			default:
-				logr.Println("non-blocking block default case")
-
 				// This would happen when the promise is not resolved yet, and there's
 				// another extension call that owns the extQueue value.
 				// Re-put the index in the randIdx source, to re-visit this case later.
 				randIdx.Put(idx)
 			}
 		} else {
-			logr.Println("blocking block")
-
 			extsChan := currProm.extsChan()
 			select {
 			case <-currProm.syncCtx.Done():
-				logr.Println("blocking block syncChan case")
-
 				res = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
-
-				logr.Println(
-					"blocking block syncChan case with res.state",
-					res.State(),
-				)
 			case extQ := <-extsChan:
-				logr.Println("blocking block extQ case")
-
 				// make sure to check the state again and get the sync result,
 				// in case the promise is resolved...
 				if extQ.initState != unknown {
-					logr.Println("blocking block extQ case sync res")
-
 					res = IdxRes[T]{
 						Idx:    idx,
 						Result: getFinalRes(currProm.res),
 					}
-
-					logr.Println(
-						"blocking block extQ case with sync res.state",
-						res.State(),
-					)
 				} else {
 					// the promise is not resolved yet...
 					// create the res chan if it's not already created.
 					if resChan == nil {
-						logr.Println("blocking block extQ case new chan")
-
 						resChan = make(chan IdxRes[T])
 					}
 
-					logr.Println(
-						"blocking block extQ case prev queue valid",
-						extQ.valid,
-						"len",
-						len(extQ.extra),
-					)
-
 					// update the queue with this extension call.
 					addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
-
-					logr.Println(
-						"blocking block extQ case new queue valid",
-						extQ.valid,
-						"len",
-						len(extQ.extra),
-					)
 				}
 
 				// send the updated queue back for either another extension call,
@@ -193,24 +124,16 @@ loop:
 
 	// because this is a Select extension call, only one result is expected
 	if res.Result == nil {
-		logr.Println("blocking on resChan receive")
-
 		res = <-resChan
 	}
 
 	// resolve the next promise, based on the final Result got
 	switch res.State() {
 	case Panicked:
-		logr.Println("idx", res.Idx, "Panicked")
-
 		newProm.resolveToPanickedRes(panickedResultSingleIdxRes[T]{res})
 	case Rejected:
-		logr.Println("idx", res.Idx, "Rejected")
-
 		newProm.resolveToRejectedRes(rejectedResultSingleIdxRes[T]{res})
 	case Fulfilled:
-		logr.Println("idx", res.Idx, "Fulfilled")
-
 		newProm.resolveToFulfilledRes(fulfilledResultSingleIdxRes[T]{res})
 	}
 }
@@ -336,25 +259,12 @@ func joinHandler[T any](
 	var randIdx uniquerand.Int
 	randIdx.Reset(len(ps))
 
-	logr.Println(
-		"join with: waitAll",
-		waitAll,
-		"allSuccess",
-		allSuccess,
-		"anySuccess",
-		anySuccess,
-		"resState",
-		resState,
-	)
-
 	// try to find a suitable resolved promise, based on the provided flags,
 	// or arrange for a notification once a promise is resolved.
 loop:
 	for idx, ok := randIdx.Get(); ok; idx, ok = randIdx.Get() {
 		currProm := ps[idx]
 		loopCnt++
-
-		logr.Println("loop with: idx", idx, "loopCnt", loopCnt, "of length", len(ps))
 
 		// Select with non-blocking or with blocking, based on whether we might be
 		// interested to check other promises for potential immediate resolution.
@@ -366,96 +276,45 @@ loop:
 
 		var res IdxRes[T]
 		if !blocking {
-			logr.Println("non-blocking block")
-
 			select {
 			case <-currProm.syncCtx.Done():
-				logr.Println("non-blocking block syncChan case")
-
 				// the promise is resolved...
 				// create a result value based on the current promise.
 				res = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
-
-				logr.Println(
-					"non-blocking block syncChan case with res.state",
-					res.State(),
-					"resState",
-					resState,
-				)
 			default:
-				logr.Println("non-blocking block default case")
-
 				// this would happen when the promise is not resolved yet, and there's
 				// another extension call that owns the extQueue value.
 				// re-put the index in the randIdx source, to re-visit this case later.
 				randIdx.Put(idx)
 			}
 		} else {
-			logr.Println("blocking block")
-
 			extsChan := currProm.extsChan()
 			select {
 			case <-currProm.syncCtx.Done():
-				logr.Println("blocking block syncChan case")
-
 				res = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
 				}
-
-				logr.Println(
-					"blocking block syncChan case with res.state",
-					res.State(),
-					"resState",
-					resState,
-				)
 			case extQ := <-extsChan:
-				logr.Println("blocking block extQ case")
-
 				// make sure to check the state again and get the sync result,
 				// in case the promise is resolved...
 				if extQ.initState != unknown {
-					logr.Println("blocking block extQ case sync res")
-
 					res = IdxRes[T]{
 						Idx:    idx,
 						Result: getFinalRes(currProm.res),
 					}
-
-					logr.Println(
-						"blocking block extQ case with sync res.state",
-						res.State(),
-						"resState",
-						resState,
-					)
 				} else {
 					// the promise is not resolved yet...
 					// create the res chan if it's not already created.
 					if resChan == nil {
-						logr.Println("blocking block extQ case new chan")
-
 						resChan = make(chan IdxRes[T])
 					}
 
-					logr.Println(
-						"blocking block extQ case prev queue valid",
-						extQ.valid,
-						"len",
-						len(extQ.extra),
-					)
-
 					// update the queue with this extension call.
 					addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
-
-					logr.Println(
-						"blocking block extQ case new queue valid",
-						extQ.valid,
-						"len",
-						len(extQ.extra),
-					)
 				}
 
 				// send the updated queue back for either another extension call,
@@ -472,18 +331,7 @@ loop:
 			// get the final promise's state, based on the previous resState and
 			// the recent resolved promise's state, using the selected mode rules.
 			if allSuccess {
-				newResState := getAllResState(res.State(), resState)
-
-				logr.Println(
-					"block syncChan allSuccess res.state",
-					res.State(),
-					"prevResState",
-					resState,
-					"newResState",
-					newResState,
-				)
-
-				resState = newResState
+				resState = getAllResState(res.State(), resState)
 
 				// stop, if we found the target break state based on the current flags.
 				// note: for the allSuccess case, we can only continue if the waitAll
@@ -492,27 +340,13 @@ loop:
 				// note: by default, we won't break on Panicked states, as it will be
 				// used only to alter the final state.
 				if !waitAll && res.State() == Rejected {
-					logr.Println("block syncChan allSuccess break")
-
 					break loop
 				}
 			}
 			if anySuccess {
-				newResState := getAnyResState(res.State(), resState)
+				resState = getAnyResState(res.State(), resState)
 
-				logr.Println(
-					"block syncChan anySuccess res.state",
-					res.State(),
-					"prevResState",
-					resState,
-					"newResState",
-					newResState,
-				)
-
-				resState = newResState
 				if !waitAll && res.State() == Fulfilled {
-					logr.Println("block syncChan anySuccess break")
-
 					break loop
 				}
 			}
@@ -529,8 +363,6 @@ loop:
 		// get the number of pending promises against the initially provided list.
 		pending := len(ps) - len(resArr)
 
-		logr.Println("pending promises", pending, "resState", resState)
-
 		// if there are no pending promises and no result state computed, then it
 		// must be a Join call, which means the result state expected is Fulfilled.
 		if pending == 0 && resState == unknown {
@@ -539,34 +371,14 @@ loop:
 
 		// otherwise, wait until a matching result is received.
 		if pending != 0 {
-			logr.Println("waiting for pending promises", pending)
-
 			for i := 0; i < pending; i++ {
 				res := <-resChan
 				resArr = append(resArr, res)
 
-				logr.Println(
-					"waiting block with res.state",
-					res.State(),
-					"resState",
-					resState,
-				)
-
 				// get the final promise's state, based on the previous resState and
 				// the recent resolved promise's state, using the selected mode rules.
 				if allSuccess {
-					newResState := getAllResState(res.State(), resState)
-
-					logr.Println(
-						"waiting block allSuccess res.state",
-						res.State(),
-						"prevResState",
-						resState,
-						"newResState",
-						newResState,
-					)
-
-					resState = newResState
+					resState = getAllResState(res.State(), resState)
 
 					// stop, if we found the target break state based on the current flags.
 					// note: for the allSuccess case, we can only continue if the waitAll
@@ -575,27 +387,13 @@ loop:
 					// note: by default, we won't break on Panicked states, as it will be
 					// used only to alter the final state.
 					if !waitAll && res.State() == Rejected {
-						logr.Println("waiting block allSuccess break")
-
 						break
 					}
 				}
 				if anySuccess {
-					newResState := getAnyResState(res.State(), resState)
+					resState = getAnyResState(res.State(), resState)
 
-					logr.Println(
-						"waiting block anySuccess res.state",
-						res.State(),
-						"prevResState",
-						resState,
-						"newResState",
-						newResState,
-					)
-
-					resState = newResState
 					if !waitAll && res.State() == Fulfilled {
-						logr.Println("waiting block anySuccess break")
-
 						break
 					}
 				}
@@ -606,8 +404,6 @@ loop:
 			}
 		}
 	}
-
-	logr.Println("resolving to", resState)
 
 	// resolve the next promise as expected, based on the final resState.
 	switch resState {
