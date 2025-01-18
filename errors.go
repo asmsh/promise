@@ -52,8 +52,8 @@ func (e PanicError) Unwrap() error {
 }
 
 // IdxError is the error container for an error returned from
-// the Select extension call.
-// It's also the container type for the MultiIdxError's elements.
+// the [All](and [AllWait]), [Any](and [AnyWait]) or [Join] extension calls.
+// It's also one of the container types for the MultiError's elements.
 type IdxError struct {
 	Idx int
 	Err error
@@ -66,13 +66,28 @@ func (e IdxError) Unwrap() error {
 	return e.Err
 }
 
-// MultiIdxError is the error container for errors returned from
-// the All(and AllWait), Any(and AnyWait) or Join extension calls.
-type MultiIdxError struct {
-	errs []error // always a []IdxError
+// GroupError is the error container for an error returned from
+// the the [Group.AllWaitRes] or [Group.AnyWaitRes] group calls.
+// It's also one of the container types for the MultiError's elements.
+type GroupError struct {
+	Err error
 }
 
-func (e MultiIdxError) Error() string {
+func (e GroupError) Error() string {
+	return e.Err.Error()
+}
+func (e GroupError) Unwrap() error {
+	return e.Err
+}
+
+// MultiError is the error container for errors returned from the
+// [All](and [AllWait]), [Any](and [AnyWait]) or [Join] extension calls,
+// and the [Group.AllWaitRes] or [Group.AnyWaitRes] group calls.
+type MultiError struct {
+	errs []error // either a []IdxError or []GroupError
+}
+
+func (e MultiError) Error() string {
 	if len(e.errs) == 1 {
 		return e.errs[0].Error()
 	}
@@ -87,6 +102,6 @@ func (e MultiIdxError) Error() string {
 	return errb.String()
 }
 
-func (e MultiIdxError) Unwrap() []error {
+func (e MultiError) Unwrap() []error {
 	return e.errs
 }

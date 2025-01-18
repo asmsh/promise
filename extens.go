@@ -130,11 +130,11 @@ loop:
 	// resolve the next promise, based on the final Result got
 	switch res.State() {
 	case Panicked:
-		newProm.resolveToPanickedRes(panickedResultSingleIdxRes[T]{res})
+		newProm.resolveToPanickedRes(panickedResultSingleRes[T, IdxRes[T]]{res})
 	case Rejected:
-		newProm.resolveToRejectedRes(rejectedResultSingleIdxRes[T]{res})
+		newProm.resolveToRejectedRes(rejectedResultSingleRes[T, IdxRes[T]]{res})
 	case Fulfilled:
-		newProm.resolveToFulfilledRes(fulfilledResultSingleIdxRes[T]{res})
+		newProm.resolveToFulfilledRes(fulfilledResultSingleRes[T, IdxRes[T]]{res})
 	}
 }
 
@@ -408,11 +408,11 @@ loop:
 	// resolve the next promise as expected, based on the final resState.
 	switch resState {
 	case Panicked:
-		newProm.resolveToPanickedRes(panickedResultMultiIdxRes[T]{resArr})
+		newProm.resolveToPanickedRes(panickedResultMultiRes[T, IdxRes[T]]{resArr})
 	case Rejected:
-		newProm.resolveToRejectedRes(rejectedResultMultiIdxRes[T]{resArr})
+		newProm.resolveToRejectedRes(rejectedResultMultiRes[T, IdxRes[T]]{resArr})
 	case Fulfilled:
-		newProm.resolveToFulfilledRes(fulfilledResultMultiIdxRes[T]{resArr})
+		newProm.resolveToFulfilledRes(fulfilledResultMultiRes[T, IdxRes[T]]{resArr})
 	}
 }
 

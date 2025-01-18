@@ -63,7 +63,7 @@ func getPanicVFromRes[T any](res Result[T]) any {
 }
 
 // IdxRes is a positional result view, that represents the result of the promise
-// at index idx in the original list provided.
+// at index Idx in the original list provided.
 type IdxRes[T any] struct {
 	Idx int
 	Result[T]
@@ -74,6 +74,23 @@ func (ir IdxRes[T]) String() string {
 		return "<nil>"
 	}
 	return fmt.Sprintf("[%d]%v", ir.Idx, ir.Result)
+}
+
+// GroupRes
+// TODO: choose another name (??)
+// the need of this type is to add fields later that can identify the promise
+// that generated that group's result.
+type GroupRes[T any] struct {
+	// possible fields:
+	// - InitType(constructor type): enum(Go, Ctx, GoRes, GoErr)
+	Result[T]
+}
+
+func (gr GroupRes[T]) String() string {
+	if gr.Result == nil {
+		return "<nil>"
+	}
+	return fmt.Sprintf("%v", gr.Result)
 }
 
 type emptyResult[T any] struct{}
