@@ -19,11 +19,13 @@ import "fmt"
 type State uint32
 
 const (
-	// the order here matters
-	unknown State = iota
-	Fulfilled
+	// the order and value here matter (increasing bitwise).
+
+	Fulfilled State = 1 << iota
 	Rejected
 	Panicked
+
+	unknown State = 0
 )
 
 func (s State) String() string {
