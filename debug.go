@@ -32,6 +32,10 @@ const (
 	emptyExtQueue
 	doneHandleExtCall
 
+	startHandleGroupCalls
+	endHandleGroupCalls
+	doneHandleGroupCall
+
 	startUnhandledPanicLogic
 	callUnhandledPanicCallback
 	startUnhandledErrorLogic

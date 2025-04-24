@@ -21,8 +21,8 @@ import (
 	"sync/atomic"
 )
 
-func (d debugEvent) String() string {
-	switch d {
+func (de debugEvent) String() string {
+	switch de {
 	case resolve:
 		return "resolve"
 	case resolveFulfilled:
@@ -45,6 +45,12 @@ func (d debugEvent) String() string {
 		return "emptyExtQueue"
 	case doneHandleExtCall:
 		return "doneHandleExtCall"
+	case startHandleGroupCalls:
+		return "startHandleGroupCalls"
+	case endHandleGroupCalls:
+		return "endHandleGroupCalls"
+	case doneHandleGroupCall:
+		return "doneHandleGroupCall"
 	case startUnhandledPanicLogic:
 		return "startUnhandledPanicLogic"
 	case callUnhandledPanicCallback:
@@ -119,44 +125,44 @@ type debugMetricsResult struct {
 	em map[debugEvent]*atomic.Int64
 }
 
-func (d *debugMetricsResult) clearAll() {
-	d.mu.Lock()
-	clear(d.em)
-	d.mu.Unlock()
+func (dmr *debugMetricsResult) clearAll() {
+	dmr.mu.Lock()
+	clear(dmr.em)
+	dmr.mu.Unlock()
 }
 
-func (d *debugMetricsResult) get(dt debugEvent) int64 {
-	d.mu.RLock()
-	m, ok := d.em[dt]
-	d.mu.RUnlock()
+func (dmr *debugMetricsResult) get(dt debugEvent) int64 {
+	dmr.mu.RLock()
+	c, ok := dmr.em[dt]
+	dmr.mu.RUnlock()
 	if !ok {
 		return 0
 	}
-	return m.Load()
+	return c.Load()
 }
 
-func (d *debugMetricsResult) String() string {
+func (dmr *debugMetricsResult) String() string {
 	s := strings.Builder{}
-	d.mu.RLock()
-	s.WriteString(fmt.Sprintf("debug metrics for %d events\n", len(d.em)))
-	for dt, count := range d.em {
-		s.WriteString(fmt.Sprintf("%s: %d\n", dt, count.Load()))
+	dmr.mu.RLock()
+	s.WriteString(fmt.Sprintf("debug metrics for %d events\n", len(dmr.em)))
+	for de, c := range dmr.em {
+		s.WriteString(fmt.Sprintf("%s: %d\n", de, c.Load()))
 	}
-	d.mu.RUnlock()
+	dmr.mu.RUnlock()
 	return s.String()
 }
 
 func createDebugMetricsCB() (*debugMetricsResult, func([]debugEvent)) {
 	dm := &debugMetricsResult{em: make(map[debugEvent]*atomic.Int64)}
-	return dm, func(dt []debugEvent) {
+	return dm, func(des []debugEvent) {
 		dm.mu.Lock()
-		for _, dt := range dt {
-			d, ok := dm.em[dt]
+		for _, de := range des {
+			c, ok := dm.em[de]
 			if !ok {
-				d = new(atomic.Int64)
-				dm.em[dt] = d
+				c = new(atomic.Int64)
+				dm.em[de] = c
 			}
-			d.Add(1)
+			c.Add(1)
 		}
 		dm.mu.Unlock()
 	}
