@@ -28,11 +28,7 @@ func ApplyConfig(conf GroupConfig) GroupOption {
 			core.unhandledErrorCB = cb
 		}
 
-		if size := conf.Size; size > 0 {
-			core.reserveChan = make(chan struct{}, size)
-		} else {
-			core.reserveChan = nil
-		}
+		core.sg.Init(int64(conf.Size))
 
 		if conf.FailuresCancelCBCtx {
 			core.ctx, core.cancel = context.WithCancel(context.Background())
@@ -70,11 +66,7 @@ func UnhandledErrorCB(cb func(error)) GroupOption {
 
 func Size(size int) GroupOption {
 	return func(core *groupCore) {
-		if size > 0 {
-			core.reserveChan = make(chan struct{}, size)
-		} else {
-			core.reserveChan = nil
-		}
+		core.sg.Init(int64(size))
 	}
 }
 
@@ -176,8 +168,9 @@ type GroupConfig struct {
 	NoNilCtxDoneChan bool
 
 	// NoWaitingBusyGroup, if true, will cause new calls to [Group.Chan], [Group.Delay],
-	// and all [Group.Go], to return a [Rejected] [Result] with [ErrPromiseGroupBusy],
-	// when the [Group] is currently handling promises that equals the [Size] value (if set).
+	// and all [Group.Go] functions, to return a [Rejected] [Result] with [ErrPromiseGroupBusy]
+	// synchronously, when the [Group] is currently handling promises that equals the [Size]
+	// value (if set).
 	// Otherwise, it will wait until there's a place for the new promise.
 	NoWaitingBusyGroup bool
 }

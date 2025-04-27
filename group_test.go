@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 )
 
 var testCtx, testCtxCancel = newTestContext()
@@ -129,4 +130,187 @@ func BenchmarkGroup_callbackCtx(b *testing.B) {
 			}
 		})
 	}
+}
+
+func TestGroup_Wait(t *testing.T) {
+	t.Run("basic flow", func(t *testing.T) {
+		t.Parallel()
+
+		targetDuration := 300 * time.Millisecond
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(targetDuration)
+			return Err[string](testStrError("promise1"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(targetDuration)
+			return Val("promise2")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(targetDuration)
+			return Val("promise3")
+		})
+
+		// at least targetDuration have to pass while waiting.
+		start := time.Now()
+		g.Wait()
+		elapsed := time.Since(start)
+		if elapsed < targetDuration {
+			t.Errorf("Wait() returned early")
+		}
+
+		// make sure we don't wait longer than we should.
+		// for that, we allow a buffer duration of 5 Millisecond.
+		if elapsed > targetDuration+(5*time.Millisecond) {
+			t.Errorf("Wait() waited so long. expected: %s, got: %s", targetDuration, elapsed)
+		}
+	})
+}
+
+func TestGroup_SelectRes(t *testing.T) {
+	t.Run("basic flow", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(1 * time.Millisecond)
+			return Err[string](testStrError("promise1"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(2 * time.Millisecond)
+			return Val("promise2")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(3 * time.Millisecond)
+			return Val("promise3")
+		})
+
+		res := g.SelectRes()
+
+		if res.State() != Rejected {
+			t.Errorf("res.State() is %s, want Rejected", res.State())
+		}
+	})
+}
+
+func TestGroup_AllWaitRes(t *testing.T) {
+	t.Run("basic flow", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(1 * time.Millisecond)
+			return Err[string](testStrError("promise1"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(2 * time.Millisecond)
+			return Val("promise2")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(5 * time.Millisecond)
+			return Val("promise3")
+		})
+
+		res := g.AllWaitRes()
+
+		if res.State() != Rejected {
+			t.Errorf("res.State() is %s, want Rejected", res.State())
+		}
+	})
+}
+
+func TestGroup_AnyWaitRes(t *testing.T) {
+	t.Run("basic flow", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(1 * time.Millisecond)
+			return Err[string](testStrError("promise1"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(2 * time.Millisecond)
+			return Val("promise2")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(5 * time.Millisecond)
+			return Val("promise3")
+		})
+
+		res := g.AnyWaitRes()
+
+		if res.State() != Fulfilled {
+			t.Errorf("res.State() is %s, want Fulfilled", res.State())
+		}
+	})
+
+	t.Run("basic flow with basic wait", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(1 * time.Millisecond)
+			panic(testStrError("promise1"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(2 * time.Millisecond)
+			return Val("promise2")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(5 * time.Millisecond)
+			return Val("promise3")
+		})
+
+		res := g.AnyWaitRes(func() {
+			g.Wait()
+		})
+
+		if res.State() != Panicked {
+			t.Errorf("res.State() is %s, want Panicked", res.State())
+		}
+	})
+}
+
+func TestGroup_JoinRes(t *testing.T) {
+	t.Run("basic flow", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(1 * time.Millisecond)
+			return Err[string](testStrError("promise1"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(2 * time.Millisecond)
+			panic(testStrError("promise2"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(5 * time.Millisecond)
+			panic(testStrError("promise3"))
+		})
+
+		res := g.JoinRes()
+
+		if res.State() != Fulfilled {
+			t.Errorf("res.State() is %s, want Fulfilled", res.State())
+		}
+	})
 }

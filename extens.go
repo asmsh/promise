@@ -331,7 +331,7 @@ loop:
 			// get the final promise's state, based on the previous resState and
 			// the recent resolved promise's state, using the selected mode rules.
 			if allSuccess {
-				resState = getAllResState(res.State(), resState)
+				resState = calcAllResState(res.State(), resState)
 
 				// stop, if we found the target break state based on the current flags.
 				// note: for the allSuccess case, we can only continue if the waitAll
@@ -344,7 +344,7 @@ loop:
 				}
 			}
 			if anySuccess {
-				resState = getAnyResState(res.State(), resState)
+				resState = calcAnyResState(res.State(), resState)
 
 				if !waitAll && res.State() == Fulfilled {
 					break loop
@@ -378,7 +378,7 @@ loop:
 				// get the final promise's state, based on the previous resState and
 				// the recent resolved promise's state, using the selected mode rules.
 				if allSuccess {
-					resState = getAllResState(res.State(), resState)
+					resState = calcAllResState(res.State(), resState)
 
 					// stop, if we found the target break state based on the current flags.
 					// note: for the allSuccess case, we can only continue if the waitAll
@@ -391,7 +391,7 @@ loop:
 					}
 				}
 				if anySuccess {
-					resState = getAnyResState(res.State(), resState)
+					resState = calcAnyResState(res.State(), resState)
 
 					if !waitAll && res.State() == Fulfilled {
 						break
@@ -435,10 +435,10 @@ func addExtCallToQ[T any](
 	}
 }
 
-// getAllResState returns the resolve state of the promise returned by All.
+// calcAllResState returns the resolve state of the promise returned by All.
 // Panicked has the highest priority.
 // Rejected has the highest priority between Fulfilled and Rejected.
-func getAllResState(newState, prevState State) State {
+func calcAllResState(newState, prevState State) State {
 	switch {
 	case newState == Panicked || prevState == Panicked:
 		return Panicked
@@ -451,10 +451,10 @@ func getAllResState(newState, prevState State) State {
 	}
 }
 
-// getAnyResState returns the resolve state of the promise returned by Any.
+// calcAnyResState returns the resolve state of the promise returned by Any.
 // Panicked has the highest priority.
 // Fulfilled has the highest priority between Fulfilled and Rejected.
-func getAnyResState(newState, prevState State) State {
+func calcAnyResState(newState, prevState State) State {
 	switch {
 	case newState == Panicked || prevState == Panicked:
 		return Panicked
@@ -465,4 +465,8 @@ func getAnyResState(newState, prevState State) State {
 	default:
 		return prevState
 	}
+}
+
+func calcJoinResState(_, _ State) State {
+	return Fulfilled
 }

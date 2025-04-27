@@ -59,7 +59,7 @@ type Promise[T any] struct {
 
 // extQueue wil be owned, at any time, by a single goroutine.
 type extQueue[T any] struct {
-	// initState is the state value at the time this queue was created.
+	// initState is the state value at the time this callsQ was created.
 	// note: the reason for this field is, during extension calls,
 	// if the promise was resolved while creating this extQueue's chan,
 	// the two select cases for the blocking scenario might be available

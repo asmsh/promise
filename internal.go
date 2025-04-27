@@ -64,7 +64,7 @@ func (p *Promise[T]) extsChan() chan extQueue[T] {
 	if extChanP != nil {
 		return *extChanP
 	}
-	// initiate the queue value, even though the chan might not be used after all,
+	// initiate the callsQ value, even though the chan might not be used after all,
 	// because if we initiated it after the CAS below, it might be available to some
 	// call and make that call block until we initiate it.
 	extChan := make(chan extQueue[T], 1)
@@ -218,8 +218,11 @@ func (p *Promise[T]) resolveToPanickedRes(
 	p.resolveState.Store(uint32(Panicked))
 	closeSyncCtx(p.syncCtx) // unblocks all calls waiting on p.
 	handleExtCalls(p)       // handles all extension calls that involve p.
-	// note: any code that gets added after closeSyncCtx and handleExtCalls
-	// isn't guaranteed to be executed without extra wait arrangements.
+	handleGroupCalls(p)     // handles all group calls which p is part of.
+
+	// note: any code that gets added after closeSyncCtx isn't guaranteed
+	// to be executed without extra wait arrangements (via Group Wait methods,
+	// or extension functions).
 }
 
 func (p *Promise[T]) resolveToRejectedRes(
@@ -233,6 +236,7 @@ func (p *Promise[T]) resolveToRejectedRes(
 	p.resolveState.Store(uint32(Rejected))
 	closeSyncCtx(p.syncCtx)
 	handleExtCalls(p)
+	handleGroupCalls(p)
 }
 
 func (p *Promise[T]) resolveToFulfilledRes(
@@ -243,6 +247,7 @@ func (p *Promise[T]) resolveToFulfilledRes(
 	p.resolveState.Store(uint32(Fulfilled))
 	closeSyncCtx(p.syncCtx)
 	handleExtCalls(p)
+	handleGroupCalls(p)
 }
 
 func (p *Promise[T]) resolveToResSync(res Result[T]) {
@@ -399,6 +404,42 @@ func handleExtCall[T any](call extCall[T], res Result[T]) bool {
 	select {
 	case call.resChan <- IdxRes[T]{
 		Idx:    call.idx,
+		Result: res,
+	}:
+		return true
+	case <-call.syncChan:
+		return false
+	}
+}
+
+func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
+	if p.group == nil {
+		return false
+	}
+
+	debug(p, startHandleGroupCalls) // debug starts here, since no Group == no debug.
+
+	res := getFinalRes(p.res)
+
+	// record group state for calls added later.
+	p.group.core.state.Or(uint32(res.State()))
+
+	// get a snapshot of the group calls queue to be handled.
+	p.group.core.callsQMu.RLock()
+	for call := p.group.core.callsQ.Front(); call != nil; call = call.Next() {
+		handled = handleGroupCall(call.Value, res) || handled
+		debug(p, doneHandleGroupCall)
+	}
+	p.group.core.callsQMu.RUnlock()
+
+	debug(p, endHandleGroupCalls)
+	return handled
+}
+
+func handleGroupCall[T any](callVal any, res Result[T]) bool {
+	call := callVal.(groupCall[T])
+	select {
+	case call.resChan <- GroupRes[T]{
 		Result: res,
 	}:
 		return true

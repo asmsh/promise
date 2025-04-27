@@ -183,13 +183,236 @@ func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 	return newPromSync[T](g, res)
 }
 
+// Wait enters the wait mode and waits until all [Promise]s returns.
+// If there are any triggers provided, it executes them first.
+//
+// Example:
+//
+//	g.Wait(func() { <-signalChan })
 func (g *Group[T]) Wait(triggers ...func()) {
 	// execute the trigger functions to block the wait logic until they return.
 	for _, f := range triggers {
 		f()
 	}
 	g.core.waiting.Store(true) // blocks new calls from being started.
-	g.core.wg.Wait()
+	g.core.sg.Wait()
+}
+
+func (g *Group[T]) SelectRes(triggers ...func()) Result[GroupRes[T]] {
+	for _, f := range triggers {
+		f()
+	}
+	return g.selectRes()
+}
+
+func (g *Group[T]) selectRes() Result[GroupRes[T]] {
+	// create the needed res channel to receive the result on it.
+	resChan := make(chan GroupRes[T])
+	syncChan := make(chan struct{})
+
+	// add the new call to the callsQ of calls for this group.
+	g.core.callsQMu.Lock()
+	call := g.core.callsQ.PushBack(groupCall[T]{
+		resChan:  resChan,
+		syncChan: syncChan,
+	})
+	g.core.callsQMu.Unlock()
+
+	// loop over the resChan, recording each Result, and update the final
+	// state based on the provided stateFunc.
+	res := <-resChan
+
+	// close the syncChan to prevent other promises from waiting on sending
+	// to the above resChan, once the wanted result is received.
+	close(syncChan)
+
+	// remove this groupCall from the callsQ, now that it's no longer active.
+	// note: this is just a cleanup action, as this groupCall will not be used
+	// by anything (there's no running promises to use anymore).
+	g.core.callsQMu.Lock()
+	g.core.callsQ.Remove(call)
+	g.core.callsQMu.Unlock()
+
+	switch res.State() {
+	case Panicked:
+		return panickedResultSingleRes[T, GroupRes[T]]{res}
+	case Rejected:
+		return rejectedResultSingleRes[T, GroupRes[T]]{res}
+	case Fulfilled:
+		return fulfilledResultSingleRes[T, GroupRes[T]]{res}
+	default:
+		// an internal panic, because it's supposed to be caught earlier.
+		panic("promise: internal: unexpected Result state: " + res.State().String())
+	}
+}
+
+func (g *Group[T]) getAllResState() State {
+	groupState := State(g.core.state.Load())
+
+	// the order here matters.
+	switch true {
+	case groupState&Panicked == Panicked:
+		return Panicked
+	case groupState&Rejected == Rejected:
+		return Rejected
+	case groupState&Fulfilled == Fulfilled:
+		return Fulfilled
+	}
+
+	// unexpected state.
+	return groupState
+}
+
+func (g *Group[T]) getAnyResState() State {
+	groupState := State(g.core.state.Load())
+
+	// the order here matters.
+	switch true {
+	case groupState&Panicked == Panicked:
+		return Panicked
+	case groupState&Fulfilled == Fulfilled:
+		return Fulfilled
+	case groupState&Rejected == Rejected:
+		return Rejected
+	}
+
+	// unexpected state.
+	return groupState
+}
+
+func (g *Group[T]) getJoinResState() State {
+	return Fulfilled
+}
+
+// AllWaitRes behaves like the [AllWait] extension function, but only operates
+// on the promises that belong to this [Group].
+// It causes the [Group] to enter the wait mode, and wait for all ongoing promises
+// to return, then examine their [Result] values.
+// It returns the promises [Result] values either from the moment of calling this
+// method.
+// The [Result] of this call will be resolved to [Fulfilled] iff all the promises
+// were resolved to [Fulfilled].
+// It will be resolved to [Panicked] if at least one promise was resolved to [Panicked].
+// It will be resolved to [Rejected] if at least one promise was resolved to [Rejected].
+//
+// TODO: // It returns the promises [Result] values either from the moment of calling this
+//// method, or from the start of this [Group], based on the Group option [GroupConfig.RecordAllGroupResults].
+func (g *Group[T]) AllWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
+	for _, f := range triggers {
+		f()
+	}
+	g.core.waiting.Store(true)
+	res := g.joinRes(g.getAllResState, calcAllResState)
+	g.core.sg.Wait()
+	return res
+}
+
+func (g *Group[T]) AnyWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
+	for _, f := range triggers {
+		f()
+	}
+	g.core.waiting.Store(true)
+	res := g.joinRes(g.getAnyResState, calcAnyResState)
+	g.core.sg.Wait()
+	return res
+}
+
+func (g *Group[T]) JoinRes(triggers ...func()) Result[[]GroupRes[T]] {
+	for _, f := range triggers {
+		f()
+	}
+	g.core.waiting.Store(true)
+	res := g.joinRes(g.getJoinResState, calcJoinResState)
+	g.core.sg.Wait()
+	return res
+}
+
+func (g *Group[T]) joinRes(
+	readStateFunc func() State,
+	calcStateFunc func(State, State) State,
+) Result[[]GroupRes[T]] {
+	// create the needed res channel to receive the result on it.
+	resChan := make(chan GroupRes[T])
+
+	// add the new call to the callsQ of calls for this group.
+	g.core.callsQMu.Lock()
+	call := g.core.callsQ.PushBack(groupCall[T]{
+		resChan: resChan,
+		// FIXME: figure a way to have the 'syncChan' be connected to the 'reserveChan',
+		// such that once it reaches zero, the 'syncChan' is closed.
+		// we need this for 2 things:
+		// 1. to make the syncChan signals to the promise's 'handleGroupCall'
+		//    that it's no longer needed to do anything.
+		//    Update (24/4/2025): this won't work, because the 'handleGroupCall'
+		//    function is executed before the Promise exists, to it won't touch
+		//    the counter, so it's kinda deadlocking itself.
+		// 2. to make the for-loop below exists, as the Group is closed and
+		//    no more Result is coming.
+		//    Update (24/4/2025): for that, we will use the sema.Group.WaitChan,
+		//    which will be closed once all Promise values exists.
+		// Note: the syncChan is not needed for the join calls,
+		// because we need to wait for _all_ ongoing promises to finish,
+		// and the syncChan is needed to signal to ongoing promises to
+		// abandon sending to the resChan, which will not be the case.
+		syncChan: nil,
+	})
+	g.core.callsQMu.Unlock()
+
+	// now that the call has been recorded, get the expected number
+	// of results we will process, and initialize the result array.
+	groupState := readStateFunc()
+	groupDone := g.core.sg.WaitChan()
+	groupLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
+	groupRes := make([]GroupRes[T], 0, groupLen)
+
+	// loop over the resChan, recording each Result, and update the final
+	// state based on the provided calcStateFunc.
+resultLoop:
+	for {
+		// the 2 select cases below can't be ready at the same time.
+		// because the groupDone channel is closed once all Promise values
+		// exits, which happens after the 'handleGroupCall' method returns,
+		// and the 'handleGroupCall' method is responsible for sending on
+		// the 'resChan'.
+		select {
+		case res := <-resChan:
+			groupRes = append(groupRes, res)
+			groupState = calcStateFunc(res.State(), groupState)
+		case <-groupDone:
+			break resultLoop
+		}
+	}
+
+	// remove this groupCall from the callsQ, now that it's no longer active.
+	// note: this is just a cleanup action, as this groupCall will not be used
+	// by anything (there are no running promises to use anymore).
+	g.core.callsQMu.Lock()
+	g.core.callsQ.Remove(call)
+	g.core.callsQMu.Unlock()
+
+	switch groupState {
+	case Panicked:
+		return panickedResultMultiRes[T, GroupRes[T]]{groupRes}
+	case Rejected:
+		return rejectedResultMultiRes[T, GroupRes[T]]{groupRes}
+	case Fulfilled:
+		return fulfilledResultMultiRes[T, GroupRes[T]]{groupRes}
+	default:
+		// an internal panic, because it's supposed to be caught earlier.
+		panic("promise: internal: unexpected Result state: " + groupState.String())
+	}
+}
+
+// groupCall describes a Group call and how to communicate back to it.
+type groupCall[T any] struct {
+	// resChan is used to send the Result back to the groupCall's goroutine.
+	// this is a new, per call, unbuffered and never closed channel.
+	resChan chan<- GroupRes[T]
+
+	// syncChan is used to communicate that the groupCall has been resolved,
+	// so that the sending promise(s) can return without blocking on resChan.
+	// this is a new, per call, unbuffered channel.
+	syncChan <-chan struct{}
 }
 
 type groupCore struct {
@@ -198,16 +421,21 @@ type groupCore struct {
 	unhandledPanicCB func(any)
 	unhandledErrorCB func(error)
 
-	// wg is used for the basic WaitAll() method.
-	wg sync.WaitGroup
-
 	// waiting represents whether this group has entered the waiting
 	// mode or not.
 	// it can enter the waiting mode via one of the Wait methods.
 	waiting atomic.Bool
 
-	// reserveChan is used for limiting concurrency.
-	reserveChan chan struct{}
+	// state is the [Group]'s [State] value, which holds the value
+	// for all [Promise] values that was run from this [Group].
+	state atomic.Uint32
+
+	// sg is used for limiting concurrency and implementing
+	// the waiting functions.
+	sg sema.Group
+
+	callsQMu sync.RWMutex
+	callsQ   list.List // of groupCall[T]
 
 	// flags for options...
 	neverCancelCBCtx   bool
@@ -236,32 +464,21 @@ func (g *Group[T]) reserveGoroutine(chainRegFunc func()) bool {
 		return true
 	}
 
-	// make sure that this reservation is accounted for.
-	g.core.wg.Add(1)
-
-	// no size limitation is set, so return early.
-	if g.core.reserveChan == nil {
-		chainRegFunc()
-		return true
-	}
-
 	// either block until a place is available, or return an error with no waiting.
 	if g.core.noWaitingBusyGroup {
-		select {
-		case g.core.reserveChan <- struct{}{}:
+		if g.core.sg.TryReserve() {
 			// since we entered this case, and this is a non-blocking select,
 			// this case will happen immediately.
 			chainRegFunc()
 			return true
-		default:
-			return false
 		}
+		return false
 	}
 
 	// it's guaranteed to make a successful reservation in this flow (after waiting),
 	// execute the register func before waiting.
 	chainRegFunc()
-	g.core.reserveChan <- struct{}{}
+	g.core.sg.Reserve()
 	return true
 }
 
@@ -271,10 +488,7 @@ func (g *Group[T]) freeGoroutine() {
 	if g == nil {
 		return
 	}
-	g.core.wg.Done()
-	if g.core.reserveChan != nil {
-		<-g.core.reserveChan
-	}
+	g.core.sg.Free()
 }
 
 func noopCancelFunc() {
