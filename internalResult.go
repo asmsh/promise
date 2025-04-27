@@ -26,60 +26,33 @@ import (
 // structure, using the error, errors.Unwrap, errors.Is and errors.As interfaces.
 // also to ensure consistent string conversion of the results.
 
-// errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
-// it's used instead of saving the ErrPromiseConsumed error in a generic errResult value.
-type errPromiseConsumedResult[T any] struct{}
-
-func (r errPromiseConsumedResult[T]) Val() (v T)   { return v }
-func (r errPromiseConsumedResult[T]) Err() error   { return ErrPromiseConsumed }
-func (r errPromiseConsumedResult[T]) State() State { return Rejected }
-func (r errPromiseConsumedResult[T]) String() string {
-	return fmt.Sprintf("rejected: %s", ErrPromiseConsumed.Error())
-}
-
-// errPromiseCtxNilDoneResult is a static error result that returns ErrPromiseNilCtxDone.
-// it's used instead of saving the ErrPromiseNilCtxDone error in a generic errResult value.
-type errPromiseCtxNilDoneResult[T any] struct{}
-
-func (r errPromiseCtxNilDoneResult[T]) Val() (v T)   { return v }
-func (r errPromiseCtxNilDoneResult[T]) Err() error   { return ErrPromiseNilCtxDone }
-func (r errPromiseCtxNilDoneResult[T]) State() State { return Rejected }
-func (r errPromiseCtxNilDoneResult[T]) String() string {
-	return fmt.Sprintf("rejected: %s", ErrPromiseNilCtxDone.Error())
-}
-
-type resultContainer[T any] interface {
-	Result[T]
-	String() string
-}
-
 // fulfilledResultSingleRes is a Result implementation for Fulfilled results
 // returned from the Select extension call.
-type fulfilledResultSingleRes[T any, TElem resultContainer[T]] struct {
+type fulfilledResultSingleRes[T any, TElem Result[T]] struct {
 	val TElem
 }
 
 func (r fulfilledResultSingleRes[T, TElem]) Val() TElem   { return r.val }
 func (r fulfilledResultSingleRes[T, TElem]) Err() error   { return nil }
 func (r fulfilledResultSingleRes[T, TElem]) State() State { return Fulfilled }
-func (r fulfilledResultSingleRes[T, TElem]) String() string {
-	return fmt.Sprintf("%s: %s", r.State().String(), r.val.String())
+func (r fulfilledResultSingleRes[T, TElem]) Format(f fmt.State, verb rune) {
+	printSingleRes(r.State().String(), r.val, f, verb)
 }
 
 // rejectedResultSingleRes is a Result and error implementation for Rejected
 // results returned from the Select extension call.
-type rejectedResultSingleRes[T any, TElem resultContainer[T]] struct {
+type rejectedResultSingleRes[T any, TElem Result[T]] struct {
 	val TElem
 }
 
 func (r rejectedResultSingleRes[T, TElem]) Val() TElem   { return r.val }
 func (r rejectedResultSingleRes[T, TElem]) Err() error   { return r }
 func (r rejectedResultSingleRes[T, TElem]) State() State { return Rejected }
-func (r rejectedResultSingleRes[T, TElem]) String() string {
-	return fmt.Sprintf("%s: %s", r.State().String(), r.val.String())
+func (r rejectedResultSingleRes[T, TElem]) Format(f fmt.State, verb rune) {
+	printSingleRes(r.State().String(), r.val, f, verb)
 }
 func (r rejectedResultSingleRes[T, TElem]) Error() string {
-	return fmt.Sprintf("%s: %s", r.State().String(), r.val.String())
+	return fmt.Sprintf("%s: %v", r.State().String(), r.val)
 }
 func (r rejectedResultSingleRes[T, TElem]) Unwrap() error {
 	switch res := any(r.val).(type) {
@@ -93,18 +66,18 @@ func (r rejectedResultSingleRes[T, TElem]) Unwrap() error {
 
 // panickedResultSingleRes is a Result and error implementation for Panicked
 // results returned from the Select extension call.
-type panickedResultSingleRes[T any, TElem resultContainer[T]] struct {
+type panickedResultSingleRes[T any, TElem Result[T]] struct {
 	val TElem
 }
 
 func (r panickedResultSingleRes[T, TElem]) Val() (v TElem) { return v }
 func (r panickedResultSingleRes[T, TElem]) Err() error     { return r }
 func (r panickedResultSingleRes[T, TElem]) State() State   { return Panicked }
-func (r panickedResultSingleRes[T, TElem]) String() string {
-	return fmt.Sprintf("%s: %s", r.State().String(), r.val.String())
+func (r panickedResultSingleRes[T, TElem]) Format(f fmt.State, verb rune) {
+	printSingleRes(r.State().String(), r.val, f, verb)
 }
 func (r panickedResultSingleRes[T, TElem]) Error() string {
-	return fmt.Sprintf("%s: %s", r.State().String(), r.val.String())
+	return fmt.Sprintf("%s: %v", r.State().String(), r.val)
 }
 func (r panickedResultSingleRes[T, TElem]) Is(target error) bool {
 	// make this error result implement the identity panic error value.
@@ -146,76 +119,47 @@ func (r panickedResultSingleRes[T, TElem]) PanicV() any {
 
 // fulfilledResultMultiRes is a Result implementation for Fulfilled results
 // returned from the All(and AllWait), Any(and AnyWait) or Join extension calls.
-type fulfilledResultMultiRes[T any, TElem resultContainer[T]] struct {
+type fulfilledResultMultiRes[T any, TElem Result[T]] struct {
 	vals []TElem
 }
 
 func (r fulfilledResultMultiRes[T, TElem]) Val() []TElem { return r.vals }
 func (r fulfilledResultMultiRes[T, TElem]) Err() error   { return nil }
 func (r fulfilledResultMultiRes[T, TElem]) State() State { return Fulfilled }
-func (r fulfilledResultMultiRes[T, TElem]) String() string {
-	if len(r.vals) == 1 {
-		return fmt.Sprintf("%s: %s", r.State().String(), r.vals[0].String())
-	}
-
-	errb := strings.Builder{}
-	for _, ir := range r.vals {
-		if errb.Len() == 0 {
-			errb.WriteString(r.State().String())
-			errb.WriteString(": ")
-		} else {
-			errb.WriteByte('\n')
-		}
-		errb.WriteString(ir.String())
-	}
-	return errb.String()
+func (r fulfilledResultMultiRes[T, TElem]) Format(f fmt.State, verb rune) {
+	printMultiRes(r.State().String(), r.vals, f, verb)
 }
 
 // rejectedResultMultiRes is a Result and error implementation for Rejected
 // results returned from the All(and AllWait), Any(and AnyWait) or Join
 // extension calls.
-type rejectedResultMultiRes[T any, TElem resultContainer[T]] struct {
+type rejectedResultMultiRes[T any, TElem Result[T]] struct {
 	vals []TElem
 }
 
 func (r rejectedResultMultiRes[T, TElem]) Val() []TElem { return r.vals }
 func (r rejectedResultMultiRes[T, TElem]) Err() error   { return r }
 func (r rejectedResultMultiRes[T, TElem]) State() State { return Rejected }
-func (r rejectedResultMultiRes[T, TElem]) String() string {
-	if len(r.vals) == 1 {
-		return fmt.Sprintf("%s: %s", r.State().String(), r.vals[0].String())
-	}
-
-	errb := strings.Builder{}
-	for _, ir := range r.vals {
-		if errb.Len() == 0 {
-			errb.WriteString(r.State().String())
-			errb.WriteString(": ")
-		} else {
-			errb.WriteByte('\n')
-		}
-		errb.WriteString(ir.String())
-	}
-	return errb.String()
+func (r rejectedResultMultiRes[T, TElem]) Format(f fmt.State, verb rune) {
+	printMultiRes(r.State().String(), r.vals, f, verb)
 }
 func (r rejectedResultMultiRes[T, TElem]) Error() string {
 	if len(r.vals) == 1 {
-		return fmt.Sprintf("%s: %s", r.State().String(), r.vals[0].String())
+		return fmt.Sprintf("%s: %v", r.State().String(), r.vals[0])
 	}
 
 	// find the first Rejected error and print it before any other errors.
 	fi, fr := r.firstRejectedRes()
-	errb := strings.Builder{}
-	errb.WriteString(r.State().String())
-	errb.WriteString(": ")
-	errb.WriteString(fr.String())
+
+	errb := &strings.Builder{}
+	fmt.Fprintf(errb, "%s: %v", r.State().String(), fr)
+
 	for i, ir := range r.vals {
 		// not Rejected, or already printed
 		if ir.State() != Rejected || i == fi {
 			continue
 		}
-		errb.WriteByte('\n')
-		errb.WriteString(ir.String())
+		fmt.Fprintf(errb, "\n%v", ir)
 	}
 	return errb.String()
 }
@@ -269,48 +213,33 @@ func (r rejectedResultMultiRes[T, TElem]) firstRejectedRes() (int, TElem) {
 // panickedResultMultiRes is a Result and error implementation for panic
 // results returned from either the All(and AllWait), Any(and AnyWait) or Join
 // extension calls.
-type panickedResultMultiRes[T any, TElem resultContainer[T]] struct {
+type panickedResultMultiRes[T any, TElem Result[T]] struct {
 	vals []TElem
 }
 
 func (r panickedResultMultiRes[T, TElem]) Val() []TElem { return r.vals }
 func (r panickedResultMultiRes[T, TElem]) Err() error   { return r }
 func (r panickedResultMultiRes[T, TElem]) State() State { return Panicked }
-func (r panickedResultMultiRes[T, TElem]) String() string {
-	if len(r.vals) == 1 {
-		return fmt.Sprintf("%s: %s", r.State().String(), r.vals[0].String())
-	}
-
-	errb := strings.Builder{}
-	for _, ir := range r.vals {
-		if errb.Len() == 0 {
-			errb.WriteString(r.State().String())
-			errb.WriteString(": ")
-		} else {
-			errb.WriteByte('\n')
-		}
-		errb.WriteString(ir.String())
-	}
-	return errb.String()
+func (r panickedResultMultiRes[T, TElem]) Format(f fmt.State, verb rune) {
+	printMultiRes(r.State().String(), r.vals, f, verb)
 }
 func (r panickedResultMultiRes[T, TElem]) Error() string {
 	if len(r.vals) == 1 {
-		return fmt.Sprintf("%s: %s", r.State().String(), r.vals[0].String())
+		return fmt.Sprintf("%s: %v", r.State().String(), r.vals[0])
 	}
 
 	// find the first Panicked error and print it before any other errors.
 	fi, fr := r.firstPanickedRes()
-	errb := strings.Builder{}
-	errb.WriteString(r.State().String())
-	errb.WriteString(": ")
-	errb.WriteString(fr.String())
+
+	errb := &strings.Builder{}
+	fmt.Fprintf(errb, "%s: %v", r.State().String(), fr)
+
 	for i, ir := range r.vals {
 		// not Rejected nor Panicked, or already printed
 		if ir.State() == Fulfilled || i == fi {
 			continue
 		}
-		errb.WriteByte('\n')
-		errb.WriteString(ir.String())
+		fmt.Fprintf(errb, "\n%v", ir)
 	}
 	return errb.String()
 }
@@ -371,6 +300,28 @@ func (r panickedResultMultiRes[T, TElem]) firstPanickedRes() (int, TElem) {
 	return i, r.vals[i]
 }
 
+// errPromiseConsumedResult is a static error result that returns ErrPromiseConsumed.
+// it's used instead of saving the ErrPromiseConsumed error in a generic errResult value.
+type errPromiseConsumedResult[T any] struct{}
+
+func (r errPromiseConsumedResult[T]) Val() (v T)   { return v }
+func (r errPromiseConsumedResult[T]) Err() error   { return ErrPromiseConsumed }
+func (r errPromiseConsumedResult[T]) State() State { return Rejected }
+func (r errPromiseConsumedResult[T]) String() string {
+	return fmt.Sprintf("rejected: %s", ErrPromiseConsumed.Error())
+}
+
+// errPromiseCtxNilDoneResult is a static error result that returns ErrPromiseNilCtxDone.
+// it's used instead of saving the ErrPromiseNilCtxDone error in a generic errResult value.
+type errPromiseCtxNilDoneResult[T any] struct{}
+
+func (r errPromiseCtxNilDoneResult[T]) Val() (v T)   { return v }
+func (r errPromiseCtxNilDoneResult[T]) Err() error   { return ErrPromiseNilCtxDone }
+func (r errPromiseCtxNilDoneResult[T]) State() State { return Rejected }
+func (r errPromiseCtxNilDoneResult[T]) String() string {
+	return fmt.Sprintf("rejected: %s", ErrPromiseNilCtxDone.Error())
+}
+
 // errPromiseGroupDoneResult is a static error result that returns ErrPromiseGroupDone.
 // it's used instead of saving the ErrPromiseGroupDone error in a generic errResult value.
 type errPromiseGroupDoneResult[T any] struct{}
@@ -391,4 +342,40 @@ func (r errPromiseGroupBusyResult[T]) Err() error   { return ErrPromiseGroupBusy
 func (r errPromiseGroupBusyResult[T]) State() State { return Rejected }
 func (r errPromiseGroupBusyResult[T]) String() string {
 	return fmt.Sprintf("rejected: %s", ErrPromiseGroupBusy.Error())
+}
+
+func printSingleRes[T any, TElem Result[T]](
+	stateStr string,
+	val TElem,
+	f fmt.State,
+	verb rune,
+) {
+	fmt.Fprintf(f, "%s: %v", stateStr, val)
+}
+
+func printMultiRes[T any, TElem Result[T]](
+	stateStr string,
+	vals []TElem,
+	f fmt.State,
+	verb rune,
+) {
+	if len(vals) == 0 {
+		fmt.Fprintf(f, "%s: nil", stateStr)
+		return
+	}
+	if len(vals) == 1 {
+		fmt.Fprintf(f, "%s: %v", stateStr, vals[0])
+		return
+	}
+
+	f.Write([]byte(stateStr))
+	f.Write([]byte(": "))
+
+	for idx, ir := range vals {
+		if idx == 0 {
+			fmt.Fprintf(f, "%v", ir)
+		} else {
+			fmt.Fprintf(f, "\n%v", ir)
+		}
+	}
 }
