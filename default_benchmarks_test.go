@@ -116,7 +116,7 @@ func BenchmarkGoRes(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			p = GoRes(func(ctx context.Context) Result[any] {
-				return Empty[any]()
+				return EmptyRes[any]()
 			})
 		}
 		_ = p
@@ -128,7 +128,7 @@ func BenchmarkGoRes(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			p = GoRes(func(ctx context.Context) Result[any] {
-				return Val[any]("golang")
+				return ValRes[any]("golang")
 			})
 		}
 		_ = p
@@ -140,7 +140,7 @@ func BenchmarkGoRes(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			p = GoRes(func(ctx context.Context) Result[any] {
-				return ValErr[any]("golang", nil)
+				return ValErrRes[any]("golang", nil)
 			})
 		}
 		_ = p
@@ -152,7 +152,7 @@ func BenchmarkGoRes(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			p = GoRes(func(ctx context.Context) Result[any] {
-				return ValErr[any]("golang", newStrError())
+				return ValErrRes[any]("golang", newStrError())
 			})
 		}
 		_ = p
@@ -165,7 +165,7 @@ func BenchmarkDelay(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Delay(Empty[any](), time.Microsecond)
+			p = Delay(EmptyRes[any](), time.Microsecond)
 		}
 		_ = p
 	})
@@ -185,7 +185,7 @@ func BenchmarkDelay(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Delay(Val("golang"), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
+			p = Delay(ValRes("golang"), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
 		}
 		_ = p
 	})
@@ -196,7 +196,7 @@ func BenchmarkDelay(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Delay(Err[string](err), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
+			p = Delay(ErrRes[string](err), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
 		}
 		_ = p
 	})
@@ -218,7 +218,7 @@ func BenchmarkWrap(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Wrap(Val("golang"))
+			p = Wrap(ValRes("golang"))
 		}
 		_ = p
 	})
@@ -229,7 +229,7 @@ func BenchmarkWrap(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Wrap(Err[string](err))
+			p = Wrap(ErrRes[string](err))
 		}
 		_ = p
 	})
@@ -240,7 +240,7 @@ func BenchmarkWrap(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			p = Wrap(Panic[string](err))
+			p = Wrap(PanicRes[string](err))
 		}
 		_ = p
 	})

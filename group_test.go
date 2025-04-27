@@ -141,17 +141,17 @@ func TestGroup_Wait(t *testing.T) {
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(targetDuration)
-			return Err[string](testStrError("promise1"))
+			return ErrRes[string](testStrError("promise1"))
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(targetDuration)
-			return Val("promise2")
+			return ValRes("promise2")
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(targetDuration)
-			return Val("promise3")
+			return ValRes("promise3")
 		})
 
 		// at least targetDuration have to pass while waiting.
@@ -178,17 +178,17 @@ func TestGroup_SelectRes(t *testing.T) {
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(1 * time.Millisecond)
-			return Err[string](testStrError("promise1"))
+			return ErrRes[string](testStrError("promise1"))
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(2 * time.Millisecond)
-			return Val("promise2")
+			return ValRes("promise2")
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(3 * time.Millisecond)
-			return Val("promise3")
+			return ValRes("promise3")
 		})
 
 		res := g.SelectRes()
@@ -207,17 +207,17 @@ func TestGroup_AllWaitRes(t *testing.T) {
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(1 * time.Millisecond)
-			return Err[string](testStrError("promise1"))
+			return ErrRes[string](testStrError("promise1"))
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(2 * time.Millisecond)
-			return Val("promise2")
+			return ValRes("promise2")
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(5 * time.Millisecond)
-			return Val("promise3")
+			return ValRes("promise3")
 		})
 
 		res := g.AllWaitRes()
@@ -236,17 +236,17 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(1 * time.Millisecond)
-			return Err[string](testStrError("promise1"))
+			return ErrRes[string](testStrError("promise1"))
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(2 * time.Millisecond)
-			return Val("promise2")
+			return ValRes("promise2")
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(5 * time.Millisecond)
-			return Val("promise3")
+			return ValRes("promise3")
 		})
 
 		res := g.AnyWaitRes()
@@ -268,12 +268,12 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(2 * time.Millisecond)
-			return Val("promise2")
+			return ValRes("promise2")
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(5 * time.Millisecond)
-			return Val("promise3")
+			return ValRes("promise3")
 		})
 
 		res := g.AnyWaitRes(func() {
@@ -294,7 +294,7 @@ func TestGroup_JoinRes(t *testing.T) {
 
 		g.GoRes(func(ctx context.Context) Result[string] {
 			time.Sleep(1 * time.Millisecond)
-			return Err[string](testStrError("promise1"))
+			return ErrRes[string](testStrError("promise1"))
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {

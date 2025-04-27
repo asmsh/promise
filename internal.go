@@ -364,7 +364,7 @@ func getEffectiveNewRes[PrevResT, NewResT any](
 
 	// TODO: this can't happen in the current implementation,
 	//  as all type parameters used so far is the same type.
-	return Err[NewResT](errors.New("TODO: unexpected"))
+	return ErrRes[NewResT](errors.New("TODO: unexpected"))
 }
 
 func handleExtCalls[T any](p *Promise[T]) (handled bool) {

@@ -33,7 +33,7 @@ func (cb goCallback[PrevResT, NewResT]) call(context.Context, Result[PrevResT]) 
 }
 func (cb goErrCallback[PrevResT, NewResT]) call(context.Context, Result[PrevResT]) Result[NewResT] {
 	if err := cb(); err != nil {
-		return Err[NewResT](err)
+		return ErrRes[NewResT](err)
 	}
 	return nil
 }

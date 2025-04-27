@@ -26,23 +26,23 @@ type Result[T any] interface {
 	State() State
 }
 
-func Empty[T any]() Result[T] {
+func EmptyRes[T any]() Result[T] {
 	return emptyResult[T]{}
 }
 
-func Val[T any](val T) Result[T] {
+func ValRes[T any](val T) Result[T] {
 	return valResult[T]{val: val}
 }
 
-func Err[T any](err error) Result[T] {
+func ErrRes[T any](err error) Result[T] {
 	return errResult[T]{err: err}
 }
 
-func ValErr[T any](val T, err error) Result[T] {
+func ValErrRes[T any](val T, err error) Result[T] {
 	return valErrResult[T]{val: val, err: err}
 }
 
-func Panic[T any](v any) Result[T] {
+func PanicRes[T any](v any) Result[T] {
 	return panicResult[T]{v: v}
 }
 

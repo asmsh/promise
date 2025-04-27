@@ -140,7 +140,7 @@ func TestRejection(t *testing.T) {
 		}()
 
 		p := GoRes(func(ctx context.Context) Result[any] {
-			return Err[any](newStrError())
+			return ErrRes[any](newStrError())
 		}).Catch(func(ctx context.Context, res Result[any]) Result[any] {
 			// handle the error...
 			return nil
@@ -158,17 +158,17 @@ func TestRejection(t *testing.T) {
 		}()
 
 		p := GoRes(func(ctx context.Context) Result[any] {
-			return Err[any](wantErr)
+			return ErrRes[any](wantErr)
 		})
 		res := p.Res()
 		if res == nil {
 			t.Errorf("Res() = nil, want: non-nil")
 		}
 		if res.Err() == nil {
-			t.Errorf("Res().Err() = nil, want: non-nil")
+			t.Errorf("Res().ErrRes() = nil, want: non-nil")
 		}
 		if err := res.Err(); !errors.Is(err, wantErr) {
-			t.Errorf("Res().Err() = %v, want: %v", err, wantErr)
+			t.Errorf("Res().ErrRes() = %v, want: %v", err, wantErr)
 		}
 	})
 }
