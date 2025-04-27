@@ -46,11 +46,6 @@ type Promise[T any] struct {
 	// don't read it unless the syncCtx is known to be closed.
 	res Result[T]
 
-	// resolveState holds the state of this promise.
-	// once the promise is resolved, it will be non-zero.
-	// written once, before the syncCtx channel is closed.
-	resolveState atomic.Uint32
-
 	// chainStatus holds the status of this promise's chain.
 	// once there are any calls registered on this promise, or
 	// the promise has been already handled, it will be non-zero.
@@ -123,8 +118,8 @@ func (p *Promise[T]) WaitChan() <-chan struct{} {
 }
 
 func (p *Promise[T]) waitCall() {
-	// wait the promise to be resolved
-	s := p.wait()
+	// wait the promise to be resolved and get its [State]
+	s := p.waitState()
 
 	// if the chain has a read call or is already handled, return early
 	if p.chainStatus.Load() >= chainStatusRead {
@@ -147,8 +142,8 @@ func (p *Promise[T]) Res() Result[T] {
 }
 
 func (p *Promise[T]) resCall() Result[T] {
-	// wait the promise to be resolved
-	p.wait()
+	// wait the promise to be resolved and get its [State]
+	p.waitState()
 
 	// if it's a call to handle the result, set the 'Handled' flag.
 	// also, keep track of whether this handle was valid(first) or not,
@@ -211,7 +206,7 @@ func callbackFollowHandler[T any](
 	defer prevProm.group.freeGoroutine()
 
 	// wait the previous promise to be resolved
-	prevProm.wait()
+	prevProm.waitState()
 
 	// run the callback with the actual promise result
 	runCallbackHandler[T, T](nil, cb, prevProm.res, false, false, ctx, cancel)
@@ -251,7 +246,7 @@ func delayFollowHandler[T any](
 	flags delayFlags,
 ) {
 	defer prevProm.group.freeGoroutine()
-	prevProm.wait()
+	prevProm.waitState()
 
 	// mark prevProm as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be used.
@@ -300,7 +295,7 @@ func thenFollowHandler[T any](
 	cancel context.CancelFunc,
 ) {
 	defer prevProm.group.freeGoroutine()
-	s := prevProm.wait()
+	s := prevProm.waitState()
 
 	// 'Then' can handle only the 'Success' state, so return otherwise
 	if s != Success {
@@ -353,7 +348,7 @@ func catchFollowHandler[T any](
 	cancel context.CancelFunc,
 ) {
 	defer prevProm.group.freeGoroutine()
-	s := prevProm.wait()
+	s := prevProm.waitState()
 
 	// 'Catch' can handle only the 'Error' state, so return otherwise
 	if s != Error {
@@ -402,7 +397,7 @@ func recoverFollowHandler[T any](
 	cancel context.CancelFunc,
 ) {
 	defer prevProm.group.freeGoroutine()
-	s := prevProm.wait()
+	s := prevProm.waitState()
 
 	// 'Recover' can handle only the 'Panic' state, so return otherwise
 	if s != Panic {
@@ -460,7 +455,7 @@ func finallyFollowHandler[T any](
 	cancel context.CancelFunc,
 ) {
 	defer prevProm.group.freeGoroutine()
-	prevProm.wait()
+	prevProm.waitState()
 	runCallbackHandler[T, T](nextProm, cb, prevProm.res, false, true, ctx, cancel)
 	debug(prevProm, endHandler, endFollowHandler, endFinallyFollowHandler)
 }

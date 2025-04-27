@@ -59,6 +59,35 @@ func (p *Promise[T]) setChainHandled() (validHandle bool) {
 	return oldChain != chainStatusHandled
 }
 
+// readState checks if the promise p is resolved, and returns its [State],
+// otherwise it returns [unknown].
+func (p *Promise[T]) readState() State {
+	// non-blocking read of res, which is closed by the previous
+	// promise, once it's resolved.
+	select {
+	case <-p.syncCtx.Done():
+		if p.res == nil {
+			return Success
+		}
+		return p.res.State()
+	default:
+		return unknown
+	}
+}
+
+// waitState waits for the promise p to be resolved, and returns its [State].
+// by either blocking on receiving
+// from the syncChan
+func (p *Promise[T]) waitState() State {
+	// the Context will be closed by the previous promise,
+	// after setting the res and status fields as expected.
+	<-p.syncCtx.Done()
+	if p.res == nil {
+		return Success
+	}
+	return p.res.State()
+}
+
 func (p *Promise[T]) extsChan() chan extQueue[T] {
 	extChanP := p.extChanP.Load()
 	if extChanP != nil {
@@ -68,33 +97,12 @@ func (p *Promise[T]) extsChan() chan extQueue[T] {
 	// because if we initiated it after the CAS below, it might be available to some
 	// call and make that call block until we initiate it.
 	extChan := make(chan extQueue[T], 1)
-	extChan <- extQueue[T]{
-		initState: State(p.resolveState.Load()),
-	}
+	extChan <- extQueue[T]{initState: p.readState()}
 	if p.extChanP.CompareAndSwap(nil, &extChan) {
 		return extChan
 	}
 	extChanP = p.extChanP.Load()
 	return *extChanP
-}
-
-// wait waits for the promise p to be resolved, by either blocking on receiving
-// from the syncChan, or by using the resolveState value of the promise.
-func (p *Promise[T]) wait() State {
-	// if the resolve status is non-zero, then no need to wait, as
-	// this is guaranteed to happen before closing the sync channel.
-	s := p.resolveState.Load()
-	if s != 0 {
-		return State(s)
-	}
-
-	// wait until the promise is resolved.
-	// the Context will be closed by the previous promise,
-	// after setting the res and status fields as expected.
-	<-p.syncCtx.Done()
-
-	s = p.resolveState.Load()
-	return State(s)
 }
 
 func (p *Promise[T]) isOnetimePromise() bool {
@@ -214,8 +222,6 @@ func (p *Promise[T]) resolveToPanicRes(
 		// otherwise, it will be delayed until the last call in the chain.
 		p.unhandledPanic()
 	}
-	// resolve with the Panic status.
-	p.resolveState.Store(uint32(Panic))
 	closeSyncCtx(p.syncCtx) // unblocks all calls waiting on p.
 	handleExtCalls(p)       // handles all extension calls that involve p.
 	handleGroupCalls(p)     // handles all group calls which p is part of.
@@ -233,7 +239,6 @@ func (p *Promise[T]) resolveToErrorRes(
 	if p.chainStatus.Load() == chainStatusEmpty {
 		p.unhandledError()
 	}
-	p.resolveState.Store(uint32(Error))
 	closeSyncCtx(p.syncCtx)
 	handleExtCalls(p)
 	handleGroupCalls(p)
@@ -244,7 +249,6 @@ func (p *Promise[T]) resolveToSuccessRes(
 ) {
 	debug(p, resolve, resolveSuccess)
 	p.res = res
-	p.resolveState.Store(uint32(Success))
 	closeSyncCtx(p.syncCtx)
 	handleExtCalls(p)
 	handleGroupCalls(p)
@@ -252,13 +256,11 @@ func (p *Promise[T]) resolveToSuccessRes(
 
 func (p *Promise[T]) resolveToResSync(res Result[T]) {
 	if res == nil {
-		p.resolveState.Store(uint32(Success))
 		return
 	}
 
 	p.res = res
-	state := res.State()
-	switch state {
+	switch state := res.State(); state {
 	case Panic:
 		p.unhandledPanic()
 	case Error:
@@ -268,7 +270,6 @@ func (p *Promise[T]) resolveToResSync(res Result[T]) {
 	default:
 		panic("promise: unexpected Result State: " + state.String())
 	}
-	p.resolveState.Store(uint32(state))
 }
 
 func handleFollow[PrevT, NextT any](
