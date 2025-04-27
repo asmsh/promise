@@ -1,5 +1,7 @@
 package promise
 
+// DelayCond describes when the wait duration provided to [Delay] or [Group.Delay]
+// takes effect, in respect with the provided [Result] value to the same call.
 type DelayCond int
 
 func (m DelayCond) String() string {
@@ -19,10 +21,22 @@ func (m DelayCond) String() string {
 
 // any values other than the listed below will be ignored
 const (
-	OnAll     DelayCond = iota // the default behavior if no conditions are passed
-	OnSuccess DelayCond = iota
-	OnError   DelayCond = iota
-	OnPanic   DelayCond = iota
+	// OnAll means that [Delay] will wait on all [Result] values,
+	// regardless of what [Result.State] returns.
+	// This is the default behavior if no conditions are passed.
+	OnAll DelayCond = iota
+
+	// OnSuccess means that [Delay] will only wait on [Result] values
+	// whose [Result.State] returns [Success].
+	OnSuccess
+
+	// OnError means that [Delay] will only wait on [Result] values
+	// whose [Result.State] returns [Error].
+	OnError
+
+	// OnPanic means that [Delay] will only wait on [Result] values
+	// whose [Result.State] returns [Panic].
+	OnPanic
 )
 
 type delayFlags struct {

@@ -37,7 +37,7 @@ type PanicError struct {
 }
 
 func (e PanicError) Error() string {
-	return fmt.Sprintf("panicked: %v", e.V)
+	return fmt.Sprintf("Panic: %v", e.V)
 }
 func (e PanicError) Is(target error) bool {
 	// make this error result implement the identity panic error value.

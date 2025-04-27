@@ -157,18 +157,18 @@ type GroupConfig struct {
 	// any callback is only used one-time (via [Promise.Res] or as an argument to
 	// any other callbacks).
 	// And this will cause any further attempt to use that [Result] value to return
-	// a [Rejected] [Result] with the [ErrPromiseConsumed] error.
+	// a [Error] [Result] with the [ErrPromiseConsumed] error.
 	OnetimeHandling bool
 
 	// NoNilCtxDoneChan, if true, will cause new calls to [Group.Ctx] to return a
-	// [Rejected] [Result] with [ErrPromiseNilCtxDone], when the [context.Context]
+	// [Error] [Result] with [ErrPromiseNilCtxDone], when the [context.Context]
 	// value passed has a nil Done channel ([context.Context.Done]).
 	// Otherwise, it will allow the creation of the [Promise], which will be a never
 	// resolved (blocked) promise, causing all follow promises to be blocked as well.
 	NoNilCtxDoneChan bool
 
 	// NoWaitingBusyGroup, if true, will cause new calls to [Group.Chan], [Group.Delay],
-	// and all [Group.Go] functions, to return a [Rejected] [Result] with [ErrPromiseGroupBusy]
+	// and all [Group.Go] functions, to return a [Error] [Result] with [ErrPromiseGroupBusy]
 	// synchronously, when the [Group] is currently handling promises that equals the [Size]
 	// value (if set).
 	// Otherwise, it will wait until there's a place for the new promise.

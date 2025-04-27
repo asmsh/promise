@@ -47,7 +47,7 @@ func PanicRes[T any](v any) Result[T] {
 }
 
 // resultPanicV must be implemented for any custom (from outside this package)
-// [Result] type that returns the [Panicked] [State].
+// [Result] type that returns the [Panic] [State].
 // it's required for retrieving the panic value when calling the [GroupConfig.UnhandledPanicCB],
 // otherwise, a new [PanicError] is gonna be passed wrapping the original [Result]
 // value as its V field ([PanicError.V]).
@@ -124,48 +124,48 @@ func (r panicResult[T]) Err() error  { return r }
 func (r ctxResult[T]) Err() error    { return r.ctx.Err() }
 func (r result[T]) Err() error       { return r.err }
 
-func (r emptyResult[T]) State() State  { return Fulfilled }
-func (r valResult[T]) State() State    { return Fulfilled }
-func (r errResult[T]) State() State    { return Rejected }
-func (r valErrResult[T]) State() State { return Rejected }
-func (r panicResult[T]) State() State  { return Panicked }
+func (r emptyResult[T]) State() State  { return Success }
+func (r valResult[T]) State() State    { return Success }
+func (r errResult[T]) State() State    { return Error }
+func (r valErrResult[T]) State() State { return Error }
+func (r panicResult[T]) State() State  { return Panic }
 func (r ctxResult[T]) State() State {
 	if r.ctx.Err() != nil {
-		return Rejected
+		return Error
 	}
-	return Fulfilled
+	return Success
 }
 func (r result[T]) State() State { return r.state }
 
 func (r emptyResult[T]) String() string {
-	return "fulfilled: <nil>"
+	return "Success: <nil>"
 }
 func (r valResult[T]) String() string {
-	return fmt.Sprintf("fulfilled: %v", r.val)
+	return fmt.Sprintf("Success: %v", r.val)
 }
 func (r errResult[T]) String() string {
-	return fmt.Sprintf("rejected: %s", r.err.Error())
+	return fmt.Sprintf("Error: %s", r.err.Error())
 }
 func (r valErrResult[T]) String() string {
-	return fmt.Sprintf("rejected: (%v, %s)", r.val, r.err.Error())
+	return fmt.Sprintf("Error: (%v, %s)", r.val, r.err.Error())
 }
 func (r panicResult[T]) String() string {
 	// same error message and format as the PanicError
-	return fmt.Sprintf("panicked: %v", r.v)
+	return fmt.Sprintf("Panic: %v", r.v)
 }
 func (r ctxResult[T]) String() string {
 	if err := r.ctx.Err(); err != nil {
-		return fmt.Sprintf("rejected: %s", err.Error())
+		return fmt.Sprintf("Error: %s", err.Error())
 	}
-	return "fulfilled: <nil>"
+	return "Success: <nil>"
 }
 func (r result[T]) String() string {
-	if r.state == Fulfilled {
-		return fmt.Sprintf("fulfilled: %v", r.val)
-	} else if r.state == Rejected {
-		return fmt.Sprintf("rejected: (%v, %s)", r.val, r.err.Error())
+	if r.state == Success {
+		return fmt.Sprintf("Success: %v", r.val)
+	} else if r.state == Error {
+		return fmt.Sprintf("Error: (%v, %s)", r.val, r.err.Error())
 	} else {
-		return fmt.Sprintf("panicked: %s", r.err.Error())
+		return fmt.Sprintf("Panic: %s", r.err.Error())
 	}
 }
 

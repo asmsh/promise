@@ -140,21 +140,6 @@ func delayHandler[T any](
 	debug(p, endHandler, endConstrHandler, endConstrDelayHandler)
 }
 
-func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
-	if ctx == nil {
-		panic(nilCtxPanicMsg)
-	}
-	if ctx.Done() != nil {
-		return newPromCtx[T](g, ctx)
-	} else if g != nil && g.core.noNilCtxDoneChan {
-		return newPromSync[T](g, errPromiseCtxNilDoneResult[T]{})
-	}
-	// since this ctx value will never be closed, the equivalent outcome would
-	// be a Promise that's never resolved.
-	// so, return that equivalent value without creating any unneeded resources.
-	return newPromBlocked[T]()
-}
-
 func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
@@ -177,6 +162,21 @@ func chanHandler[T any](p *Promise[T], resChan <-chan Result[T]) {
 	res := <-resChan
 	p.resolveToRes(res)
 	debug(p, endHandler, endConstrHandler, endConstrChanHandler)
+}
+
+func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
+	if ctx == nil {
+		panic(nilCtxPanicMsg)
+	}
+	if ctx.Done() != nil {
+		return newPromCtx[T](g, ctx)
+	} else if g != nil && g.core.noNilCtxDoneChan {
+		return newPromSync[T](g, errPromiseCtxNilDoneResult[T]{})
+	}
+	// since this ctx value will never be closed, the equivalent outcome would
+	// be a Promise that's never resolved.
+	// so, return that equivalent value without creating any unneeded resources.
+	return newPromBlocked[T]()
 }
 
 func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
@@ -234,12 +234,12 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 	g.core.callsQMu.Unlock()
 
 	switch res.State() {
-	case Panicked:
-		return panickedResultSingleRes[T, GroupRes[T]]{res}
-	case Rejected:
-		return rejectedResultSingleRes[T, GroupRes[T]]{res}
-	case Fulfilled:
-		return fulfilledResultSingleRes[T, GroupRes[T]]{res}
+	case Panic:
+		return panicResultSingleRes[T, GroupRes[T]]{res}
+	case Error:
+		return errorResultSingleRes[T, GroupRes[T]]{res}
+	case Success:
+		return successResultSingleRes[T, GroupRes[T]]{res}
 	default:
 		// an internal panic, because it's supposed to be caught earlier.
 		panic("promise: internal: unexpected Result state: " + res.State().String())
@@ -251,12 +251,12 @@ func (g *Group[T]) getAllResState() State {
 
 	// the order here matters.
 	switch true {
-	case groupState&Panicked == Panicked:
-		return Panicked
-	case groupState&Rejected == Rejected:
-		return Rejected
-	case groupState&Fulfilled == Fulfilled:
-		return Fulfilled
+	case groupState&Panic == Panic:
+		return Panic
+	case groupState&Error == Error:
+		return Error
+	case groupState&Success == Success:
+		return Success
 	}
 
 	// unexpected state.
@@ -268,12 +268,12 @@ func (g *Group[T]) getAnyResState() State {
 
 	// the order here matters.
 	switch true {
-	case groupState&Panicked == Panicked:
-		return Panicked
-	case groupState&Fulfilled == Fulfilled:
-		return Fulfilled
-	case groupState&Rejected == Rejected:
-		return Rejected
+	case groupState&Panic == Panic:
+		return Panic
+	case groupState&Success == Success:
+		return Success
+	case groupState&Error == Error:
+		return Error
 	}
 
 	// unexpected state.
@@ -281,7 +281,7 @@ func (g *Group[T]) getAnyResState() State {
 }
 
 func (g *Group[T]) getJoinResState() State {
-	return Fulfilled
+	return Success
 }
 
 // AllWaitRes behaves like the [AllWait] extension function, but only operates
@@ -290,13 +290,13 @@ func (g *Group[T]) getJoinResState() State {
 // to return, then examine their [Result] values.
 // It returns the promises [Result] values either from the moment of calling this
 // method.
-// The [Result] of this call will be resolved to [Fulfilled] iff all the promises
-// were resolved to [Fulfilled].
-// It will be resolved to [Panicked] if at least one promise was resolved to [Panicked].
-// It will be resolved to [Rejected] if at least one promise was resolved to [Rejected].
+// The [Result] of this call will be resolved to [Success] iff all the promises
+// were resolved to [Success].
+// It will be resolved to [Panic] if at least one promise was resolved to [Panic].
+// It will be resolved to [Error] if at least one promise was resolved to [Error].
 //
 // TODO: // It returns the promises [Result] values either from the moment of calling this
-//// method, or from the start of this [Group], based on the Group option [GroupConfig.RecordAllGroupResults].
+// // method, or from the start of this [Group], based on the Group option [GroupConfig.RecordAllGroupResults].
 func (g *Group[T]) AllWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 	for _, f := range triggers {
 		f()
@@ -391,12 +391,12 @@ resultLoop:
 	g.core.callsQMu.Unlock()
 
 	switch groupState {
-	case Panicked:
-		return panickedResultMultiRes[T, GroupRes[T]]{groupRes}
-	case Rejected:
-		return rejectedResultMultiRes[T, GroupRes[T]]{groupRes}
-	case Fulfilled:
-		return fulfilledResultMultiRes[T, GroupRes[T]]{groupRes}
+	case Panic:
+		return panicResultMultiRes[T, GroupRes[T]]{groupRes}
+	case Error:
+		return errorResultMultiRes[T, GroupRes[T]]{groupRes}
+	case Success:
+		return successResultMultiRes[T, GroupRes[T]]{groupRes}
 	default:
 		// an internal panic, because it's supposed to be caught earlier.
 		panic("promise: internal: unexpected Result state: " + groupState.String())
@@ -444,7 +444,7 @@ type groupCore struct {
 	noWaitingBusyGroup bool
 
 	// ctx will be non-nil if the Group is meant to close all Context values
-	// once any Promise that's created using it is rejected or panicked.
+	// once any Promise that's created using it panics or returns an error.
 	// if neverCancelCBCtx is true, these 2 fields will be unset.
 	ctx    context.Context
 	cancel context.CancelFunc

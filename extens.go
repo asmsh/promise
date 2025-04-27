@@ -129,23 +129,26 @@ loop:
 
 	// resolve the next promise, based on the final Result got
 	switch res.State() {
-	case Panicked:
-		newProm.resolveToPanickedRes(panickedResultSingleRes[T, IdxRes[T]]{res})
-	case Rejected:
-		newProm.resolveToRejectedRes(rejectedResultSingleRes[T, IdxRes[T]]{res})
-	case Fulfilled:
-		newProm.resolveToFulfilledRes(fulfilledResultSingleRes[T, IdxRes[T]]{res})
+	case Panic:
+		newProm.resolveToPanicRes(panicResultSingleRes[T, IdxRes[T]]{res})
+	case Error:
+		newProm.resolveToErrorRes(errorResultSingleRes[T, IdxRes[T]]{res})
+	case Success:
+		newProm.resolveToSuccessRes(successResultSingleRes[T, IdxRes[T]]{res})
+	default:
+		// an internal panic, cause it's supposed to be caught earlier.
+		panic("promise: internal: unexpected Result State: " + res.State().String())
 	}
 }
 
-// All returns a Promise value that resolves to Fulfilled if all Promise values
-// passed resolved to Fulfilled.
-// It resolves to Panicked if at least one resolved to Panicked.
-// It resolves to Rejected if at least one resolved to Rejected and none resolves
-// to Panicked.
+// All returns a Promise value that resolves to Success if all Promise values
+// passed resolved to Success.
+// It resolves to Panic if at least one resolved to Panic.
+// It resolves to Error if at least one resolved to Error and none resolves
+// to Panic.
 //
 // It doesn't wait for all passed Promise values to resolve, unless the resolved
-// one(s) is Panicked.
+// one(s) is Panic.
 //
 // The resulting IdxRes slice holds the Result values of the Promise values passed
 // up to when the returned Promise was resolved.
@@ -154,16 +157,15 @@ func All[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return allCall(false, p)
 }
 
-// AllWait returns a Promise value that resolves to Fulfilled if all Promise values
-// passed resolved to Fulfilled.
-// It resolves to Panicked if at least one resolved to Panicked.
-// It resolves to Rejected if at least one resolved to Rejected and none resolves
-// to Panicked.
+// AllWait returns a [Promise] that resolves to [Success] iff all the passed
+// promises resolved to [Success].
+// It resolves to [Panic] if at least one resolved to [Panic].
+// It resolves to [Error] if at least one resolved to [Error].
 //
-// It waits for all passed Promise values to resolve.
+// It waits for all passed promises to resolve.
 //
-// The resulting IdxRes slice holds the Result values of all Promise values passed.
-// The original order of any IdxRes's Promise can be retrieved from its Idx field.
+// The resulting [IdxRes] slice holds the [Result] values of all [Promise] values
+// passed, and their original order can be retrieved from its [IdxRes.Idx] field.
 func AllWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return allCall(true, p)
 }
@@ -178,13 +180,13 @@ func allCall[T any](waitAll bool, ps []*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// Any returns a Promise value that resolves to Fulfilled if at least one of
-// the Promise values passed resolves to Fulfilled and none resolves to Panicked.
-// It resolves to Panicked if at least one resolved to Panicked.
-// It resolves to Rejected if all resolves to Rejected.
+// Any returns a Promise value that resolves to Success if at least one of
+// the Promise values passed resolves to Success and none resolves to Panic.
+// It resolves to Panic if at least one resolved to Panic.
+// It resolves to Error if all resolves to Error.
 //
 // It doesn't wait for all passed Promise values to resolve, unless the resolved
-// one(s) is Panicked.
+// one(s) is Panic.
 //
 // The resulting IdxRes slice holds the Result values of the Promise values passed
 // up to when the returned Promise was resolved.
@@ -193,10 +195,10 @@ func Any[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return anyCall(false, p)
 }
 
-// AnyWait returns a Promise value that resolves to Fulfilled if at least one of
-// the Promise values passed resolves to Fulfilled and none resolves to Panicked.
-// It resolves to Panicked if at least one resolved to Panicked.
-// It resolves to Rejected if all resolves to Rejected.
+// AnyWait returns a Promise value that resolves to Success if at least one of
+// the Promise values passed resolves to Success and none resolves to Panic.
+// It resolves to Panic if at least one resolved to Panic.
+// It resolves to Error if all resolves to Error.
 //
 // It waits for all passed Promise values to resolve.
 //
@@ -216,7 +218,7 @@ func anyCall[T any](waitAll bool, ps []*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// Join returns a Promise value that resolves to Fulfilled after all Promise
+// Join returns a Promise value that resolves to Success after all Promise
 // values passed resolves.
 //
 // It waits for all passed Promise values to resolve.
@@ -336,17 +338,17 @@ loop:
 				// stop, if we found the target break state based on the current flags.
 				// note: for the allSuccess case, we can only continue if the waitAll
 				// flag is not set, or the recent resolved promise got resolved to
-				// anything but Rejected.
-				// note: by default, we won't break on Panicked states, as it will be
+				// anything but Error.
+				// note: by default, we won't break on Panic states, as it will be
 				// used only to alter the final state.
-				if !waitAll && res.State() == Rejected {
+				if !waitAll && res.State() == Error {
 					break loop
 				}
 			}
 			if anySuccess {
 				resState = calcAnyResState(res.State(), resState)
 
-				if !waitAll && res.State() == Fulfilled {
+				if !waitAll && res.State() == Success {
 					break loop
 				}
 			}
@@ -356,17 +358,17 @@ loop:
 	// no resolved promises, or the resolved promise(s) didn't meet the requirements
 	// set by the provided flags.
 	if waitAll || resState == unknown ||
-		(allSuccess && resState == Fulfilled) ||
-		(anySuccess && resState != Fulfilled) {
+		(allSuccess && resState == Success) ||
+		(anySuccess && resState != Success) {
 		// the waitAll flag is set, no promise got resolved by the wait logic above,
 		// or the resolved promise(s) didn't meet the requirements set by the flags...
 		// get the number of pending promises against the initially provided list.
 		pending := len(ps) - len(resArr)
 
 		// if there are no pending promises and no result state computed, then it
-		// must be a Join call, which means the result state expected is Fulfilled.
+		// must be a Join call, which means the result state expected is Success.
 		if pending == 0 && resState == unknown {
-			resState = Fulfilled
+			resState = Success
 		}
 
 		// otherwise, wait until a matching result is received.
@@ -383,23 +385,23 @@ loop:
 					// stop, if we found the target break state based on the current flags.
 					// note: for the allSuccess case, we can only continue if the waitAll
 					// flag is not set, or the recent resolved promise got resolved to
-					// anything but Rejected.
-					// note: by default, we won't break on Panicked states, as it will be
+					// anything but Error.
+					// note: by default, we won't break on Panic states, as it will be
 					// used only to alter the final state.
-					if !waitAll && res.State() == Rejected {
+					if !waitAll && res.State() == Error {
 						break
 					}
 				}
 				if anySuccess {
 					resState = calcAnyResState(res.State(), resState)
 
-					if !waitAll && res.State() == Fulfilled {
+					if !waitAll && res.State() == Success {
 						break
 					}
 				}
 
 				if !allSuccess && !anySuccess {
-					resState = Fulfilled
+					resState = Success
 				}
 			}
 		}
@@ -407,12 +409,15 @@ loop:
 
 	// resolve the next promise as expected, based on the final resState.
 	switch resState {
-	case Panicked:
-		newProm.resolveToPanickedRes(panickedResultMultiRes[T, IdxRes[T]]{resArr})
-	case Rejected:
-		newProm.resolveToRejectedRes(rejectedResultMultiRes[T, IdxRes[T]]{resArr})
-	case Fulfilled:
-		newProm.resolveToFulfilledRes(fulfilledResultMultiRes[T, IdxRes[T]]{resArr})
+	case Panic:
+		newProm.resolveToPanicRes(panicResultMultiRes[T, IdxRes[T]]{resArr})
+	case Error:
+		newProm.resolveToErrorRes(errorResultMultiRes[T, IdxRes[T]]{resArr})
+	case Success:
+		newProm.resolveToSuccessRes(successResultMultiRes[T, IdxRes[T]]{resArr})
+	default:
+		// an internal panic, cause it's supposed to be caught earlier.
+		panic("promise: internal: unexpected Result State: " + resState.String())
 	}
 }
 
@@ -436,14 +441,14 @@ func addExtCallToQ[T any](
 }
 
 // calcAllResState returns the resolve state of the promise returned by All.
-// Panicked has the highest priority.
-// Rejected has the highest priority between Fulfilled and Rejected.
+// Panic has the highest priority.
+// Error has the highest priority between Success and Error.
 func calcAllResState(newState, prevState State) State {
 	switch {
-	case newState == Panicked || prevState == Panicked:
-		return Panicked
-	case newState == Rejected:
-		return Rejected
+	case newState == Panic || prevState == Panic:
+		return Panic
+	case newState == Error:
+		return Error
 	case prevState == unknown:
 		return newState
 	default:
@@ -452,14 +457,14 @@ func calcAllResState(newState, prevState State) State {
 }
 
 // calcAnyResState returns the resolve state of the promise returned by Any.
-// Panicked has the highest priority.
-// Fulfilled has the highest priority between Fulfilled and Rejected.
+// Panic has the highest priority.
+// Success has the highest priority between Success and Error.
 func calcAnyResState(newState, prevState State) State {
 	switch {
-	case newState == Panicked || prevState == Panicked:
-		return Panicked
-	case newState == Fulfilled:
-		return Fulfilled
+	case newState == Panic || prevState == Panic:
+		return Panic
+	case newState == Success:
+		return Success
 	case prevState == unknown:
 		return newState
 	default:
@@ -468,5 +473,5 @@ func calcAnyResState(newState, prevState State) State {
 }
 
 func calcJoinResState(_, _ State) State {
-	return Fulfilled
+	return Success
 }

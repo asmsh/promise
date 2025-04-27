@@ -20,9 +20,9 @@ const (
 	_ debugEvent = iota
 
 	resolve
-	resolveFulfilled
-	resolveRejected
-	resolvePanicked
+	resolveSuccess
+	resolveError
+	resolvePanic
 
 	startHandleExtCalls
 	endHandleExtCalls

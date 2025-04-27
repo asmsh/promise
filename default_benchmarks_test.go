@@ -213,7 +213,7 @@ func BenchmarkWrap(b *testing.B) {
 		_ = p
 	})
 
-	b.Run("Fulfilled result", func(b *testing.B) {
+	b.Run("Success result", func(b *testing.B) {
 		var p *Promise[string]
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -223,7 +223,7 @@ func BenchmarkWrap(b *testing.B) {
 		_ = p
 	})
 
-	b.Run("Rejected result", func(b *testing.B) {
+	b.Run("Error result", func(b *testing.B) {
 		var p *Promise[string]
 		var err = newStrError()
 		b.ReportAllocs()
@@ -234,7 +234,7 @@ func BenchmarkWrap(b *testing.B) {
 		_ = p
 	})
 
-	b.Run("Panicked result", func(b *testing.B) {
+	b.Run("Panic result", func(b *testing.B) {
 		var p *Promise[string]
 		var err = newStrError()
 		b.ReportAllocs()

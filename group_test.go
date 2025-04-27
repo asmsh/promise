@@ -193,8 +193,8 @@ func TestGroup_SelectRes(t *testing.T) {
 
 		res := g.SelectRes()
 
-		if res.State() != Rejected {
-			t.Errorf("res.State() is %s, want Rejected", res.State())
+		if res.State() != Error {
+			t.Errorf("res.State() is %s, want Error", res.State())
 		}
 	})
 }
@@ -222,8 +222,8 @@ func TestGroup_AllWaitRes(t *testing.T) {
 
 		res := g.AllWaitRes()
 
-		if res.State() != Rejected {
-			t.Errorf("res.State() is %s, want Rejected", res.State())
+		if res.State() != Error {
+			t.Errorf("res.State() is %s, want Error", res.State())
 		}
 	})
 }
@@ -251,8 +251,8 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 
 		res := g.AnyWaitRes()
 
-		if res.State() != Fulfilled {
-			t.Errorf("res.State() is %s, want Fulfilled", res.State())
+		if res.State() != Success {
+			t.Errorf("res.State() is %s, want Success", res.State())
 		}
 	})
 
@@ -280,8 +280,8 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 			g.Wait()
 		})
 
-		if res.State() != Panicked {
-			t.Errorf("res.State() is %s, want Panicked", res.State())
+		if res.State() != Panic {
+			t.Errorf("res.State() is %s, want Panic", res.State())
 		}
 	})
 }
@@ -309,8 +309,8 @@ func TestGroup_JoinRes(t *testing.T) {
 
 		res := g.JoinRes()
 
-		if res.State() != Fulfilled {
-			t.Errorf("res.State() is %s, want Fulfilled", res.State())
+		if res.State() != Success {
+			t.Errorf("res.State() is %s, want Success", res.State())
 		}
 	})
 }

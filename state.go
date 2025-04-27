@@ -21,21 +21,21 @@ type State uint32
 const (
 	// the order and value here matter (increasing bitwise).
 
-	Fulfilled State = 1 << iota
-	Rejected
-	Panicked
+	Success State = 1 << iota
+	Error
+	Panic
 
 	unknown State = 0
 )
 
 func (s State) String() string {
 	switch s {
-	case Fulfilled:
-		return "fulfilled"
-	case Rejected:
-		return "rejected"
-	case Panicked:
-		return "panicked"
+	case Success:
+		return "Success"
+	case Error:
+		return "Error"
+	case Panic:
+		return "Panic"
 	default:
 		return fmt.Sprintf("<unknown>(%d)", s)
 	}

@@ -25,12 +25,12 @@ func (de debugEvent) String() string {
 	switch de {
 	case resolve:
 		return "resolve"
-	case resolveFulfilled:
-		return "resolveFulfilled"
-	case resolveRejected:
-		return "resolveRejected"
-	case resolvePanicked:
-		return "resolvePanicked"
+	case resolveSuccess:
+		return "resolveSuccess"
+	case resolveError:
+		return "resolveError"
+	case resolvePanic:
+		return "resolvePanic"
 	case startHandleExtCalls:
 		return "startHandleExtCalls"
 	case endHandleExtCalls:

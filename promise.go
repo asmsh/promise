@@ -134,9 +134,9 @@ func (p *Promise[T]) waitCall() {
 	// at this point, the promise is not handled and doesn't have a read call,
 	// so call the unhandled handlers if the state is one of a failure.
 	switch s {
-	case Rejected:
+	case Error:
 		p.unhandledError()
-	case Panicked:
+	case Panic:
 		p.unhandledPanic()
 	}
 }
@@ -261,7 +261,7 @@ func delayFollowHandler[T any](
 		if flags.onError {
 			time.Sleep(dd)
 		}
-		nextProm.resolveToRejectedRes(res)
+		nextProm.resolveToErrorRes(res)
 		return
 	}
 
@@ -302,8 +302,8 @@ func thenFollowHandler[T any](
 	defer prevProm.group.freeGoroutine()
 	s := prevProm.wait()
 
-	// 'Then' can handle only the 'Fulfilled' state, so return otherwise
-	if s != Fulfilled {
+	// 'Then' can handle only the 'Success' state, so return otherwise
+	if s != Success {
 		nextProm.resolveToRes(prevProm.res)
 		return
 	}
@@ -355,8 +355,8 @@ func catchFollowHandler[T any](
 	defer prevProm.group.freeGoroutine()
 	s := prevProm.wait()
 
-	// 'Catch' can handle only the 'Rejected' state, so return otherwise
-	if s != Rejected {
+	// 'Catch' can handle only the 'Error' state, so return otherwise
+	if s != Error {
 		nextProm.resolveToRes(prevProm.res)
 		return
 	}
@@ -404,8 +404,8 @@ func recoverFollowHandler[T any](
 	defer prevProm.group.freeGoroutine()
 	s := prevProm.wait()
 
-	// 'Recover' can handle only the 'Panicked' state, so return otherwise
-	if s != Panicked {
+	// 'Recover' can handle only the 'Panic' state, so return otherwise
+	if s != Panic {
 		nextProm.resolveToRes(prevProm.res)
 		return
 	}
@@ -450,7 +450,7 @@ func (p *Promise[T]) Finally(
 // finallyFollowHandler is like an asyncReadCall, except that it can't set the 'Handled'
 // flag(handle the promise), and it can return new promise with new result.
 // if we made the finally a normal 'follow' method(like then,..), it will be
-// possible to call it on a panicked promise and return a fulfilled promise,
+// possible to call it on a panicked promise and return a Success promise,
 // and the panic will be dismissed implicitly, which is something we don't want.
 func finallyFollowHandler[T any](
 	prevProm *Promise[T],
