@@ -338,18 +338,6 @@ func (g *Group[T]) joinRes(
 	g.core.callsQMu.Lock()
 	call := g.core.callsQ.PushBack(groupCall[T]{
 		resChan: resChan,
-		// FIXME: figure a way to have the 'syncChan' be connected to the 'reserveChan',
-		// such that once it reaches zero, the 'syncChan' is closed.
-		// we need this for 2 things:
-		// 1. to make the syncChan signals to the promise's 'handleGroupCall'
-		//    that it's no longer needed to do anything.
-		//    Update (24/4/2025): this won't work, because the 'handleGroupCall'
-		//    function is executed before the Promise exists, to it won't touch
-		//    the counter, so it's kinda deadlocking itself.
-		// 2. to make the for-loop below exists, as the Group is closed and
-		//    no more Result is coming.
-		//    Update (24/4/2025): for that, we will use the sema.Group.WaitChan,
-		//    which will be closed once all Promise values exists.
 		// Note: the syncChan is not needed for the join calls,
 		// because we need to wait for _all_ ongoing promises to finish,
 		// and the syncChan is needed to signal to ongoing promises to
