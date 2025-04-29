@@ -162,7 +162,7 @@ func (p *Promise[T]) resolveToRes(res Result[T]) {
 	}
 
 	// resolve the provided Promise to the provided Result, accordingly.
-	// Note: if res is a Promise value, the State call will block until that
+	// note: if res is a Promise value, the State call will block until that
 	// Promise is resolved.
 	switch s := res.State(); s {
 	case Panic:

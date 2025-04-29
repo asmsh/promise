@@ -136,36 +136,36 @@ func TestGroup_Wait(t *testing.T) {
 	t.Run("basic flow", func(t *testing.T) {
 		t.Parallel()
 
-		targetDuration := 300 * time.Millisecond
 		g := NewGroup[string]()
 
 		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(targetDuration)
+			time.Sleep(1 * time.Millisecond)
 			return ErrRes[string](testStrError("promise1"))
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(targetDuration)
+			time.Sleep(2 * time.Millisecond)
 			return ValRes("promise2")
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(targetDuration)
+			time.Sleep(50 * time.Millisecond)
 			return ValRes("promise3")
 		})
 
-		// at least targetDuration have to pass while waiting.
+		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
+		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
+
 		start := time.Now()
 		g.Wait()
 		elapsed := time.Since(start)
-		if elapsed < targetDuration {
-			t.Errorf("Wait() returned early")
+
+		if elapsed < lowerDuration {
+			t.Errorf("Wait() returned early. expected: %s, got: %s", lowerDuration, elapsed)
 		}
 
-		// make sure we don't wait longer than we should.
-		// for that, we allow a buffer duration of 5 Millisecond.
-		if elapsed > targetDuration+(5*time.Millisecond) {
-			t.Errorf("Wait() waited so long. expected: %s, got: %s", targetDuration, elapsed)
+		if elapsed > upperDuration {
+			t.Errorf("Wait() waited so long. expected: %s, got: %s", upperDuration, elapsed)
 		}
 	})
 }
@@ -182,19 +182,117 @@ func TestGroup_SelectRes(t *testing.T) {
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(2 * time.Millisecond)
+			time.Sleep(20 * time.Millisecond)
 			return ValRes("promise2")
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(3 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			return ValRes("promise3")
 		})
 
+		lowerDuration := 1 * time.Millisecond // promise1 sleep.
+		upperDuration := 6 * time.Millisecond // promise1 sleep + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
 		res := g.SelectRes()
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("SelectRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("SelectRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
 
 		if res.State() != Error {
-			t.Errorf("res.State() is %s, want Error", res.State())
+			t.Errorf("SelectRes().State() is %s, want Error", res.State())
+		}
+	})
+}
+
+func TestGroup_AllRes(t *testing.T) {
+	t.Run("basic flow", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(10 * time.Millisecond)
+			return ErrRes[string](testStrError("promise1"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(100 * time.Millisecond)
+			return ValRes("promise2")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(500 * time.Millisecond)
+			return ValRes("promise3")
+		})
+
+		lowerDuration := 10 * time.Millisecond // promise1 sleep.
+		upperDuration := 15 * time.Millisecond // promise1 sleep + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
+		// it shouldn't wait for other promises once one is Error.
+		res := g.AllRes()
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("AllRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("AllRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
+
+		if res.State() != Error {
+			t.Errorf("AllRes().State() is %s, want Error", res.State())
+		}
+	})
+
+	t.Run("panic flow", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(10 * time.Millisecond)
+			return PanicRes[string]("promise1")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(100 * time.Millisecond)
+			return ErrRes[string](testStrError("promise2"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(500 * time.Millisecond)
+			return ValRes("promise3")
+		})
+
+		lowerDuration := 100 * time.Millisecond // promise2 sleep.
+		upperDuration := 105 * time.Millisecond // promise2 sleep + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
+		// it shouldn't wait for other promises once one is Error,
+		// unless that one is Panic.
+		res := g.AllRes()
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("AllRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("AllRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
+
+		if res.State() != Panic {
+			t.Errorf("AllRes().State() is %s, want Panic", res.State())
 		}
 	})
 }
@@ -216,14 +314,153 @@ func TestGroup_AllWaitRes(t *testing.T) {
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			return ValRes("promise3")
 		})
 
+		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
+		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
 		res := g.AllWaitRes()
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("AllWaitRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("AllWaitRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
 
 		if res.State() != Error {
-			t.Errorf("res.State() is %s, want Error", res.State())
+			t.Errorf("AllWaitRes().State() is %s, want Error", res.State())
+		}
+	})
+}
+
+func TestGroup_AnyRes(t *testing.T) {
+	t.Run("basic flow", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(10 * time.Millisecond)
+			return ErrRes[string](testStrError("promise1"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(100 * time.Millisecond)
+			return ValRes("promise2")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(500 * time.Millisecond)
+			return ValRes("promise3")
+		})
+
+		lowerDuration := 100 * time.Millisecond // promise2 sleep.
+		upperDuration := 105 * time.Millisecond // promise2 sleep + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
+		// it shouldn't wait for other promises once one is Success.
+		res := g.AnyRes()
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("AnyRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("AnyRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
+
+		if res.State() != Success {
+			t.Errorf("AnyRes().State() is %s, want Success", res.State())
+		}
+	})
+
+	t.Run("panic flow - early", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(10 * time.Millisecond)
+			return PanicRes[string]("promise1")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(100 * time.Millisecond)
+			return ErrRes[string](testStrError("promise2"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(500 * time.Millisecond)
+			return ValRes("promise3")
+		})
+
+		lowerDuration := 500 * time.Millisecond // promise3 sleep.
+		upperDuration := 505 * time.Millisecond // promise3 sleep + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
+		// it should wait until one is Success, but if there was one that
+		// is Panic, it should resolve to Panic.
+		res := g.AnyRes()
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("AnyRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("AnyRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
+
+		if res.State() != Panic {
+			t.Errorf("AnyRes().State() is %s, want Panic", res.State())
+		}
+	})
+
+	t.Run("panic flow - late", func(t *testing.T) {
+		t.Parallel()
+
+		g := NewGroup[string]()
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(10 * time.Millisecond)
+			return ValRes("promise1")
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(100 * time.Millisecond)
+			return ErrRes[string](testStrError("promise2"))
+		})
+
+		g.GoRes(func(ctx context.Context) Result[string] {
+			time.Sleep(500 * time.Millisecond)
+			return PanicRes[string]("promise3")
+		})
+
+		lowerDuration := 10 * time.Millisecond // promise1 sleep.
+		upperDuration := 15 * time.Millisecond // promise1 sleep + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
+		// it shouldn't wait for other promises once one is Success.
+		res := g.AnyRes()
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("AllRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("AllRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
+
+		if res.State() != Success {
+			t.Errorf("AllRes().State() is %s, want Success", res.State())
 		}
 	})
 }
@@ -245,14 +482,27 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			return ValRes("promise3")
 		})
 
+		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
+		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
 		res := g.AnyWaitRes()
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("AnyWaitRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("AnyWaitRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
 
 		if res.State() != Success {
-			t.Errorf("res.State() is %s, want Success", res.State())
+			t.Errorf("AnyWaitRes().State() is %s, want Success", res.State())
 		}
 	})
 
@@ -272,16 +522,29 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			return ValRes("promise3")
 		})
 
+		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
+		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
 		res := g.AnyWaitRes(func() {
 			g.Wait()
 		})
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("AnyWaitRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("AnyWaitRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
 
 		if res.State() != Panic {
-			t.Errorf("res.State() is %s, want Panic", res.State())
+			t.Errorf("AnyWaitRes().State() is %s, want Panic", res.State())
 		}
 	})
 }
@@ -303,14 +566,28 @@ func TestGroup_JoinRes(t *testing.T) {
 		})
 
 		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 			panic(testStrError("promise3"))
 		})
 
+		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
+		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
+
+		start := time.Now()
 		res := g.JoinRes()
+		elapsed := time.Since(start)
+
+		if elapsed < lowerDuration {
+			t.Errorf("JoinRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		}
+
+		if elapsed > upperDuration {
+			t.Errorf("JoinRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		}
 
 		if res.State() != Success {
-			t.Errorf("res.State() is %s, want Success", res.State())
+			t.Errorf("JoinRes().State() is %s, want Success", res.State())
 		}
 	})
 }
+

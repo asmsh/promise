@@ -228,7 +228,7 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 
 	// remove this groupCall from the callsQ, now that it's no longer active.
 	// note: this is just a cleanup action, as this groupCall will not be used
-	// by anything (there's no running promises to use anymore).
+	// by anything (there are no running promises to use anymore).
 	g.core.callsQMu.Lock()
 	g.core.callsQ.Remove(call)
 	g.core.callsQMu.Unlock()
@@ -263,6 +263,11 @@ func (g *Group[T]) getAllResState() State {
 	return groupState
 }
 
+func (g *Group[T]) checkAllResState(state State) bool {
+	// All breaks on [Error] only, as it ignores [Panic] and is okay with [Success].
+	return state == Error
+}
+
 func (g *Group[T]) getAnyResState() State {
 	groupState := State(g.core.state.Load())
 
@@ -280,8 +285,21 @@ func (g *Group[T]) getAnyResState() State {
 	return groupState
 }
 
+func (g *Group[T]) checkAnyResState(state State) bool {
+	// Any breaks on [Success] only, as it waits for the first [Success].
+	return state == Success
+}
+
 func (g *Group[T]) getJoinResState() State {
 	return Success
+}
+
+func (g *Group[T]) AllRes(triggers ...func()) Result[[]GroupRes[T]] {
+	for _, f := range triggers {
+		f()
+	}
+	res := g.joinRes(false, g.getAllResState, calcAllResState, g.checkAllResState)
+	return res
 }
 
 // AllWaitRes behaves like the [AllWait] extension function, but only operates
@@ -302,8 +320,16 @@ func (g *Group[T]) AllWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 		f()
 	}
 	g.core.waiting.Store(true)
-	res := g.joinRes(g.getAllResState, calcAllResState)
+	res := g.joinRes(true, g.getAllResState, calcAllResState, nil)
 	g.core.sg.Wait()
+	return res
+}
+
+func (g *Group[T]) AnyRes(triggers ...func()) Result[[]GroupRes[T]] {
+	for _, f := range triggers {
+		f()
+	}
+	res := g.joinRes(false, g.getAnyResState, calcAnyResState, g.checkAnyResState)
 	return res
 }
 
@@ -312,7 +338,7 @@ func (g *Group[T]) AnyWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 		f()
 	}
 	g.core.waiting.Store(true)
-	res := g.joinRes(g.getAnyResState, calcAnyResState)
+	res := g.joinRes(true, g.getAnyResState, calcAnyResState, nil)
 	g.core.sg.Wait()
 	return res
 }
@@ -322,36 +348,55 @@ func (g *Group[T]) JoinRes(triggers ...func()) Result[[]GroupRes[T]] {
 		f()
 	}
 	g.core.waiting.Store(true)
-	res := g.joinRes(g.getJoinResState, calcJoinResState)
+	res := g.joinRes(true, g.getJoinResState, calcJoinResState, nil)
 	g.core.sg.Wait()
 	return res
 }
 
 func (g *Group[T]) joinRes(
+	waitAll bool,
 	readStateFunc func() State,
 	calcStateFunc func(State, State) State,
+	checkStateFunc func(State) bool, // optional. only needed if waitAll == true.
 ) Result[[]GroupRes[T]] {
 	// create the needed res channel to receive the result on it.
 	resChan := make(chan GroupRes[T])
 
+	// only create the syncChan if we are expecting an early return.
+	var syncChan chan struct{}
+	if !waitAll {
+		syncChan = make(chan struct{})
+	}
+
 	// add the new call to the callsQ of calls for this group.
 	g.core.callsQMu.Lock()
 	call := g.core.callsQ.PushBack(groupCall[T]{
-		resChan: resChan,
-		// Note: the syncChan is not needed for the join calls,
-		// because we need to wait for _all_ ongoing promises to finish,
-		// and the syncChan is needed to signal to ongoing promises to
-		// abandon sending to the resChan, which will not be the case.
-		syncChan: nil,
+		resChan:  resChan,
+		syncChan: syncChan,
 	})
 	g.core.callsQMu.Unlock()
 
 	// now that the call has been recorded, get the expected number
 	// of results we will process, and initialize the result array.
-	groupState := readStateFunc()
 	groupDone := g.core.sg.WaitChan()
-	groupLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
-	groupRes := make([]GroupRes[T], 0, groupLen)
+
+	// init the result array, and account for the group state only
+	// if we are waiting for all promises.
+	var groupRes []GroupRes[T]
+	var groupState State
+	if !waitAll {
+		// expect at least all ongoing promises to be included.
+		groupLen := g.core.sg.ActiveCount()
+		groupRes = make([]GroupRes[T], 0, groupLen)
+	} else {
+		// we are going to wait for all promises, ongoing and blocked,
+		// so init the result array with the expected number.
+		groupLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
+		groupRes = make([]GroupRes[T], 0, groupLen)
+
+		// read the group state, which holds the history of the group.
+		groupState = readStateFunc()
+	}
 
 	// loop over the resChan, recording each Result, and update the final
 	// state based on the provided calcStateFunc.
@@ -366,9 +411,18 @@ resultLoop:
 		case res := <-resChan:
 			groupRes = append(groupRes, res)
 			groupState = calcStateFunc(res.State(), groupState)
+			if !waitAll && checkStateFunc(res.State()) {
+				break resultLoop
+			}
 		case <-groupDone:
 			break resultLoop
 		}
+	}
+
+	// if we are expected to return early, make sure no promises will block
+	// on sending to the resChan.
+	if !waitAll {
+		close(syncChan)
 	}
 
 	// remove this groupCall from the callsQ, now that it's no longer active.
