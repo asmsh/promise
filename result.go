@@ -124,11 +124,16 @@ func (r panicResult[T]) Err() error  { return r }
 func (r ctxResult[T]) Err() error    { return r.ctx.Err() }
 func (r result[T]) Err() error       { return r.err }
 
-func (r emptyResult[T]) State() State  { return Success }
-func (r valResult[T]) State() State    { return Success }
-func (r errResult[T]) State() State    { return Error }
-func (r valErrResult[T]) State() State { return Error }
-func (r panicResult[T]) State() State  { return Panic }
+func (r emptyResult[T]) State() State { return Success }
+func (r valResult[T]) State() State   { return Success }
+func (r errResult[T]) State() State   { return Error }
+func (r valErrResult[T]) State() State {
+	if r.err == nil {
+		return Success
+	}
+	return Error
+}
+func (r panicResult[T]) State() State { return Panic }
 func (r ctxResult[T]) State() State {
 	if r.ctx.Err() != nil {
 		return Error
