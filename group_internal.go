@@ -335,8 +335,8 @@ resultLoop:
 		// the 'resChan'.
 		select {
 		case res := <-resChan:
-			callRes = append(callRes, res)
 			callResState = op.NextState(res.State(), callResState)
+			callRes = append(callRes, res)
 			if op.ReturnOnTargetState() && op.IsTargetState(res.State()) {
 				break resultLoop
 			}
@@ -384,17 +384,55 @@ resultLoop:
 
 type allOperation struct{}
 
+// InitState returns the [Result] [State] that should be fetched from
+// the [Group] history and be included in the [Result] returned by
+// [All], or [AllWait].
+// It returns 0 ([unknown]) if no fetching from the history should be done.
+// [Panic] has the highest priority.
+// [Success] is ignored, as no [Success] should be fetched from history.
+// It returns either [Panic], [Error], or 0 ([unknown]).
 func (allOperation) InitState(stateHist State) State {
-	return calcAllInitState(stateHist)
+	// the order here matters.
+	switch {
+	case stateHist == unknown:
+		return unknown
+	case stateHist&Panic == Panic:
+		return Panic
+	case stateHist&Error == Error:
+		return Error
+	case stateHist&Success == Success:
+		return unknown
+	}
+
+	// unexpected state.
+	return stateHist
 }
+
+// NextState returns the resolve state of the promise returned by [All],
+// or [AllWait].
+// [Panic] has the highest priority.
+// [Error] has the highest priority between [Success] and [Error].
 func (allOperation) NextState(currState State, prevState State) (nextState State) {
-	return calcAllNextState(currState, prevState)
+	switch {
+	case currState == Panic || prevState == Panic:
+		return Panic
+	case currState == Error:
+		return Error
+	case prevState == unknown:
+		return currState
+	default:
+		return prevState
+	}
 }
+
 func (allOperation) ReturnOnTargetState() bool {
 	return true
 }
+
+// IsTargetState breaks on [Error] only, as it ignores [Panic] and is
+// okay with [Success].
 func (allOperation) IsTargetState(currState State) bool {
-	return checkTargetAllState(currState)
+	return currState == Error
 }
 
 type allWaitOperation struct{ allOperation }
@@ -405,17 +443,55 @@ func (a allWaitOperation) ReturnOnTargetState() bool {
 
 type anyOperation struct{}
 
+// InitState returns the [Result] [State] that should be fetched
+// from the [Group] history and be included in the [Result] returned by
+// [Any], or [AnyWait].
+// It returns 0 ([unknown]) if no fetching from the history should be done.
+// [Panic] has the highest priority.
+// [Error] is ignored, as no [Error] should be fetched from history.
+// It returns either [Panic], [Error], or 0 ([unknown]).
 func (anyOperation) InitState(stateHist State) State {
-	return calcAnyInitState(stateHist)
+	// the order here matters.
+	switch {
+	case stateHist == unknown:
+		return unknown
+	case stateHist&Panic == Panic:
+		return Panic
+	case stateHist&Success == Success:
+		return Success
+	case stateHist&Error == Error:
+		return unknown
+	}
+
+	// unexpected state.
+	return stateHist
 }
+
+// NextState returns the resolve state of the promise returned by [Any],
+// [AnyWait].
+// Panic has the highest priority.
+// Success has the highest priority between Success and Error.
 func (anyOperation) NextState(currState State, prevState State) (nextState State) {
-	return calcAnyNextState(prevState, currState)
+	switch {
+	case currState == Panic || prevState == Panic:
+		return Panic
+	case currState == Success:
+		return Success
+	case prevState == unknown:
+		return currState
+	default:
+		return prevState
+	}
 }
+
 func (anyOperation) ReturnOnTargetState() bool {
 	return true
 }
+
+// IsTargetState breaks on [Success] only, as it ignores [Panic] and is
+// okay with [Error].
 func (anyOperation) IsTargetState(currState State) bool {
-	return checkTargetAnyState(currState)
+	return currState == Success
 }
 
 type anyWaitOperation struct{ anyOperation }
@@ -427,10 +503,10 @@ func (a anyWaitOperation) ReturnOnTargetState() bool {
 type joinOperation struct{}
 
 func (joinOperation) InitState(stateHist State) State {
-	return calcJoinInitState(stateHist)
+	return Success
 }
 func (joinOperation) NextState(currState State, prevState State) (nextState State) {
-	return calcJoinNextState(prevState, currState)
+	return Success
 }
 func (joinOperation) ReturnOnTargetState() bool {
 	return false

@@ -24,10 +24,6 @@ import (
 // The resulting IdxRes value holds the Result value of the resolved Promise.
 // The original order of the IdxRes's Promise can be retrieved from its Idx field.
 func Select[T any](p ...*Promise[T]) *Promise[IdxRes[T]] {
-	return selectCall[T](p...)
-}
-
-func selectCall[T any](p ...*Promise[T]) *Promise[IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[IdxRes[T]](nil)
 	}
@@ -38,7 +34,7 @@ func selectCall[T any](p ...*Promise[T]) *Promise[IdxRes[T]] {
 }
 
 func selectHandler[T any](
-	newProm *Promise[IdxRes[T]],
+	nextProm *Promise[IdxRes[T]],
 	ps []*Promise[T],
 ) {
 	// resChan is populated lazily, only if it's needed.
@@ -78,9 +74,8 @@ loop:
 					Result: getFinalRes(currProm.res),
 				}
 			default:
-				// This would happen when the promise is not resolved yet, and there's
-				// another extension call that owns the extQueue value.
-				// Re-put the index in the randIdx source, to re-visit this case later.
+				// this would happen when the promise is not resolved yet.
+				// re-put the index, to re-visit this case later.
 				randIdx.Put(idx)
 			}
 		} else {
@@ -93,7 +88,7 @@ loop:
 				}
 			case extQ := <-extsChan:
 				// make sure to check the state again and get the sync result,
-				// in case the promise is resolved...
+				// in case the promise got resolved while calling extsChan...
 				if extQ.initState != unknown {
 					res = IdxRes[T]{
 						Idx:    idx,
@@ -107,7 +102,7 @@ loop:
 					}
 
 					// update the queue with this extension call.
-					addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
+					addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
 				}
 
 				// send the updated queue back for either another extension call,
@@ -127,18 +122,8 @@ loop:
 		res = <-resChan
 	}
 
-	// resolve the next promise, based on the final Result got
-	switch res.State() {
-	case Panic:
-		newProm.resolveToPanicRes(panicResultSingleRes[T, IdxRes[T]]{res})
-	case Error:
-		newProm.resolveToErrorRes(errorResultSingleRes[T, IdxRes[T]]{res})
-	case Success:
-		newProm.resolveToSuccessRes(successResultSingleRes[T, IdxRes[T]]{res})
-	default:
-		// an internal panic, cause it's supposed to be caught earlier.
-		panic("promise: internal: unexpected Result State: " + res.State().String())
-	}
+	// resolve the next promise as expected, based on the final callResState.
+	nextProm.resolveToRes(newSingleRes(res.State(), res))
 }
 
 // All returns a Promise value that resolves to Success if all Promise values
@@ -154,7 +139,13 @@ loop:
 // up to when the returned Promise was resolved.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func All[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
-	return allCall(false, p)
+	if len(p) == 0 {
+		return Wrap[[]IdxRes[T]](nil)
+	}
+
+	nextProm := newPromInter[[]IdxRes[T]](nil)
+	go joinHandler(nextProm, p, allOp)
+	return nextProm
 }
 
 // AllWait returns a [Promise] that resolves to [Success] iff all the passed
@@ -167,16 +158,12 @@ func All[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 // The resulting [IdxRes] slice holds the [Result] values of all [Promise] values
 // passed, and their original order can be retrieved from its [IdxRes.Idx] field.
 func AllWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
-	return allCall(true, p)
-}
-
-func allCall[T any](waitAll bool, ps []*Promise[T]) *Promise[[]IdxRes[T]] {
-	if len(ps) == 0 {
+	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
 	nextProm := newPromInter[[]IdxRes[T]](nil)
-	go joinHandler(nextProm, ps, waitAll, true, false)
+	go joinHandler(nextProm, p, allWaitOp)
 	return nextProm
 }
 
@@ -192,7 +179,13 @@ func allCall[T any](waitAll bool, ps []*Promise[T]) *Promise[[]IdxRes[T]] {
 // up to when the returned Promise was resolved.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func Any[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
-	return anyCall(false, p)
+	if len(p) == 0 {
+		return Wrap[[]IdxRes[T]](nil)
+	}
+
+	nextProm := newPromInter[[]IdxRes[T]](nil)
+	go joinHandler(nextProm, p, anyOp)
+	return nextProm
 }
 
 // AnyWait returns a Promise value that resolves to Success if at least one of
@@ -205,16 +198,12 @@ func Any[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func AnyWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
-	return anyCall(true, p)
-}
-
-func anyCall[T any](waitAll bool, ps []*Promise[T]) *Promise[[]IdxRes[T]] {
-	if len(ps) == 0 {
+	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
 	nextProm := newPromInter[[]IdxRes[T]](nil)
-	go joinHandler(nextProm, ps, waitAll, false, true)
+	go joinHandler(nextProm, p, anyWaitOp)
 	return nextProm
 }
 
@@ -226,32 +215,26 @@ func anyCall[T any](waitAll bool, ps []*Promise[T]) *Promise[[]IdxRes[T]] {
 // The resulting IdxRes slice holds the Result values of all Promise values passed.
 // The original order of any IdxRes's Promise can be retrieved from its Idx field.
 func Join[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
-	return joinCall(p)
-}
-
-func joinCall[T any](ps []*Promise[T]) *Promise[[]IdxRes[T]] {
-	if len(ps) == 0 {
+	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
 	nextProm := newPromInter[[]IdxRes[T]](nil)
-	go joinHandler(nextProm, ps, true, false, false)
+	go joinHandler(nextProm, p, joinOp)
 	return nextProm
 }
 
 func joinHandler[T any](
-	newProm *Promise[[]IdxRes[T]],
+	nextProm *Promise[[]IdxRes[T]],
 	ps []*Promise[T],
-	waitAll bool,
-	allSuccess bool,
-	anySuccess bool,
+	op joinOperationLogic,
 ) {
 	// resChan is populated lazily, only if it's needed.
 	var resChan chan IdxRes[T]
 
-	// resArr and resState, collectively, represent the resolve result.
-	resArr := make([]IdxRes[T], 0, len(ps))
-	resState := unknown
+	// callResState and callRes, collectively, represent the final [Result].
+	callResState := unknown
+	callRes := make([]IdxRes[T], 0, len(ps))
 
 	// loopCnt records how many iterations happened in the loop below
 	var loopCnt int
@@ -263,13 +246,12 @@ func joinHandler[T any](
 
 	// try to find a suitable resolved promise, based on the provided flags,
 	// or arrange for a notification once a promise is resolved.
-loop:
 	for idx, ok := randIdx.Get(); ok; idx, ok = randIdx.Get() {
 		currProm := ps[idx]
 		loopCnt++
 
 		// Select with non-blocking or with blocking, based on whether we might be
-		// interested to check other promises for potential immediate resolution.
+		// interested in checking other promises for potential sync resolution.
 		// Only do that if we haven't already looped over the list before, otherwise
 		// we might end up in an (almost) infinite loop.
 		// Non-blocking gives us the benefit of catching other possibly resolved
@@ -287,9 +269,8 @@ loop:
 					Result: getFinalRes(currProm.res),
 				}
 			default:
-				// this would happen when the promise is not resolved yet, and there's
-				// another extension call that owns the extQueue value.
-				// re-put the index in the randIdx source, to re-visit this case later.
+				// this would happen when the promise is not resolved yet.
+				// re-put the index, to re-visit this case later.
 				randIdx.Put(idx)
 			}
 		} else {
@@ -302,7 +283,7 @@ loop:
 				}
 			case extQ := <-extsChan:
 				// make sure to check the state again and get the sync result,
-				// in case the promise is resolved...
+				// in case the promise got resolved while calling extsChan...
 				if extQ.initState != unknown {
 					res = IdxRes[T]{
 						Idx:    idx,
@@ -316,7 +297,7 @@ loop:
 					}
 
 					// update the queue with this extension call.
-					addExtCallToQ(&extQ, resChan, newProm.syncCtx.Done(), idx)
+					addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
 				}
 
 				// send the updated queue back for either another extension call,
@@ -325,100 +306,53 @@ loop:
 			}
 		}
 
-		// if the promise was resolved synchronously, update the result fields.
-		if res.Result != nil {
-			// add it to the result array.
-			resArr = append(resArr, res)
+		// if no promise was resolved synchronously, retry with another one.
+		if res.Result == nil {
+			continue
+		}
 
-			// get the final promise's state, based on the previous resState and
-			// the recent resolved promise's state, using the selected mode rules.
-			if allSuccess {
-				resState = calcAllNextState(res.State(), resState)
+		// a promise was resolved synchronously, update the result fields..
+		// add the result to the final promise's [Result].
+		callRes = append(callRes, res)
 
-				// stop, if we found the target break state based on the current flags.
-				// note: for the allSuccess case, we can only continue if the waitAll
-				// flag is not set, or the recent resolved promise got resolved to
-				// anything but Error.
-				// note: by default, we won't break on Panic states, as it will be
-				// used only to alter the final state.
-				if !waitAll && res.State() == Error {
-					break loop
-				}
-			}
-			if anySuccess {
-				resState = calcAnyNextState(res.State(), resState)
+		// get the final promise's [State] based on  the current call.
+		callResState = op.NextState(res.State(), callResState)
 
-				if !waitAll && res.State() == Success {
-					break loop
-				}
-			}
+		// stop, if we found the target [State] based on the current call.
+		if op.ReturnOnTargetState() && op.IsTargetState(res.State()) {
+			break
 		}
 	}
 
 	// no resolved promises, or the resolved promise(s) didn't meet the requirements
 	// set by the provided flags.
-	if waitAll || resState == unknown ||
-		(allSuccess && resState == Success) ||
-		(anySuccess && resState != Success) {
-		// the waitAll flag is set, no promise got resolved by the wait logic above,
-		// or the resolved promise(s) didn't meet the requirements set by the flags...
+	if callResState == unknown || !op.ReturnOnTargetState() ||
+		!op.IsTargetState(callResState) {
+		// no early return is requested, no promises got resolved by the wait
+		// logic above, or the resolved promise(s) didn't meet the requirements
+		// set for this call...
 		// get the number of pending promises against the initially provided list.
-		pending := len(ps) - len(resArr)
+		pending := len(ps) - len(callRes)
 
 		// if there are no pending promises and no result state computed, then it
 		// must be a Join call, which means the result state expected is Success.
-		if pending == 0 && resState == unknown {
-			resState = Success
+		if pending == 0 && callResState == unknown {
+			callResState = Success
 		}
 
-		// otherwise, wait until a matching result is received.
-		if pending != 0 {
-			for i := 0; i < pending; i++ {
-				res := <-resChan
-				resArr = append(resArr, res)
-
-				// get the final promise's state, based on the previous resState and
-				// the recent resolved promise's state, using the selected mode rules.
-				if allSuccess {
-					resState = calcAllNextState(res.State(), resState)
-
-					// stop, if we found the target break state based on the current flags.
-					// note: for the allSuccess case, we can only continue if the waitAll
-					// flag is not set, or the recent resolved promise got resolved to
-					// anything but Error.
-					// note: by default, we won't break on Panic states, as it will be
-					// used only to alter the final state.
-					if !waitAll && res.State() == Error {
-						break
-					}
-				}
-				if anySuccess {
-					resState = calcAnyNextState(res.State(), resState)
-
-					if !waitAll && res.State() == Success {
-						break
-					}
-				}
-
-				if !allSuccess && !anySuccess {
-					resState = Success
-				}
+		// otherwise, wait until a matching result from the pending promises.
+		for i := 0; i < pending; i++ {
+			res := <-resChan
+			callRes = append(callRes, res)
+			callResState = op.NextState(res.State(), callResState)
+			if op.ReturnOnTargetState() && op.IsTargetState(res.State()) {
+				break
 			}
 		}
 	}
 
-	// resolve the next promise as expected, based on the final resState.
-	switch resState {
-	case Panic:
-		newProm.resolveToPanicRes(panicResultMultiRes[T, IdxRes[T]]{resArr})
-	case Error:
-		newProm.resolveToErrorRes(errorResultMultiRes[T, IdxRes[T]]{resArr})
-	case Success:
-		newProm.resolveToSuccessRes(successResultMultiRes[T, IdxRes[T]]{resArr})
-	default:
-		// an internal panic, cause it's supposed to be caught earlier.
-		panic("promise: internal: unexpected Result State: " + resState.String())
-	}
+	// resolve the next promise as expected, based on the final callResState.
+	nextProm.resolveToRes(newMultiRes(callResState, callRes))
 }
 
 func addExtCallToQ[T any](
@@ -438,102 +372,4 @@ func addExtCallToQ[T any](
 	} else {
 		q.extra = append(q.extra, call)
 	}
-}
-
-// calcAllInitState returns the [Result] [State] that should be fetched
-// from the [Group] history and be included in the [Result] returned by
-// [All], or [AllWait].
-// It returns 0 ([unknown]) if no fetching from the history should be done.
-// [Panic] has the highest priority.
-// [Success] is ignored, as no [Success] should be fetched from history.
-// It returns either [Panic], [Error], or 0 ([unknown]).
-func calcAllInitState(stateHist State) State {
-	// the order here matters.
-	switch {
-	case stateHist == unknown:
-		return unknown
-	case stateHist&Panic == Panic:
-		return Panic
-	case stateHist&Error == Error:
-		return Error
-	case stateHist&Success == Success:
-		return unknown
-	}
-
-	// unexpected state.
-	return stateHist
-}
-
-// calcAllNextState returns the resolve state of the promise returned by All.
-// Panic has the highest priority.
-// Error has the highest priority between Success and Error.
-func calcAllNextState(currState, prevState State) State {
-	switch {
-	case currState == Panic || prevState == Panic:
-		return Panic
-	case currState == Error:
-		return Error
-	case prevState == unknown:
-		return currState
-	default:
-		return prevState
-	}
-}
-
-// All breaks on [Error] only, as it ignores [Panic] and is okay with [Success].
-func checkTargetAllState(currState State) bool {
-	return currState == Error
-}
-
-// calcAnyInitState returns the [Result] [State] that should be fetched
-// from the [Group] history and be included in the [Result] returned by
-// [Any], or [AnyWait].
-// It returns 0 ([unknown]) if no fetching from the history should be done.
-// [Panic] has the highest priority.
-// [Error] is ignored, as no [Error] should be fetched from history.
-// It returns either [Panic], [Error], or 0 ([unknown]).
-func calcAnyInitState(stateHist State) State {
-	// the order here matters.
-	switch {
-	case stateHist == unknown:
-		return unknown
-	case stateHist&Panic == Panic:
-		return Panic
-	case stateHist&Success == Success:
-		return Success
-	case stateHist&Error == Error:
-		return unknown
-	}
-
-	// unexpected state.
-	return stateHist
-}
-
-// calcAnyNextState returns the resolve state of the promise returned by Any.
-// Panic has the highest priority.
-// Success has the highest priority between Success and Error.
-func calcAnyNextState(newState, currState State) State {
-	switch {
-	case newState == Panic || currState == Panic:
-		return Panic
-	case newState == Success:
-		return Success
-	case currState == unknown:
-		return newState
-	default:
-		return currState
-	}
-}
-
-// Any breaks on [Success] only, as it waits for the first [Success].
-func checkTargetAnyState(currState State) bool {
-	return currState == Success
-}
-
-func calcJoinInitState(_ State) State {
-	return Success
-}
-
-func calcJoinNextState(_, _ State) State {
-	return Success
 }

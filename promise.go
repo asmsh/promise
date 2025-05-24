@@ -27,7 +27,7 @@ import (
 // It implements the [Result] interface
 type Promise[T any] struct {
 	// group is a pointer to the promise group which this promise is part of,
-	// or nil, if it's part of the default group.
+	// or nil, if it's not part of any group.
 	group *Group[T]
 
 	// initiated lazily, by the first extension call.
