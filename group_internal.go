@@ -356,29 +356,6 @@ resultLoop:
 	g.core.callsQ.Remove(call)
 	g.core.callsQMu.Unlock()
 
-	// TODO: I don't think this can happen anymore, because now we set
-	// the 'resStateHist' and the 'resHist' (or 'resQ') under the same
-	// lock, and to enter the 'joinResSlow', we have to pass first by
-	// the zero [Group] check.
-	// so, at this point, this can't be a zero [Group], which means
-	// that the 'resStateHist' must be already set.
-	//
-	// handle not receiving any [Result], or calls on a zero [Group].
-	// it could still happen that we don't receive any [Result] if we
-	// propagated this 'groupCall' after the ongoing promises passed
-	// the 'handleGroupCall' loop in the 'handleGroupCalls'.
-	// and in this case, the [Group] 'state' and 'resQ' fields will have
-	// the up-to-date [Result] values.
-	// so, in this case, it will be treated as a sync call.
-	//
-	// note: in this case, the 'callRes' will also be empty, because
-	// we always set it after reading the 'callResState' from the [Group],
-	// which can only be 'unknown' if this is a zero [Group], or it's
-	// a no-waitAll call that received no [Result] values.
-	if callResState == unknown {
-		return newMultiRes[T, GroupRes[T]](Success, nil)
-	}
-
 	return newMultiRes(callResState, callRes)
 }
 
