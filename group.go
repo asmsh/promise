@@ -1,6 +1,7 @@
 package promise
 
 import (
+	"container/list"
 	"context"
 	"sync"
 	"sync/atomic"
@@ -206,11 +207,36 @@ func (g *Group[T]) SelectRes(triggers ...func()) Result[GroupRes[T]] {
 }
 
 func (g *Group[T]) selectRes() Result[GroupRes[T]] {
+	// init the wait chan of this group.
+	groupDone := g.core.sg.WaitChan()
+
+	// check whether this is a sync call or an async call.
+	// it will be a sync call iff the [Group] is already done,
+	// which happens when the 'groupDone' is closed.
+	// this will be used to not add the 'groupCall' to the 'callsQ',
+	// and instead just read directly from the 'resQ'.
+	select {
+	case <-groupDone:
+		// TODO: how to know which saved Result is the first, to return here,
+		// like what we do with the AllRes, etc.
+		// fast-path, with no unneeded allocations in 'selectResSlow'.
+		// return a [Success] [GroupRes] with empty [Result].
+		// this could happen either on a zero [Group], or when
+		// the [Group] has no ongoing promises, and in both cases
+		// the [Select] can't observe any [Result] values.
+		return newSingleRes[T, GroupRes[T]](Success, GroupRes[T]{})
+	default:
+		return g.selectResSlow(groupDone)
+	}
+}
+
+func (g *Group[T]) selectResSlow(groupDone <-chan struct{}) Result[GroupRes[T]] {
 	// create the needed res channel to receive the result on it.
 	resChan := make(chan GroupRes[T])
 	syncChan := make(chan struct{})
 
-	// add the new call to the callsQ of calls for this group.
+	// record this 'groupCall' in the 'callsQ' for this [Group], enforcing
+	// all promises that observe it to wait and send the result to it
 	g.core.callsQMu.Lock()
 	call := g.core.callsQ.PushBack(groupCall[T]{
 		resChan:  resChan,
@@ -218,12 +244,18 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 	})
 	g.core.callsQMu.Unlock()
 
-	// loop over the resChan, recording each Result, and update the final
-	// state based on the provided stateFunc.
-	res := <-resChan
+	// wait for a [Result] or for the [Group] to be done.
+	var callResState State
+	var callRes GroupRes[T]
+	select {
+	case <-groupDone:
+	case res := <-resChan:
+		callResState = res.State()
+		callRes = res
+	}
 
-	// close the syncChan to prevent other promises from waiting on sending
-	// to the above resChan, once the wanted result is received.
+	// close the 'syncChan' to prevent other promises from blocking on
+	// sending to the 'resChan', once the wanted [Result] is received.
 	close(syncChan)
 
 	// remove this groupCall from the callsQ, now that it's no longer active.
@@ -233,72 +265,23 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 	g.core.callsQ.Remove(call)
 	g.core.callsQMu.Unlock()
 
-	switch res.State() {
-	case Panic:
-		return panicResultSingleRes[T, GroupRes[T]]{res}
-	case Error:
-		return errorResultSingleRes[T, GroupRes[T]]{res}
-	case Success:
-		return successResultSingleRes[T, GroupRes[T]]{res}
-	default:
-		// an internal panic, because it's supposed to be caught earlier.
-		panic("promise: internal: unexpected Result state: " + res.State().String())
-	}
-}
-
-func (g *Group[T]) getAllResState() State {
-	groupState := State(g.core.state.Load())
-
-	// the order here matters.
-	switch true {
-	case groupState&Panic == Panic:
-		return Panic
-	case groupState&Error == Error:
-		return Error
-	case groupState&Success == Success:
-		return Success
+	// handle not receiving any [Result], or calls on a zero [Group].
+	// it could still happen that we don't receive any [Result] if we
+	// propagated this 'groupCall' after the ongoing promises passed
+	// the 'handleGroupCall' loop in the 'handleGroupCalls'.
+	// so, in this case, it will be treated as a sync call.
+	if callResState == unknown {
+		return newSingleRes[T, GroupRes[T]](Success, GroupRes[T]{})
 	}
 
-	// unexpected state.
-	return groupState
-}
-
-func (g *Group[T]) checkAllResState(state State) bool {
-	// All breaks on [Error] only, as it ignores [Panic] and is okay with [Success].
-	return state == Error
-}
-
-func (g *Group[T]) getAnyResState() State {
-	groupState := State(g.core.state.Load())
-
-	// the order here matters.
-	switch true {
-	case groupState&Panic == Panic:
-		return Panic
-	case groupState&Success == Success:
-		return Success
-	case groupState&Error == Error:
-		return Error
-	}
-
-	// unexpected state.
-	return groupState
-}
-
-func (g *Group[T]) checkAnyResState(state State) bool {
-	// Any breaks on [Success] only, as it waits for the first [Success].
-	return state == Success
-}
-
-func (g *Group[T]) getJoinResState() State {
-	return Success
+	return newSingleRes(callResState, callRes)
 }
 
 func (g *Group[T]) AllRes(triggers ...func()) Result[[]GroupRes[T]] {
 	for _, f := range triggers {
 		f()
 	}
-	res := g.joinRes(false, g.getAllResState, calcAllResState, g.checkAllResState)
+	res := g.joinRes(allOp)
 	return res
 }
 
@@ -314,13 +297,13 @@ func (g *Group[T]) AllRes(triggers ...func()) Result[[]GroupRes[T]] {
 // It will be resolved to [Error] if at least one promise was resolved to [Error].
 //
 // TODO: // It returns the promises [Result] values either from the moment of calling this
-// // method, or from the start of this [Group], based on the Group option [GroupConfig.RecordAllGroupResults].
+// // method, or from the start of this [Group], based on the Group option [GroupConfig.SaveAllGroupResults].
 func (g *Group[T]) AllWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 	for _, f := range triggers {
 		f()
 	}
 	g.core.waiting.Store(true)
-	res := g.joinRes(true, g.getAllResState, calcAllResState, nil)
+	res := g.joinRes(allWaitOp)
 	g.core.sg.Wait()
 	return res
 }
@@ -329,7 +312,7 @@ func (g *Group[T]) AnyRes(triggers ...func()) Result[[]GroupRes[T]] {
 	for _, f := range triggers {
 		f()
 	}
-	res := g.joinRes(false, g.getAnyResState, calcAnyResState, g.checkAnyResState)
+	res := g.joinRes(anyOp)
 	return res
 }
 
@@ -338,7 +321,7 @@ func (g *Group[T]) AnyWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 		f()
 	}
 	g.core.waiting.Store(true)
-	res := g.joinRes(true, g.getAnyResState, calcAnyResState, nil)
+	res := g.joinRes(anyWaitOp)
 	g.core.sg.Wait()
 	return res
 }
@@ -348,27 +331,147 @@ func (g *Group[T]) JoinRes(triggers ...func()) Result[[]GroupRes[T]] {
 		f()
 	}
 	g.core.waiting.Store(true)
-	res := g.joinRes(true, g.getJoinResState, calcJoinResState, nil)
+	res := g.joinRes(joinOp)
 	g.core.sg.Wait()
 	return res
 }
 
-func (g *Group[T]) joinRes(
-	waitAll bool,
-	readStateFunc func() State,
-	calcStateFunc func(State, State) State,
-	checkStateFunc func(State) bool, // optional. only needed if waitAll == true.
+// checkTargetStateFunc is optional and only  needed if we want to return early.
+func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
+	// init the wait chan of this group.
+	groupDone := g.core.sg.WaitChan()
+
+	// check whether this is a sync call or an async call.
+	// it will be a sync call iff the [Group] is already done,
+	// which happens when the 'groupDone' is closed.
+	// this will be used to not add the 'groupCall' to the 'callsQ',
+	// and instead just read directly from the 'resQ'.
+	select {
+	case <-groupDone:
+		// get the 'callResState' and 'callRes' from this [Group].
+		g.core.resMu.RLock()
+		// if the state history is 0, then this is a zero [Group],
+		// so return a [Success] [GroupRes] with empty [Result].
+		callResState := op.InitState(g.core.resStateHist)
+		if callResState == unknown {
+			callResState = calcGroupResState(g.core.resStateHist)
+		}
+		callRes := g.getCallResSnapshot(callResState, 0)
+		g.core.resMu.RUnlock()
+
+		return newMultiRes(callResState, callRes)
+	default:
+		// if we want to return early, check if the current [Group]
+		// state is the target [State] for this call.
+		// note: if the check failed, we will need to check the history
+		// fields again, because the target [State] might be sent later
+		// on the resQ.
+		// note: the history fields set happens-before the resQ send,
+		// so, to be sure that we didn't miss anything, we need to check
+		// the history fields _after_ the resQ send.
+		if op.ReturnOnTargetState() {
+			var callResState State
+			var callRes []GroupRes[T]
+			var targetFound bool
+
+			g.core.resMu.RLock()
+			callResState = op.InitState(g.core.resStateHist)
+			if op.IsTargetState(callResState) {
+				// we found our target, so return the expected [Result] values.
+				targetFound = true
+				callRes = g.getCallResSnapshot(callResState, 0)
+			}
+			g.core.resMu.RUnlock()
+
+			if targetFound {
+				return newMultiRes(callResState, callRes)
+			}
+
+			// target is not found, move forward to joinResSlow...
+		}
+
+		return g.joinResSlow(groupDone, op)
+	}
+}
+
+// getCallResSnapshot returns a copy of this [Group]'s results,
+// at the time of calling, based on the 'saveAllGroupResults' flag.
+//
+// the callResState is the result of the respective 'calcInitStateFunc'
+// call, given the [Group]'s state history, at the time of calling.
+//
+// callResLen is the capacity of the returned [GroupRes] slice that's
+// requested by the caller.
+// the actual capacity will be bigger than this value by a difference
+// based on the 'saveAllGroupResults' flag.
+// the difference will be the length of resQ if 'saveAllGroupResults'
+// is true, and 1 otherwise.
+//
+// the resMu must be locked before entering.
+func (g *Group[T]) getCallResSnapshot(callResState State, callResLen int) []GroupRes[T] {
+	if g.core.saveAllGroupResults {
+		callResLen += g.core.resQ.Len()
+		callRes := make([]GroupRes[T], 0, callResLen)
+		for res := g.core.resQ.Front(); res != nil; res = res.Next() {
+			callRes = append(callRes, res.Value.(GroupRes[T]))
+		}
+		return callRes
+	}
+
+	// fetch the result from the history based on the callResState.
+	var val any
+	switch callResState {
+	case Panic:
+		if res := g.core.resHist.panic; res != nil {
+			val = res
+			callResLen += 1
+		}
+	case Error:
+		if res := g.core.resHist.error; res != nil {
+			val = res
+			callResLen += 1
+		}
+	case Success:
+		if res := g.core.resHist.success; res != nil {
+			val = res
+			callResLen += 1
+		}
+	default:
+		// do nothing, as it means the call doesn't expect a result
+		// to be added from the history.
+	}
+
+	// create the callRes with the final expected cap, only if there
+	// are results expected, otherwise leave it nil.
+	var callRes []GroupRes[T]
+	if callResLen > 0 {
+		callRes = make([]GroupRes[T], 0, callResLen)
+	}
+
+	// if we found a result that matches the group call, include it.
+	if val != nil {
+		callRes = append(callRes, val.(GroupRes[T]))
+	}
+
+	return callRes
+}
+
+// checkTargetStateFunc is optional and only needed if we want to return early.
+func (g *Group[T]) joinResSlow(
+	groupDone <-chan struct{},
+	op joinOperationLogic,
 ) Result[[]GroupRes[T]] {
 	// create the needed res channel to receive the result on it.
 	resChan := make(chan GroupRes[T])
 
 	// only create the syncChan if we are expecting an early return.
 	var syncChan chan struct{}
-	if !waitAll {
+	if op.ReturnOnTargetState() {
 		syncChan = make(chan struct{})
 	}
 
-	// add the new call to the callsQ of calls for this group.
+	// record this 'groupCall' in the 'callsQ' for this [Group], enforcing
+	// all promises that observe it to wait and send the result to it
 	g.core.callsQMu.Lock()
 	call := g.core.callsQ.PushBack(groupCall[T]{
 		resChan:  resChan,
@@ -376,42 +479,85 @@ func (g *Group[T]) joinRes(
 	})
 	g.core.callsQMu.Unlock()
 
-	// now that the call has been recorded, get the expected number
-	// of results we will process, and initialize the result array.
-	groupDone := g.core.sg.WaitChan()
-
-	// init the result array, and account for the group state only
+	// init the result array, and account for the [Group] state only
 	// if we are waiting for all promises.
-	var groupRes []GroupRes[T]
-	var groupState State
-	if !waitAll {
-		// expect at least all ongoing promises to be included.
-		groupLen := g.core.sg.ActiveCount()
-		groupRes = make([]GroupRes[T], 0, groupLen)
+	var callResState State
+	var callRes []GroupRes[T]
+	var targetFound bool
+	if op.ReturnOnTargetState() {
+		g.core.resMu.RLock()
+		callResState = op.InitState(g.core.resStateHist)
+		if op.IsTargetState(callResState) {
+			// we found our target, so return the expected [Result] values.
+			targetFound = true
+			callRes = g.getCallResSnapshot(callResState, 0)
+		} else {
+			// expect at least all active promises to be included.
+			callResLen := g.core.sg.ActiveCount()
+			callRes = g.getCallResSnapshot(callResState, int(callResLen))
+		}
+		g.core.resMu.RUnlock()
 	} else {
-		// we are going to wait for all promises, ongoing and blocked,
-		// so init the result array with the expected number.
-		groupLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
-		groupRes = make([]GroupRes[T], 0, groupLen)
+		// we want to wait for all promises, active and pending, so
+		// init the result array with the expected results number.
+		//
+		// note: we account for ALL ongoing promises (active and pending),
+		// because at this point, we propagated this 'groupCall' to all
+		// ongoing promises, and since they block on either a sending
+		// to this 'groupCall''s resChan, or receiving from its syncChan,
+		// and as both operations will only unblock in the resultLoop
+		// below, then all results will be seen by the resultLoop.
+		//
+		// note: to return the results of all promises that ever ran on
+		// this [Group], done and ongoing, we start with a snapshot of
+		// the 'resQ', which at this point, will include all results
+		// that have been sent on this [Group] before and already
+		// consumed by other 'groupCall', except this one.
+		//
+		// this is guaranteed by how the 'handleGroupCalls' is implemented,
+		// which blocks once this 'groupCall' is propagated to all promises,
+		// and inserts to the 'resQ' after this 'groupCall' unblocks them.
+		// (see the note above for details).
+		//
+		// since the inserts to the 'resQ' are protected by a write lock
+		// (Lock) on the resMu.
+		// and the copy below is protected by a read lock (RLock);
+		// we know that once we RLock the 'resMu', NO ongoing calls
+		// will update the 'resQ' until this 'groupCall' unblocks in the
+		// 'resultLoop' below.
+		//
+		// this also means that all further inserts to the 'resQ' will
+		// also be sent to the 'resChan' of this 'groupCall'.
+		//
+		// after starting with the snapshot, we will move forward
+		// to the 'resultLoop' below, which will unblock all ongoing
+		// promises and append the got [Result] to the 'callRes'.
+		// the 'callRes' now includes all results so far.
 
-		// read the group state, which holds the history of the group.
-		groupState = readStateFunc()
+		// get the [State] of this [Group], and a snapshot of its [Result],
+		// expecting at least all ongoing promises to be included.
+		g.core.resMu.RLock()
+		callResState = op.InitState(g.core.resStateHist)
+		callResLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
+		callRes = g.getCallResSnapshot(callResState, int(callResLen))
+		g.core.resMu.RUnlock()
 	}
 
-	// loop over the resChan, recording each Result, and update the final
-	// state based on the provided calcStateFunc.
+	// loop over the 'resChan', if the target [State] is not found yet,
+	// recording each [Result], and updating the final [State] based on
+	// the provided 'calcNextStateFunc'.
 resultLoop:
-	for {
+	for !targetFound {
 		// the 2 select cases below can't be ready at the same time.
-		// because the groupDone channel is closed once all Promise values
+		// because the 'groupDone' channel is closed once all Promise values
 		// exits, which happens after the 'handleGroupCall' method returns,
 		// and the 'handleGroupCall' method is responsible for sending on
 		// the 'resChan'.
 		select {
 		case res := <-resChan:
-			groupRes = append(groupRes, res)
-			groupState = calcStateFunc(res.State(), groupState)
-			if !waitAll && checkStateFunc(res.State()) {
+			callRes = append(callRes, res)
+			callResState = op.NextState(res.State(), callResState)
+			if op.ReturnOnTargetState() && op.IsTargetState(res.State()) {
 				break resultLoop
 			}
 		case <-groupDone:
@@ -421,28 +567,39 @@ resultLoop:
 
 	// if we are expected to return early, make sure no promises will block
 	// on sending to the resChan.
-	if !waitAll {
+	if op.ReturnOnTargetState() {
 		close(syncChan)
 	}
 
-	// remove this groupCall from the callsQ, now that it's no longer active.
-	// note: this is just a cleanup action, as this groupCall will not be used
-	// by anything (there are no running promises to use anymore).
+	// remove this 'groupCall' from the 'callsQ', now that it's no longer active.
 	g.core.callsQMu.Lock()
 	g.core.callsQ.Remove(call)
 	g.core.callsQMu.Unlock()
 
-	switch groupState {
-	case Panic:
-		return panicResultMultiRes[T, GroupRes[T]]{groupRes}
-	case Error:
-		return errorResultMultiRes[T, GroupRes[T]]{groupRes}
-	case Success:
-		return successResultMultiRes[T, GroupRes[T]]{groupRes}
-	default:
-		// an internal panic, because it's supposed to be caught earlier.
-		panic("promise: internal: unexpected Result state: " + groupState.String())
+	// TODO: I don't think this can happen anymore, because now we set
+	// the 'resStateHist' and the 'resHist' (or 'resQ') under the same
+	// lock, and to enter the 'joinResSlow', we have to pass first by
+	// the zero [Group] check.
+	// so, at this point, this can't be a zero [Group], which means
+	// that the 'resStateHist' must be already set.
+	//
+	// handle not receiving any [Result], or calls on a zero [Group].
+	// it could still happen that we don't receive any [Result] if we
+	// propagated this 'groupCall' after the ongoing promises passed
+	// the 'handleGroupCall' loop in the 'handleGroupCalls'.
+	// and in this case, the [Group] 'state' and 'resQ' fields will have
+	// the up-to-date [Result] values.
+	// so, in this case, it will be treated as a sync call.
+	//
+	// note: in this case, the 'callRes' will also be empty, because
+	// we always set it after reading the 'callResState' from the [Group],
+	// which can only be 'unknown' if this is a zero [Group], or it's
+	// a no-waitAll call that received no [Result] values.
+	if callResState == unknown {
+		return newMultiRes[T, GroupRes[T]](Success, nil)
 	}
+
+	return newMultiRes(callResState, callRes)
 }
 
 // groupCall describes a Group call and how to communicate back to it.
@@ -457,6 +614,12 @@ type groupCall[T any] struct {
 	syncChan <-chan struct{}
 }
 
+type groupResHistory struct {
+	panic   any // of GroupRes[T]
+	error   any // of GroupRes[T]
+	success any // of GroupRes[T]
+}
+
 type groupCore struct {
 	debugCB func([]debugEvent)
 
@@ -468,28 +631,45 @@ type groupCore struct {
 	// it can enter the waiting mode via one of the Wait methods.
 	waiting atomic.Bool
 
-	// state is the [Group]'s [State] value, which holds the value
-	// for all [Promise] values that was run from this [Group].
-	state atomic.Uint32
-
 	// sg is used for limiting concurrency and implementing
 	// the waiting functions.
 	sg sema.Group
 
+	// callsQ is used for registering and tracking the [Group] Res calls,
+	// like AnyRes, AllWaitRes, etc.
 	callsQMu sync.RWMutex
 	callsQ   list.List // of groupCall[T]
 
-	// flags for options...
-	neverCancelCBCtx   bool
-	onetimeHandling    bool
-	noNilCtxDoneChan   bool
-	noWaitingBusyGroup bool
+	// resQ is used to hold all [Result] values returned from promises
+	// that belong to this [Group] when the [GroupConfig.SaveAllGroupResults]
+	// option is set.
+	// it's a linked-list instead of an array, because the size is unpredictable.
+	// resStateHist holds the history of [State] values for all [Promise]
+	// values that was run from this [Group].
+	// resHist holds the history of [Result] values for either first values
+	// or the last ones, depending on the [saveLastSingleGroupResult] flag.
+	// TODO: merge [resStateHist] and [resHist] somehow.
+	//  maybe by making resHist an array of 3 and check them to get
+	//  the resStateHist value.
+	// resMu protects reads and writes to them.
+	resMu        sync.RWMutex
+	resQ         list.List // of GroupRes[T]
+	resStateHist State     // Bitwise OR of previous values
+	resHist      groupResHistory
 
 	// ctx will be non-nil if the Group is meant to close all Context values
 	// once any Promise that's created using it panics or returns an error.
 	// if neverCancelCBCtx is true, these 2 fields will be unset.
 	ctx    context.Context
 	cancel context.CancelFunc
+
+	// flags for options...
+	neverCancelCBCtx          bool
+	onetimeHandling           bool
+	noNilCtxDoneChan          bool
+	noWaitingBusyGroup        bool
+	saveAllGroupResults       bool
+	saveLastSingleGroupResult bool
 }
 
 func (g *Group[T]) isWaiting() bool {

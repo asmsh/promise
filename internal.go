@@ -424,9 +424,6 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 
 	res := getFinalRes(p.res)
 
-	// record group state for calls added later.
-	p.group.core.state.Or(uint32(res.State()))
-
 	// get a snapshot of the group calls queue to be handled.
 	p.group.core.callsQMu.RLock()
 	for call := p.group.core.callsQ.Front(); call != nil; call = call.Next() {
@@ -434,6 +431,34 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 		debug(p, doneHandleGroupCall)
 	}
 	p.group.core.callsQMu.RUnlock()
+
+	// save the group state and result for calls added later.
+	p.group.core.resMu.Lock()
+	groupRes := GroupRes[T]{Result: res}
+	p.group.core.resStateHist |= res.State()
+	if p.group.core.saveAllGroupResults {
+		p.group.core.resQ.PushBack(groupRes)
+	} else {
+		switch res.State() {
+		case Success:
+			if p.group.core.saveLastSingleGroupResult ||
+				p.group.core.resHist.success == nil {
+				p.group.core.resHist.success = groupRes
+			}
+		case Error:
+			if p.group.core.saveLastSingleGroupResult ||
+				p.group.core.resHist.error == nil {
+				p.group.core.resHist.error = groupRes
+			}
+		case Panic:
+			if p.group.core.saveLastSingleGroupResult ||
+				p.group.core.resHist.panic == nil {
+				p.group.core.resHist.panic = groupRes
+			}
+		}
+	}
+	debug(p, doneSaveGroupResult)
+	p.group.core.resMu.Unlock()
 
 	debug(p, endHandleGroupCalls)
 	return handled

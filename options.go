@@ -49,6 +49,14 @@ func ApplyConfig(conf GroupConfig) GroupOption {
 		if conf.NoWaitingBusyGroup {
 			core.noWaitingBusyGroup = true
 		}
+
+		if conf.SaveAllGroupResults {
+			core.saveAllGroupResults = true
+		}
+
+		if conf.SaveLastSingleGroupResult {
+			core.saveLastSingleGroupResult = true
+		}
 	}
 }
 
@@ -129,6 +137,26 @@ func SetNoWaitingBusyGroup(set ...bool) GroupOption {
 	}
 }
 
+func SetSaveAllGroupResult(set ...bool) GroupOption {
+	return func(core *groupCore) {
+		s := true
+		if len(set) > 0 {
+			s = set[0]
+		}
+		core.saveAllGroupResults = s
+	}
+}
+
+func SetSaveLastSingleGroupResult(set ...bool) GroupOption {
+	return func(core *groupCore) {
+		s := true
+		if len(set) > 0 {
+			s = set[0]
+		}
+		core.saveLastSingleGroupResult = s
+	}
+}
+
 type GroupConfig struct {
 	UnhandledPanicCB func(v any)
 	UnhandledErrorCB func(err error)
@@ -173,4 +201,16 @@ type GroupConfig struct {
 	// value (if set).
 	// Otherwise, it will wait until there's a place for the new promise.
 	NoWaitingBusyGroup bool
+
+	// SaveAllGroupResults causes the [Group.AllWaitRes], [Group.AnyWaitRes]
+	// and [Group.JoinRes] to return all [Result] values that got returned
+	// from the [Promise] values created from this [Group] since it got created.
+	//
+	// By default, we save a single Result value, the first Result.
+	SaveAllGroupResults bool
+
+	// SaveLastSingleGroupResult saves the last Result instead of the first.
+	//
+	// By default, we save the first Result.
+	SaveLastSingleGroupResult bool
 }

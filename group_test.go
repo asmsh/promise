@@ -17,6 +17,7 @@ package promise
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -132,421 +133,1837 @@ func BenchmarkGroup_callbackCtx(b *testing.B) {
 	}
 }
 
-func TestGroup_Wait(t *testing.T) {
-	t.Run("basic flow", func(t *testing.T) {
-		t.Parallel()
+type waitTriggerTestMode int
 
-		g := NewGroup[string]()
+const (
+	noWaitTrigger waitTriggerTestMode = iota
+	groupWaitTrigger
+	promiseWaitTrigger
+)
 
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(1 * time.Millisecond)
-			return ErrRes[string](testStrError("promise1"))
+type promiseTestCase[T any] struct {
+	delay time.Duration
+	res   Result[T]
+
+	// promise is optional, and if not set, one will be
+	// generated from the above scenario.
+	promise *Promise[T]
+}
+
+type groupWaitTestCall struct {
+	// callDelay is the sleep duration before calling
+	// the function in question.
+	callDelay time.Duration
+
+	waitMode       waitTriggerTestMode
+	waitPromiseIdx int
+
+	// lowerDuration and upperDuration define the duration
+	// range which the function in question is allowed to take,
+	// which includes the time consumed by any wait trigger as well.
+	lowerDuration time.Duration
+	upperDuration time.Duration
+}
+
+type groupResTestCall[GroupResT any] struct {
+	// callDelay is the sleep duration before calling
+	// the function in question.
+	callDelay time.Duration
+
+	waitMode       waitTriggerTestMode
+	waitPromiseIdx int
+
+	// lowerDuration and upperDuration define the duration
+	// range which the function in question is allowed to take.
+	lowerDuration time.Duration
+	upperDuration time.Duration
+
+	wantState  State
+	wantResVal GroupResT
+}
+
+type groupWaitTestCase[PromiseResT any] struct {
+	name     string
+	config   *GroupConfig
+	promises []*promiseTestCase[PromiseResT]
+	calls    []groupWaitTestCall
+}
+
+type groupResTestCase[PromiseResT, GroupResT any] struct {
+	name     string
+	config   *GroupConfig
+	promises []*promiseTestCase[PromiseResT]
+	calls    []groupResTestCall[GroupResT]
+}
+
+func groupWaitTestHelper[PromiseResT any](
+	t *testing.T,
+	tc groupWaitTestCase[PromiseResT],
+	fn func(g *Group[PromiseResT], triggers ...func()),
+	fnName string,
+) {
+	t.Parallel()
+
+	var g *Group[PromiseResT]
+	if tc.config != nil {
+		g = NewGroup[PromiseResT](ApplyConfig(*tc.config))
+	} else {
+		g = NewGroup[PromiseResT]()
+	}
+
+	for _, pp := range tc.promises {
+		if pp.promise != nil {
+			continue
+		}
+
+		pp.promise = g.GoRes(func(ctx context.Context) Result[PromiseResT] {
+			time.Sleep(pp.delay)
+			return pp.res
 		})
+	}
 
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(2 * time.Millisecond)
-			return ValRes("promise2")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(50 * time.Millisecond)
-			return ValRes("promise3")
-		})
-
-		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
-		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
+	for tccIdx, tcc := range tc.calls {
+		if tcc.callDelay != 0 {
+			time.Sleep(tcc.callDelay)
+		}
 
 		start := time.Now()
-		g.Wait()
+		switch tcc.waitMode {
+		default: // also == 'noWaitTrigger'
+			fn(g)
+		case groupWaitTrigger:
+			fn(g, func() {
+				g.Wait()
+			})
+		case promiseWaitTrigger:
+			fn(g, func() {
+				tc.promises[tcc.waitPromiseIdx].promise.Wait()
+			})
+		}
 		elapsed := time.Since(start)
 
-		if elapsed < lowerDuration {
-			t.Errorf("Wait() returned early. expected: %s, got: %s", lowerDuration, elapsed)
+		if elapsed < tcc.lowerDuration {
+			t.Errorf(
+				"Call[%d] %s() returned early. expected: %s, got: %s",
+				tccIdx,
+				fnName,
+				tcc.lowerDuration,
+				elapsed,
+			)
 		}
 
-		if elapsed > upperDuration {
-			t.Errorf("Wait() waited so long. expected: %s, got: %s", upperDuration, elapsed)
+		if elapsed > tcc.upperDuration {
+			t.Errorf(
+				"Call[%d] %s() waited so long. expected: %s, got: %s",
+				tccIdx,
+				fnName,
+				tcc.upperDuration,
+				elapsed,
+			)
 		}
-	})
+	}
+}
+
+func groupResTestHelper[PromiseResT, GroupResT any](
+	t *testing.T,
+	tc groupResTestCase[PromiseResT, GroupResT],
+	fn func(g *Group[PromiseResT], triggers ...func()) Result[GroupResT],
+	fnName string,
+) {
+	t.Parallel()
+
+	var g *Group[PromiseResT]
+	if tc.config != nil {
+		g = NewGroup[PromiseResT](ApplyConfig(*tc.config))
+	} else {
+		g = NewGroup[PromiseResT]()
+	}
+
+	for _, pp := range tc.promises {
+		if pp.promise != nil {
+			continue
+		}
+
+		pp.promise = g.GoRes(func(ctx context.Context) Result[PromiseResT] {
+			time.Sleep(pp.delay)
+			return pp.res
+		})
+	}
+
+	for tccIdx, tcc := range tc.calls {
+		if tcc.callDelay != 0 {
+			time.Sleep(tcc.callDelay)
+		}
+
+		start := time.Now()
+		var res Result[GroupResT]
+		switch tcc.waitMode {
+		default: // also == 'noWaitTrigger'
+			res = fn(g)
+		case groupWaitTrigger:
+			res = fn(g, func() {
+				g.Wait()
+			})
+		case promiseWaitTrigger:
+			res = fn(g, func() {
+				tc.promises[tcc.waitPromiseIdx].promise.Wait()
+			})
+		}
+		elapsed := time.Since(start)
+
+		if elapsed < tcc.lowerDuration {
+			t.Errorf(
+				"Call[%d] %s() returned early. expected: %s, got: %s",
+				tccIdx,
+				fnName,
+				tcc.lowerDuration,
+				elapsed,
+			)
+		}
+
+		if elapsed > tcc.upperDuration {
+			t.Errorf(
+				"Call[%d] %s() waited so long. expected: %s, got: %s",
+				tccIdx,
+				fnName,
+				tcc.upperDuration,
+				elapsed,
+			)
+		}
+
+		if res.State() != tcc.wantState {
+			t.Errorf(
+				"Call[%d] %s().State() is %s, want %s",
+				tccIdx,
+				fnName,
+				res.State(),
+				tcc.wantState,
+			)
+		}
+
+		if !reflect.DeepEqual(res.Val(), tcc.wantResVal) {
+			t.Errorf(
+				"Call[%d] %s().Val() is %v, want %v",
+				tccIdx,
+				fnName,
+				res.Val(),
+				tcc.wantResVal,
+			)
+		}
+	}
+}
+
+func TestGroup_Wait(t *testing.T) {
+	tests := []groupWaitTestCase[string]{
+		{
+			name:     "zero group",
+			promises: nil,
+			calls: []groupWaitTestCall{
+				{
+					lowerDuration: 0,
+					upperDuration: 1 * time.Millisecond, // an OK delay for the test env.
+				},
+			},
+		},
+		{
+			name: "basic flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 1 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 2 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 50 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupWaitTestCall{
+				{
+					lowerDuration: 50 * time.Millisecond, // max duration value.
+					upperDuration: 55 * time.Millisecond, // max duration value + a 5ms buffer duration.
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			groupWaitTestHelper(t, tc, (*Group[string]).Wait, "Wait")
+		})
+	}
 }
 
 func TestGroup_SelectRes(t *testing.T) {
-	t.Run("basic flow", func(t *testing.T) {
-		t.Parallel()
-
-		g := NewGroup[string]()
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(1 * time.Millisecond)
-			return ErrRes[string](testStrError("promise1"))
+	tests := []groupResTestCase[string, GroupRes[string]]{
+		{
+			name:     "zero group",
+			promises: nil,
+			calls: []groupResTestCall[GroupRes[string]]{
+				{
+					callDelay:      0,
+					waitMode:       noWaitTrigger,
+					waitPromiseIdx: 0,
+					lowerDuration:  0,
+					upperDuration:  1 * time.Millisecond, // an OK delay for the test env.
+					wantState:      Success,
+					wantResVal:     GroupRes[string]{},
+				},
+			},
+		},
+		{
+			name: "basic flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 50 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[GroupRes[string]]{
+				{
+					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
+					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal:    GroupRes[string]{Result: ErrRes[string](testStrError("promise1"))},
+				},
+			},
+		},
+		{
+			name: "second call consistency",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 50 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[GroupRes[string]]{
+				{
+					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
+					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal:    GroupRes[string]{Result: ErrRes[string](testStrError("promise1"))},
+				},
+				{
+					callDelay:     100 * time.Millisecond, // after promise3 returns.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal:    GroupRes[string]{Result: ErrRes[string](testStrError("promise1"))},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			groupResTestHelper(t, tc, (*Group[string]).SelectRes, "SelectRes")
 		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(20 * time.Millisecond)
-			return ValRes("promise2")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(50 * time.Millisecond)
-			return ValRes("promise3")
-		})
-
-		lowerDuration := 1 * time.Millisecond // promise1 sleep.
-		upperDuration := 6 * time.Millisecond // promise1 sleep + a buffer duration of 5 Milliseconds.
-
-		start := time.Now()
-		res := g.SelectRes()
-		elapsed := time.Since(start)
-
-		if elapsed < lowerDuration {
-			t.Errorf("SelectRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
-		}
-
-		if elapsed > upperDuration {
-			t.Errorf("SelectRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
-		}
-
-		if res.State() != Error {
-			t.Errorf("SelectRes().State() is %s, want Error", res.State())
-		}
-	})
+	}
 }
 
 func TestGroup_AllRes(t *testing.T) {
-	t.Run("basic flow", func(t *testing.T) {
-		t.Parallel()
-
-		g := NewGroup[string]()
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(10 * time.Millisecond)
-			return ErrRes[string](testStrError("promise1"))
+	tests := []groupResTestCase[string, []GroupRes[string]]{
+		{
+			name:     "zero group",
+			promises: nil,
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					lowerDuration: 0,
+					upperDuration: 1 * time.Millisecond, // an OK delay for the test env.
+					wantState:     Success,
+					wantResVal:    nil,
+				},
+			},
+		},
+		{
+			name: "basic flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it shouldn't wait for other promises once one is Error.
+					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
+					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+					},
+				},
+			},
+		},
+		{
+			name: "panic flow - early",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it shouldn't wait for other promises once one is Error,
+					// unless that one is Panic.
+					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
+					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+					},
+				},
+			},
+		},
+		{
+			name: "panic flow - late",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: PanicRes[string]("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it shouldn't wait for other promises once one is Error,
+					// unless that one is Panic.
+					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
+					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+					},
+				},
+			},
+		},
+		{
+			name: "success flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for all promises to return, as all
+					// of them are Success and it only breaks on [Error],
+					// and return all of their results as [Success].
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "group wait trigger",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode: groupWaitTrigger,
+					// it should only start waiting after all promises have
+					// returned, and use the group history to return the correct
+					// result state, as if it was running from the start.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "promise wait trigger 1",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 0,
+					// it should only start waiting after the Panic promise
+					// return, but yet return its state (because it's the
+					// highest among the above promises), and it should
+					// return on the Error promise, without waiting for
+					// the Success one.
+					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
+					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+					},
+				},
+			},
+		},
+		{
+			name: "promise wait trigger 2",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 1,
+					// it should only start waiting after the Error promise
+					// return, but since there was a Panic promise, before it,
+					// it will ignore the Error promise.
+					// so, it returns the Panic result (highest [State])
+					// and the Success result (observed by this call).
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - no wait trigger",
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it shouldn't wait for other promises once one is Error.
+					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
+					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					wantState:     Error,                 // the only one observed.
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - group wait trigger",
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode: groupWaitTrigger,
+					// it should start waiting after all promises have returned,
+					// but since we saved all results, it should return them.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Error,                  // the highest state.
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - promise wait trigger 1",
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 0,
+					// it should start waiting after the first [Success] promise
+					// have returned, but sine it's an [All] call, it returns
+					// after [Error], and yet we should get all 3 results.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Error,                  // since we return only after Error.
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+				{
+					callDelay:     500 * time.Millisecond, // after promise3 returns.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - promise wait trigger 2",
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 1,
+					// it should start waiting after second promise have returned,
+					// but sine it's an [All] call, it would return after Error, and
+					// yet we should get all 3 results.
+					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
+					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:     Error,                  // since we return only after Error.
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+					},
+				},
+				{
+					callDelay:     500 * time.Millisecond, // after promise3 returns.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - second call consistency",
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 1,
+					// it should start waiting after second promise have returned,
+					// but sine it's an [All] call, it would return after Error, and
+					// yet we should get all 3 results.
+					lowerDuration: 500 * time.Millisecond, // promise2 sleep.
+					upperDuration: 505 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:     Error,                  // since we return only after Error.
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			groupResTestHelper(t, tc, (*Group[string]).AllRes, "AllRes")
 		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(100 * time.Millisecond)
-			return ValRes("promise2")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(500 * time.Millisecond)
-			return ValRes("promise3")
-		})
-
-		lowerDuration := 10 * time.Millisecond // promise1 sleep.
-		upperDuration := 15 * time.Millisecond // promise1 sleep + a buffer duration of 5 Milliseconds.
-
-		start := time.Now()
-		// it shouldn't wait for other promises once one is Error.
-		res := g.AllRes()
-		elapsed := time.Since(start)
-
-		if elapsed < lowerDuration {
-			t.Errorf("AllRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
-		}
-
-		if elapsed > upperDuration {
-			t.Errorf("AllRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
-		}
-
-		if res.State() != Error {
-			t.Errorf("AllRes().State() is %s, want Error", res.State())
-		}
-	})
-
-	t.Run("panic flow", func(t *testing.T) {
-		t.Parallel()
-
-		g := NewGroup[string]()
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(10 * time.Millisecond)
-			return PanicRes[string]("promise1")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(100 * time.Millisecond)
-			return ErrRes[string](testStrError("promise2"))
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(500 * time.Millisecond)
-			return ValRes("promise3")
-		})
-
-		lowerDuration := 100 * time.Millisecond // promise2 sleep.
-		upperDuration := 105 * time.Millisecond // promise2 sleep + a buffer duration of 5 Milliseconds.
-
-		start := time.Now()
-		// it shouldn't wait for other promises once one is Error,
-		// unless that one is Panic.
-		res := g.AllRes()
-		elapsed := time.Since(start)
-
-		if elapsed < lowerDuration {
-			t.Errorf("AllRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
-		}
-
-		if elapsed > upperDuration {
-			t.Errorf("AllRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
-		}
-
-		if res.State() != Panic {
-			t.Errorf("AllRes().State() is %s, want Panic", res.State())
-		}
-	})
+	}
 }
 
 func TestGroup_AllWaitRes(t *testing.T) {
-	t.Run("basic flow", func(t *testing.T) {
-		t.Parallel()
-
-		g := NewGroup[string]()
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(1 * time.Millisecond)
-			return ErrRes[string](testStrError("promise1"))
+	tests := []groupResTestCase[string, []GroupRes[string]]{
+		{
+			name:     "zero group",
+			promises: nil,
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					lowerDuration: 0,
+					upperDuration: 1 * time.Millisecond, // an OK delay for the test env.
+					wantState:     Success,
+					wantResVal:    nil,
+				},
+			},
+		},
+		{
+			name: "basic flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for all promises, but yet return Error.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+					},
+				},
+			},
+		},
+		{
+			name: "panic flow - early",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for all promises, but return Panic, even
+					// though an Error happened, because Panic is higher than Error.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					// it should return immediately with only the [Panic] result.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "panic flow - late",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: PanicRes[string]("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for all promises, return their results,
+					// but as [Panic].
+					lowerDuration: 500 * time.Millisecond, // promise1 sleep.
+					upperDuration: 505 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: PanicRes[string]("promise3")},
+					},
+				},
+				{
+					// it should return immediately with only the [Panic] result.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "success flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for all promises to return, as all
+					// of them are Success and it only breaks on [Error],
+					// and return all of their results as [Success].
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "group wait trigger",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode: groupWaitTrigger,
+					// it should only start waiting after all promises have
+					// returned, and use the group history to return the correct
+					// result state, as if it was running from the start.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{ // state's result.
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,                // same as the first call.
+					wantResVal: []GroupRes[string]{ // state's result.
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "promise wait trigger 1",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 0,
+					// it should only start waiting after the Panic promise
+					// return, but yet return its state (because it's the
+					// highest among the above promises), and it should
+					// return after all promises are done.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{ // state's result + observed result.
+						{Result: PanicRes[string]("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,                // same as the first call.
+					wantResVal: []GroupRes[string]{ // state's result.
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "promise wait trigger 2",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 1,
+					// it should only start waiting after the Error promise
+					// return, which means it skips its result, and then
+					// return after all promises are done.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{ // state's result + observed result.
+						{Result: PanicRes[string]("promise1")},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,                // same as the first call.
+					wantResVal: []GroupRes[string]{ // state's result.
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - no wait trigger",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should return after all promises return with their results.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - group wait trigger",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode: groupWaitTrigger,
+					// it should start waiting after all promises have returned,
+					// but since we saved all results, it should return them.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,                // same as the first call.
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - promise wait trigger 1",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 0,
+					// it should start waiting after the first [Success] promise
+					// have returned, but sine it's an [AllWait] call, it returns
+					// after all the promises return.
+					// it should return [Error], as it's the highest [State], with
+					// all results.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Error,                  // since we return only after Error.
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,                // same as the first call.
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - promise wait trigger 2",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 1,
+					// it should start waiting after the second [Success] promise
+					// have returned, but sine it's an [AllWait] call, it returns
+					// after all the promises returns.
+					// it should return [Error], as it's the highest [State], with
+					// all results, even the first [Success] promise's.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Error,                  // since we return only after Error.
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,                // same as the first call.
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			groupResTestHelper(t, tc, (*Group[string]).AllWaitRes, "AllWaitRes")
 		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(2 * time.Millisecond)
-			return ValRes("promise2")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(50 * time.Millisecond)
-			return ValRes("promise3")
-		})
-
-		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
-		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
-
-		start := time.Now()
-		res := g.AllWaitRes()
-		elapsed := time.Since(start)
-
-		if elapsed < lowerDuration {
-			t.Errorf("AllWaitRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
-		}
-
-		if elapsed > upperDuration {
-			t.Errorf("AllWaitRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
-		}
-
-		if res.State() != Error {
-			t.Errorf("AllWaitRes().State() is %s, want Error", res.State())
-		}
-	})
+	}
 }
 
 func TestGroup_AnyRes(t *testing.T) {
-	t.Run("basic flow", func(t *testing.T) {
-		t.Parallel()
-
-		g := NewGroup[string]()
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(10 * time.Millisecond)
-			return ErrRes[string](testStrError("promise1"))
+	tests := []groupResTestCase[string, []GroupRes[string]]{
+		{
+			name:     "zero group",
+			promises: nil,
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					lowerDuration: 0,
+					upperDuration: 1 * time.Millisecond, // an OK delay for the test env.
+					wantState:     Success,
+					wantResVal:    nil,
+				},
+			},
+		},
+		{
+			name: "basic flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it shouldn't wait for other promises once one is Success.
+					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
+					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise2")},
+					},
+				},
+			},
+		},
+		{
+			name: "panic flow - early",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it shouldn't wait for other promises once one is Success,
+					// unless that one is Panic.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "panic flow - late",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: PanicRes[string]("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it shouldn't wait for other promises once one is Success,
+					// unless that one is Panic.
+					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
+					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "error flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for all promises to return, as all
+					// of them are Error and it only breaks on [Success],
+					// and return all of their results as [Error].
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+					},
+				},
+			},
+		},
+		{
+			name: "group wait trigger",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode: groupWaitTrigger,
+					// it should only start waiting after all promises have
+					// returned, and use the group history to return the correct
+					// result state, as if it was running from the start.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "promise wait trigger 1",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: PanicRes[string]("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should only start waiting after the Error promise
+					// return, and return on Success, without waiting for
+					// the Panic one.
+					// it should return a Success result, as it won't observe
+					// the Panic promise.
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 0,
+					lowerDuration:  100 * time.Millisecond, // promise2 sleep.
+					upperDuration:  105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:      Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise2")},
+					},
+				},
+				{
+					// it starts waiting after the Panic promise returns,
+					// so it becomes the highest state, and should be returned.
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 2,
+					lowerDuration:  395 * time.Millisecond, // promise3 - promise2 with a 5ms buffer duration.
+					upperDuration:  405 * time.Millisecond, // a 5ms buffer duration.
+					wantState:      Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "promise wait trigger 2",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 1,
+					// it should only start waiting after the Error promise
+					// return, ignore its result, but yet return immediately
+					// after it, with the first promise, as it's a Success.
+					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
+					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+					},
+				},
+				{
+					// it should only return the first Success.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - no wait trigger",
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should return on the first Success, include the
+					// Error result, and have a Success [State].
+					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
+					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+					},
+				},
+				{
+					// since there's no wait duration, it should return the
+					// exact result in the previous call, almost instantly.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+					},
+				},
+				{
+					// since we wait after the last promise return, it should
+					// be included in the result.
+					callDelay:     500 * time.Millisecond, // promise3 - promise2 wait.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - group wait trigger",
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should start waiting after all promises have returned,
+					// but since we saved all results, it should return them.
+					waitMode:      groupWaitTrigger,
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					// since no wait duration, it should be the same as
+					// the previous call.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - promise wait trigger 1",
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should start waiting after the first [Success] promise
+					// have returned, so it should return immediately with
+					// its result only.
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 0,
+					lowerDuration:  10,                    // promise2 sleep.
+					upperDuration:  15 * time.Millisecond, // promise2  sleep + a 5ms buffer duration.
+					wantState:      Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+					},
+				},
+				{
+					// since it waits after the [Error] promise returns,
+					// it should include all results in the returned result,
+					// without changing the result [State].
+					callDelay:     500 * time.Millisecond, // after promise3 returns.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - promise wait trigger 2",
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should start waiting after [Error] promise returns,
+					// but since there was a [Success] resolved before, it
+					// should return immediately, with the first Success and
+					// the Error results, as we're saving all results.
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 1,
+					lowerDuration:  100,                    // promise2 sleep.
+					upperDuration:  105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					wantState:      Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+					},
+				},
+				{
+					// it should return the same result as the previous call.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			groupResTestHelper(t, tc, (*Group[string]).AnyRes, "AnyRes")
 		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(100 * time.Millisecond)
-			return ValRes("promise2")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(500 * time.Millisecond)
-			return ValRes("promise3")
-		})
-
-		lowerDuration := 100 * time.Millisecond // promise2 sleep.
-		upperDuration := 105 * time.Millisecond // promise2 sleep + a buffer duration of 5 Milliseconds.
-
-		start := time.Now()
-		// it shouldn't wait for other promises once one is Success.
-		res := g.AnyRes()
-		elapsed := time.Since(start)
-
-		if elapsed < lowerDuration {
-			t.Errorf("AnyRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
-		}
-
-		if elapsed > upperDuration {
-			t.Errorf("AnyRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
-		}
-
-		if res.State() != Success {
-			t.Errorf("AnyRes().State() is %s, want Success", res.State())
-		}
-	})
-
-	t.Run("panic flow - early", func(t *testing.T) {
-		t.Parallel()
-
-		g := NewGroup[string]()
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(10 * time.Millisecond)
-			return PanicRes[string]("promise1")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(100 * time.Millisecond)
-			return ErrRes[string](testStrError("promise2"))
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(500 * time.Millisecond)
-			return ValRes("promise3")
-		})
-
-		lowerDuration := 500 * time.Millisecond // promise3 sleep.
-		upperDuration := 505 * time.Millisecond // promise3 sleep + a buffer duration of 5 Milliseconds.
-
-		start := time.Now()
-		// it should wait until one is Success, but if there was one that
-		// is Panic, it should resolve to Panic.
-		res := g.AnyRes()
-		elapsed := time.Since(start)
-
-		if elapsed < lowerDuration {
-			t.Errorf("AnyRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
-		}
-
-		if elapsed > upperDuration {
-			t.Errorf("AnyRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
-		}
-
-		if res.State() != Panic {
-			t.Errorf("AnyRes().State() is %s, want Panic", res.State())
-		}
-	})
-
-	t.Run("panic flow - late", func(t *testing.T) {
-		t.Parallel()
-
-		g := NewGroup[string]()
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(10 * time.Millisecond)
-			return ValRes("promise1")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(100 * time.Millisecond)
-			return ErrRes[string](testStrError("promise2"))
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(500 * time.Millisecond)
-			return PanicRes[string]("promise3")
-		})
-
-		lowerDuration := 10 * time.Millisecond // promise1 sleep.
-		upperDuration := 15 * time.Millisecond // promise1 sleep + a buffer duration of 5 Milliseconds.
-
-		start := time.Now()
-		// it shouldn't wait for other promises once one is Success.
-		res := g.AnyRes()
-		elapsed := time.Since(start)
-
-		if elapsed < lowerDuration {
-			t.Errorf("AllRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
-		}
-
-		if elapsed > upperDuration {
-			t.Errorf("AllRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
-		}
-
-		if res.State() != Success {
-			t.Errorf("AllRes().State() is %s, want Success", res.State())
-		}
-	})
+	}
 }
 
 func TestGroup_AnyWaitRes(t *testing.T) {
-	t.Run("basic flow", func(t *testing.T) {
-		t.Parallel()
-
-		g := NewGroup[string]()
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(1 * time.Millisecond)
-			return ErrRes[string](testStrError("promise1"))
+	tests := []groupResTestCase[string, []GroupRes[string]]{
+		{
+			name:     "zero group",
+			promises: nil,
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					lowerDuration: 0,
+					upperDuration: 1 * time.Millisecond, // an OK delay for the test env.
+					wantState:     Success,
+					wantResVal:    nil,
+				},
+			},
+		},
+		{
+			name: "basic flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for the last [Success], and return all results.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise2")},
+					},
+				},
+			},
+		},
+		{
+			name: "panic flow - early",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for the last [Success], return all
+					// results, but as [Panic].
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					// it should return immediately with only the [Panic] result.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "panic flow - late",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: PanicRes[string]("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for all promises, return their results,
+					// but as [Panic].
+					lowerDuration: 500 * time.Millisecond, // promise1 sleep.
+					upperDuration: 505 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: PanicRes[string]("promise3")},
+					},
+				},
+				{
+					// it should return immediately with only the [Panic] result.
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string]("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "error flow",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should wait for all promises to return, as all
+					// of them are Error and it only breaks on [Success],
+					// and return all of their results as [Error].
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Error,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+					},
+				},
+			},
+		},
+		{
+			name: "group wait trigger",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// result state, as if it was running from the start.
+					// returned, and use the group history to return the correct
+					// it should only start waiting after all promises have
+					waitMode:      groupWaitTrigger,
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{ // state's result.
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,                // same as the first call.
+					wantResVal: []GroupRes[string]{ // state's result.
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "promise wait trigger 1",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string]("promise1")},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should only start waiting after the Panic promise
+					// return, but yet return its state (because it's the
+					// highest among the above promises), and it should
+					// return on the Success promise, and include all results.
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 0,
+					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
+					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:      Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{ // state's result + observed result.
+						{Result: PanicRes[string]("promise1")},
+						{Result: ErrRes[string](testStrError("promise2"))},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,                // same as the first call.
+					wantResVal: []GroupRes[string]{ // state's result.
+						{Result: PanicRes[string]("promise1")},
+					},
+				},
+			},
+		},
+		{
+			name: "promise wait trigger 2",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ErrRes[string](testStrError("promise2"))},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should only start waiting after the seconds [Error]
+					// promise return, which means it skips its result and
+					// previous ones, and then return after the Success promise
+					// is done, with its result only.
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 1,
+					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
+					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:      Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - no wait trigger",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ErrRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should return after all promises return with their results.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ErrRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - group wait trigger",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: PanicRes[string](testStrError("promise1"))},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ValRes("promise3")},
+			},
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should start waiting after all promises have returned,
+					// but since we saved all results, it should return them.
+					waitMode:      groupWaitTrigger,
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Panic,                  // the highest state.
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Panic,
+					wantResVal: []GroupRes[string]{
+						{Result: PanicRes[string](testStrError("promise1"))},
+						{Result: ValRes("promise2")},
+						{Result: ValRes("promise3")},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - promise wait trigger 1",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					// it should start waiting after the first [Success] promise
+					// have returned, but sine it's an [AnyWait] call, it returns
+					// after all the promises return.
+					// it should return [Success], as it's the highest [State], with
+					// all results.
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 0,
+					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
+					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:      Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+			},
+		},
+		{
+			name: "all result - promise wait trigger 2",
+			promises: []*promiseTestCase[string]{
+				{delay: 10 * time.Millisecond, res: ValRes("promise1")},
+				{delay: 100 * time.Millisecond, res: ValRes("promise2")},
+				{delay: 500 * time.Millisecond, res: ErrRes[string](testStrError("promise3"))},
+			},
+			config: &GroupConfig{
+				SaveAllGroupResults: true,
+			},
+			calls: []groupResTestCall[[]GroupRes[string]]{
+				{
+					waitMode:       promiseWaitTrigger,
+					waitPromiseIdx: 2,
+					// it should start waiting after the [Error] promise
+					// returns, but yet return all results as [Success],
+					// as we're saving all results.
+					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
+					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+				{
+					lowerDuration: 0,
+					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					wantState:     Success,
+					wantResVal: []GroupRes[string]{
+						{Result: ValRes("promise1")},
+						{Result: ValRes("promise2")},
+						{Result: ErrRes[string](testStrError("promise3"))},
+					},
+				},
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			groupResTestHelper(t, tc, (*Group[string]).AnyWaitRes, "AnyWaitRes")
 		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(2 * time.Millisecond)
-			return ValRes("promise2")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(50 * time.Millisecond)
-			return ValRes("promise3")
-		})
-
-		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
-		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
-
-		start := time.Now()
-		res := g.AnyWaitRes()
-		elapsed := time.Since(start)
-
-		if elapsed < lowerDuration {
-			t.Errorf("AnyWaitRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
-		}
-
-		if elapsed > upperDuration {
-			t.Errorf("AnyWaitRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
-		}
-
-		if res.State() != Success {
-			t.Errorf("AnyWaitRes().State() is %s, want Success", res.State())
-		}
-	})
-
-	t.Run("basic flow with basic wait", func(t *testing.T) {
-		t.Parallel()
-
-		g := NewGroup[string]()
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(1 * time.Millisecond)
-			panic(testStrError("promise1"))
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(2 * time.Millisecond)
-			return ValRes("promise2")
-		})
-
-		g.GoRes(func(ctx context.Context) Result[string] {
-			time.Sleep(50 * time.Millisecond)
-			return ValRes("promise3")
-		})
-
-		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
-		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
-
-		start := time.Now()
-		res := g.AnyWaitRes(func() {
-			g.Wait()
-		})
-		elapsed := time.Since(start)
-
-		if elapsed < lowerDuration {
-			t.Errorf("AnyWaitRes() returned early. expected: %s, got: %s", lowerDuration, elapsed)
-		}
-
-		if elapsed > upperDuration {
-			t.Errorf("AnyWaitRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
-		}
-
-		if res.State() != Panic {
-			t.Errorf("AnyWaitRes().State() is %s, want Panic", res.State())
-		}
-	})
+	}
 }
 
 func TestGroup_JoinRes(t *testing.T) {
@@ -571,7 +1988,7 @@ func TestGroup_JoinRes(t *testing.T) {
 		})
 
 		lowerDuration := 50 * time.Millisecond // max(1, 2, 50)
-		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a buffer duration of 5 Milliseconds.
+		upperDuration := 55 * time.Millisecond // max(1, 2, 50) + a 5ms buffer duration.
 
 		start := time.Now()
 		res := g.JoinRes()
@@ -585,9 +2002,8 @@ func TestGroup_JoinRes(t *testing.T) {
 			t.Errorf("JoinRes() waited so long. expected: %s, got: %s", upperDuration, elapsed)
 		}
 
-		if res.State() != Success {
-			t.Errorf("JoinRes().State() is %s, want Success", res.State())
+		if want := Success; res.State() != want {
+			t.Errorf("JoinRes().State() is %s, want %s", res.State(), want)
 		}
 	})
 }
-

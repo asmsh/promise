@@ -333,7 +333,7 @@ loop:
 			// get the final promise's state, based on the previous resState and
 			// the recent resolved promise's state, using the selected mode rules.
 			if allSuccess {
-				resState = calcAllResState(res.State(), resState)
+				resState = calcAllNextState(res.State(), resState)
 
 				// stop, if we found the target break state based on the current flags.
 				// note: for the allSuccess case, we can only continue if the waitAll
@@ -346,7 +346,7 @@ loop:
 				}
 			}
 			if anySuccess {
-				resState = calcAnyResState(res.State(), resState)
+				resState = calcAnyNextState(res.State(), resState)
 
 				if !waitAll && res.State() == Success {
 					break loop
@@ -380,7 +380,7 @@ loop:
 				// get the final promise's state, based on the previous resState and
 				// the recent resolved promise's state, using the selected mode rules.
 				if allSuccess {
-					resState = calcAllResState(res.State(), resState)
+					resState = calcAllNextState(res.State(), resState)
 
 					// stop, if we found the target break state based on the current flags.
 					// note: for the allSuccess case, we can only continue if the waitAll
@@ -393,7 +393,7 @@ loop:
 					}
 				}
 				if anySuccess {
-					resState = calcAnyResState(res.State(), resState)
+					resState = calcAnyNextState(res.State(), resState)
 
 					if !waitAll && res.State() == Success {
 						break
@@ -440,38 +440,100 @@ func addExtCallToQ[T any](
 	}
 }
 
-// calcAllResState returns the resolve state of the promise returned by All.
+// calcAllInitState returns the [Result] [State] that should be fetched
+// from the [Group] history and be included in the [Result] returned by
+// [All], or [AllWait].
+// It returns 0 ([unknown]) if no fetching from the history should be done.
+// [Panic] has the highest priority.
+// [Success] is ignored, as no [Success] should be fetched from history.
+// It returns either [Panic], [Error], or 0 ([unknown]).
+func calcAllInitState(stateHist State) State {
+	// the order here matters.
+	switch {
+	case stateHist == unknown:
+		return unknown
+	case stateHist&Panic == Panic:
+		return Panic
+	case stateHist&Error == Error:
+		return Error
+	case stateHist&Success == Success:
+		return unknown
+	}
+
+	// unexpected state.
+	return stateHist
+}
+
+// calcAllNextState returns the resolve state of the promise returned by All.
 // Panic has the highest priority.
 // Error has the highest priority between Success and Error.
-func calcAllResState(newState, prevState State) State {
+func calcAllNextState(currState, prevState State) State {
 	switch {
-	case newState == Panic || prevState == Panic:
+	case currState == Panic || prevState == Panic:
 		return Panic
-	case newState == Error:
+	case currState == Error:
 		return Error
 	case prevState == unknown:
-		return newState
+		return currState
 	default:
 		return prevState
 	}
 }
 
-// calcAnyResState returns the resolve state of the promise returned by Any.
+// All breaks on [Error] only, as it ignores [Panic] and is okay with [Success].
+func checkTargetAllState(currState State) bool {
+	return currState == Error
+}
+
+// calcAnyInitState returns the [Result] [State] that should be fetched
+// from the [Group] history and be included in the [Result] returned by
+// [Any], or [AnyWait].
+// It returns 0 ([unknown]) if no fetching from the history should be done.
+// [Panic] has the highest priority.
+// [Error] is ignored, as no [Error] should be fetched from history.
+// It returns either [Panic], [Error], or 0 ([unknown]).
+func calcAnyInitState(stateHist State) State {
+	// the order here matters.
+	switch {
+	case stateHist == unknown:
+		return unknown
+	case stateHist&Panic == Panic:
+		return Panic
+	case stateHist&Success == Success:
+		return Success
+	case stateHist&Error == Error:
+		return unknown
+	}
+
+	// unexpected state.
+	return stateHist
+}
+
+// calcAnyNextState returns the resolve state of the promise returned by Any.
 // Panic has the highest priority.
 // Success has the highest priority between Success and Error.
-func calcAnyResState(newState, prevState State) State {
+func calcAnyNextState(newState, currState State) State {
 	switch {
-	case newState == Panic || prevState == Panic:
+	case newState == Panic || currState == Panic:
 		return Panic
 	case newState == Success:
 		return Success
-	case prevState == unknown:
+	case currState == unknown:
 		return newState
 	default:
-		return prevState
+		return currState
 	}
 }
 
-func calcJoinResState(_, _ State) State {
+// Any breaks on [Success] only, as it waits for the first [Success].
+func checkTargetAnyState(currState State) bool {
+	return currState == Success
+}
+
+func calcJoinInitState(_ State) State {
+	return Success
+}
+
+func calcJoinNextState(_, _ State) State {
 	return Success
 }

@@ -26,6 +26,20 @@ import (
 // structure, using the error, errors.Unwrap, errors.Is and errors.As interfaces.
 // also to ensure consistent string conversion of the results.
 
+func newSingleRes[T any, TElem Result[T]](s State, val TElem) Result[TElem] {
+	switch s {
+	case Panic:
+		return panicResultSingleRes[T, TElem]{val}
+	case Error:
+		return errorResultSingleRes[T, TElem]{val}
+	case Success:
+		return successResultSingleRes[T, TElem]{val}
+	default:
+		// an internal panic, because it's supposed to be caught earlier.
+		panic("promise: internal: unexpected Result state: " + s.String())
+	}
+}
+
 // successResultSingleRes is a Result implementation for Success results
 // returned from the Select extension call.
 type successResultSingleRes[T any, TElem Result[T]] struct {
@@ -115,6 +129,20 @@ func (r panicResultSingleRes[T, TElem]) As(target any) bool {
 }
 func (r panicResultSingleRes[T, TElem]) PanicV() any {
 	return getPanicVFromRes(r.val)
+}
+
+func newMultiRes[T any, TElem Result[T]](s State, vals []TElem) Result[[]TElem] {
+	switch s {
+	case Panic:
+		return panicResultMultiRes[T, TElem]{vals}
+	case Error:
+		return errorResultMultiRes[T, TElem]{vals}
+	case Success:
+		return successResultMultiRes[T, TElem]{vals}
+	default:
+		// an internal panic, because it's supposed to be caught earlier.
+		panic("promise: internal: unexpected Result state: " + s.String())
+	}
 }
 
 // successResultMultiRes is a Result implementation for Success results

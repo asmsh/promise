@@ -51,6 +51,8 @@ func (de debugEvent) String() string {
 		return "endHandleGroupCalls"
 	case doneHandleGroupCall:
 		return "doneHandleGroupCall"
+	case doneSaveGroupResult:
+		return "doneSaveGroupResult"
 	case startUnhandledPanicLogic:
 		return "startUnhandledPanicLogic"
 	case callUnhandledPanicCallback:

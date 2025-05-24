@@ -35,6 +35,7 @@ const (
 	startHandleGroupCalls
 	endHandleGroupCalls
 	doneHandleGroupCall
+	doneSaveGroupResult
 
 	startUnhandledPanicLogic
 	callUnhandledPanicCallback
