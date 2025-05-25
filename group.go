@@ -277,10 +277,110 @@ type groupCall[T any] struct {
 	syncChan <-chan struct{}
 }
 
-type groupResHistory struct {
-	panic   any // of GroupRes[T]
-	error   any // of GroupRes[T]
-	success any // of GroupRes[T]
+type groupResHistory[T any] struct {
+	// vals holds 1 [Result] of each [State], either the first or the last,
+	// based on the [GroupConfig.SetSaveLastSingleGroupResult] flag.
+	// the first most or last most [Result] will be saved at index 0.
+	vals [3]GroupRes[T]
+}
+
+// the resMu must be locked before entering.
+func (h *groupResHistory[T]) insertRes(res GroupRes[T], saveLast bool) {
+	// if we only save the first [Result], then save it in the first empty place.
+	if !saveLast {
+		for i := range h.vals {
+			// found an empty place?
+			if h.vals[i].Result == nil {
+				h.vals[i] = res
+				break
+			}
+
+			// found another [Result] with the same [State]?
+			if h.vals[i].State() == res.State() {
+				break
+			}
+		}
+		return
+	}
+
+	// 1- remove the res at the first index, and keep it around.
+	oldRes := h.vals[0]
+
+	// 2- insert the new res at the first index.
+	h.vals[0] = res
+
+	// 3- if the removed res was empty, return.
+	if oldRes.Result == nil {
+		return
+	}
+
+	// 4- if the removed res has the same [State] as the new res, return.
+	if oldRes.State() == res.State() {
+		return
+	}
+
+	// 5- otherwise, find the res that matches the removed res, and swap.
+	// it can only be found at index 1 and 2.
+	if h.vals[1].Result == nil {
+		h.vals[1] = res
+		return
+	} else if h.vals[1].State() == res.State() {
+		h.vals[1] = res
+		return
+	}
+	if h.vals[2].Result == nil {
+		h.vals[2] = res
+		return
+	} else if h.vals[2].State() == res.State() {
+		h.vals[2] = res
+		return
+	}
+
+	// TODO: this is only for testing. make sure to remove.
+	panic("promise: internal: we shouldn't reach this point")
+}
+
+// getRes returns the first most or last most [Result], according to how
+// the values have been saved.
+//
+// the resMu must be locked before entering.
+func (h *groupResHistory[T]) getRes() (res GroupRes[T]) {
+	// if it's not been initialized, return nothing.
+	if h == nil {
+		return res
+	}
+
+	// the [Result] we're interested in is always at index 0.
+	return h.vals[0]
+}
+
+// getStateRes returns the GroupRes for the provided [State], or nothing,
+// if no matching GroupRes has been saved for the provided [State].
+//
+// the resMu must be locked before entering.
+func (h *groupResHistory[T]) getStateRes(state State) (res GroupRes[T]) {
+	// if it's not been initialized, return nothing.
+	if h == nil {
+		return res
+	}
+
+	// the call doesn't expect a result to be added from the history.
+	if state == unknown {
+		return res
+	}
+
+	// fetch the result from the history based on the state.
+	for i := range h.vals {
+		if h.vals[i].Result == nil {
+			continue
+		}
+		if h.vals[i].State() == state {
+			return h.vals[i]
+		}
+	}
+
+	// no result is found for that call's state.
+	return res
 }
 
 type groupCore struct {
@@ -318,7 +418,7 @@ type groupCore struct {
 	resMu        sync.RWMutex
 	resQ         list.List // of GroupRes[T]
 	resStateHist State     // Bitwise OR of previous values
-	resHist      groupResHistory
+	resHist      any       // of *groupResHistory[T]
 
 	// ctx will be non-nil if the Group is meant to close all Context values
 	// once any Promise that's created using it panics or returns an error.

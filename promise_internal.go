@@ -439,23 +439,12 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 	if p.group.core.saveAllGroupResults {
 		p.group.core.resQ.PushBack(groupRes)
 	} else {
-		switch res.State() {
-		case Success:
-			if p.group.core.saveLastSingleGroupResult ||
-				p.group.core.resHist.success == nil {
-				p.group.core.resHist.success = groupRes
-			}
-		case Error:
-			if p.group.core.saveLastSingleGroupResult ||
-				p.group.core.resHist.error == nil {
-				p.group.core.resHist.error = groupRes
-			}
-		case Panic:
-			if p.group.core.saveLastSingleGroupResult ||
-				p.group.core.resHist.panic == nil {
-				p.group.core.resHist.panic = groupRes
-			}
+		resHist, ok := p.group.core.resHist.(*groupResHistory[T])
+		if !ok {
+			resHist = &groupResHistory[T]{}
+			p.group.core.resHist = resHist
 		}
+		resHist.insertRes(groupRes, p.group.core.saveLastSingleGroupResult)
 	}
 	debug(p, doneSaveGroupResult)
 	p.group.core.resMu.Unlock()

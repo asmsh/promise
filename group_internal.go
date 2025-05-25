@@ -45,6 +45,21 @@ type joinOperationLogic interface {
 	IsTargetState(currState State) bool
 }
 
+// the resMu must be locked before entering.
+func (g *Group[T]) getCallSingleResSnapshot() GroupRes[T] {
+	if g.core.saveAllGroupResults {
+		front := g.core.resQ.Front()
+		if front == nil {
+			return GroupRes[T]{}
+		}
+		return front.Value.(GroupRes[T])
+	}
+
+	// fetch the call's result from the history.
+	resHist, _ := g.core.resHist.(*groupResHistory[T])
+	return resHist.getRes()
+}
+
 func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 	// init the wait chan of this group.
 	groupDone := g.core.sg.WaitChan()
@@ -56,15 +71,36 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 	// and instead just read directly from the 'resQ'.
 	select {
 	case <-groupDone:
-		// TODO: how to know which saved Result is the first, to return here,
-		// like what we do with the AllRes, etc.
 		// fast-path, with no unneeded allocations in 'selectResSlow'.
-		// return a [Success] [GroupRes] with empty [Result].
 		// this could happen either on a zero [Group], or when
-		// the [Group] has no ongoing promises, and in both cases
-		// the [Select] can't observe any [Result] values.
-		return newSingleRes[T, GroupRes[T]](Success, GroupRes[T]{})
+		// the [Group] has no ongoing promises.
+		g.core.resMu.RLock()
+		callResState := Success
+		callRes := g.getCallSingleResSnapshot()
+		if callRes.Result != nil {
+			callResState = callRes.State()
+		}
+		g.core.resMu.RUnlock()
+
+		return newSingleRes[T, GroupRes[T]](callResState, callRes)
 	default:
+		var callResState State
+		var targetFound bool
+
+		g.core.resMu.RLock()
+		callRes := g.getCallSingleResSnapshot()
+		if callRes.Result != nil {
+			callResState = callRes.State()
+			targetFound = true
+		}
+		g.core.resMu.RUnlock()
+
+		if targetFound {
+			return newSingleRes[T, GroupRes[T]](callResState, callRes)
+		}
+
+		// target is not found, move forward to joinResSlow...
+
 		return g.selectResSlow(groupDone)
 	}
 }
@@ -109,11 +145,56 @@ func (g *Group[T]) selectResSlow(groupDone <-chan struct{}) Result[GroupRes[T]] 
 	// propagated this 'groupCall' after the ongoing promises passed
 	// the 'handleGroupCall' loop in the 'handleGroupCalls'.
 	// so, in this case, it will be treated as a sync call.
-	if callResState == unknown {
-		return newSingleRes[T, GroupRes[T]](Success, GroupRes[T]{})
-	}
+	//if callResState == unknown {
+	//	return newSingleRes[T, GroupRes[T]](Success, GroupRes[T]{})
+	//}
 
 	return newSingleRes(callResState, callRes)
+}
+
+// getCallResSnapshot returns a copy of this [Group]'s results,
+// at the time of calling, based on the 'saveAllGroupResults' flag.
+//
+// the callResState is the result of the respective 'calcInitStateFunc'
+// call, given the [Group]'s state history, at the time of calling.
+//
+// callResLen is the capacity of the returned [GroupRes] slice that's
+// requested by the caller.
+// the actual capacity will be bigger than this value by a difference
+// based on the 'saveAllGroupResults' flag.
+// the difference will be the length of resQ if 'saveAllGroupResults'
+// is true, and 1 otherwise.
+//
+// the resMu must be locked before entering.
+func (g *Group[T]) getCallResSnapshot(callResState State, callResLen int) []GroupRes[T] {
+	if g.core.saveAllGroupResults {
+		callResLen += g.core.resQ.Len()
+		callRes := make([]GroupRes[T], 0, callResLen)
+		for res := g.core.resQ.Front(); res != nil; res = res.Next() {
+			callRes = append(callRes, res.Value.(GroupRes[T]))
+		}
+		return callRes
+	}
+
+	// fetch the call's result from the history.
+	var resHist *groupResHistory[T]
+	if rh, ok := g.core.resHist.(*groupResHistory[T]); ok {
+		resHist = rh
+	}
+	res := resHist.getStateRes(callResState)
+
+	// if no matching [Result] is found, either return nil, or return
+	// the new callResLen with the expected cap.
+	if res.Result == nil && callResLen == 0 {
+		return nil
+	} else if res.Result == nil {
+		return make([]GroupRes[T], 0, callResLen)
+	}
+
+	// we found a [Result] that matches the group call...
+	// create the callRes with the expected cap, and include it in
+	// the returned callRes.
+	return append(make([]GroupRes[T], 0, callResLen+1), res)
 }
 
 // checkTargetStateFunc is optional and only  needed if we want to return early.
@@ -150,16 +231,15 @@ func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
 		// so, to be sure that we didn't miss anything, we need to check
 		// the history fields _after_ the resQ send.
 		if op.ReturnOnTargetState() {
-			var callResState State
 			var callRes []GroupRes[T]
 			var targetFound bool
 
 			g.core.resMu.RLock()
-			callResState = op.InitState(g.core.resStateHist)
+			callResState := op.InitState(g.core.resStateHist)
 			if op.IsTargetState(callResState) {
 				// we found our target, so return the expected [Result] values.
-				targetFound = true
 				callRes = g.getCallResSnapshot(callResState, 0)
+				targetFound = true
 			}
 			g.core.resMu.RUnlock()
 
@@ -172,68 +252,6 @@ func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
 
 		return g.joinResSlow(groupDone, op)
 	}
-}
-
-// getCallResSnapshot returns a copy of this [Group]'s results,
-// at the time of calling, based on the 'saveAllGroupResults' flag.
-//
-// the callResState is the result of the respective 'calcInitStateFunc'
-// call, given the [Group]'s state history, at the time of calling.
-//
-// callResLen is the capacity of the returned [GroupRes] slice that's
-// requested by the caller.
-// the actual capacity will be bigger than this value by a difference
-// based on the 'saveAllGroupResults' flag.
-// the difference will be the length of resQ if 'saveAllGroupResults'
-// is true, and 1 otherwise.
-//
-// the resMu must be locked before entering.
-func (g *Group[T]) getCallResSnapshot(callResState State, callResLen int) []GroupRes[T] {
-	if g.core.saveAllGroupResults {
-		callResLen += g.core.resQ.Len()
-		callRes := make([]GroupRes[T], 0, callResLen)
-		for res := g.core.resQ.Front(); res != nil; res = res.Next() {
-			callRes = append(callRes, res.Value.(GroupRes[T]))
-		}
-		return callRes
-	}
-
-	// fetch the result from the history based on the callResState.
-	var val any
-	switch callResState {
-	case Panic:
-		if res := g.core.resHist.panic; res != nil {
-			val = res
-			callResLen += 1
-		}
-	case Error:
-		if res := g.core.resHist.error; res != nil {
-			val = res
-			callResLen += 1
-		}
-	case Success:
-		if res := g.core.resHist.success; res != nil {
-			val = res
-			callResLen += 1
-		}
-	default:
-		// do nothing, as it means the call doesn't expect a result
-		// to be added from the history.
-	}
-
-	// create the callRes with the final expected cap, only if there
-	// are results expected, otherwise leave it nil.
-	var callRes []GroupRes[T]
-	if callResLen > 0 {
-		callRes = make([]GroupRes[T], 0, callResLen)
-	}
-
-	// if we found a result that matches the group call, include it.
-	if val != nil {
-		callRes = append(callRes, val.(GroupRes[T]))
-	}
-
-	return callRes
 }
 
 // checkTargetStateFunc is optional and only needed if we want to return early.
@@ -269,8 +287,8 @@ func (g *Group[T]) joinResSlow(
 		callResState = op.InitState(g.core.resStateHist)
 		if op.IsTargetState(callResState) {
 			// we found our target, so return the expected [Result] values.
-			targetFound = true
 			callRes = g.getCallResSnapshot(callResState, 0)
+			targetFound = true
 		} else {
 			// expect at least all active promises to be included.
 			callResLen := g.core.sg.ActiveCount()

@@ -84,7 +84,7 @@ type panicResultSingleRes[T any, TElem Result[T]] struct {
 	val TElem
 }
 
-func (r panicResultSingleRes[T, TElem]) Val() (v TElem) { return v }
+func (r panicResultSingleRes[T, TElem]) Val() (v TElem) { return r.val }
 func (r panicResultSingleRes[T, TElem]) Err() error     { return r }
 func (r panicResultSingleRes[T, TElem]) State() State   { return Panic }
 func (r panicResultSingleRes[T, TElem]) Format(f fmt.State, verb rune) {
