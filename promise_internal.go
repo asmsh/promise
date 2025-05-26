@@ -16,7 +16,6 @@ package promise
 
 import (
 	"context"
-	"errors"
 	"time"
 )
 
@@ -308,37 +307,40 @@ func handleFollow[PrevT, NextT any](
 // and make the handleReturns function uses this value to tell whether the nil value is valid
 // or not, which will be useful to tell whether runtime.Goexit is called, a panic with nil
 // value occurred, or not.
-func handleReturns[PrevResT, NewResT any](
-	p *Promise[NewResT],
-	prevRes Result[PrevResT],
-	newResP *Result[NewResT],
+func handleReturns[PrevT, NextT any](
+	nextProm *Promise[NextT],
+	prevRes Result[PrevT],
+	nextResP *Result[NextT],
 ) {
 	// get the new Result value based on the state of the callback
-	var newRes Result[NewResT]
+	var nextRes Result[NextT]
 	if v := recover(); v != nil {
 		// the callback panicked, create the appropriate Result value.
-		newRes = panicResult[NewResT]{v: v}
+		nextRes = panicResult[NextT]{v: v}
 	} else {
 		// the callback returned normally, called runtime.Goexit, or
 		// called panic with nil value.
-		newRes = getEffectiveNewRes(prevRes, newResP)
+		nextRes = getEffectiveNextRes(prevRes, nextResP)
 	}
 
 	// resolve the provided Promise to the new Result value.
-	p.resolveToRes(newRes)
+	nextProm.resolveToRes(nextRes)
 }
 
-func getEffectiveNewRes[PrevResT, NewResT any](
-	prevRes Result[PrevResT],
-	newResP *Result[NewResT],
-) (effRes Result[NewResT]) {
-	// if a new Result is set, return it.
-	if newResP != nil {
-		return *newResP
+func getEffectiveNextRes[PrevT, NextT any](
+	prevRes Result[PrevT],
+	nextResP *Result[NextT],
+) (effRes Result[NextT]) {
+	// if a next Result is set, return it.
+	// this happens for callbacks that support returning a new [Result].
+	if nextResP != nil {
+		return *nextResP
 	}
 
-	// if there was no previous Result provided, return the zero value
-	// of the new Result.
+	// if there was no previous [Result] provided, return the zero value
+	// of the next [Result].
+	// this happens for callbacks that aren't following a previous [Promise],
+	// and doesn't support returning a new [Result], which is the [Go] callback.
 	if prevRes == nil {
 		return effRes
 	}
@@ -346,28 +348,31 @@ func getEffectiveNewRes[PrevResT, NewResT any](
 	// no new result is set, and the previous Result is non-nil, so try
 	// to cast the previous Result to the new Result's type...
 
-	// handle having the previous Result value as nil.
-	anyPrevRes := any(prevRes.Val())
-	if anyPrevRes == nil {
-		return result[NewResT]{
+	// handle having the previous [Result]'s value as nil.
+	// TODO: when can this happen?
+	anyPrevResVal := any(prevRes.Val())
+	if anyPrevResVal == nil {
+		return result[NextT]{
 			err:   prevRes.Err(),
 			state: prevRes.State(),
 		}
 	}
 
-	// handle having the previous Result's type compatible with the new one.
-	prevResVal, ok := anyPrevRes.(NewResT)
+	// handle having the previous [Result]'s type be compatible with the new one.
+	// TODO: when can this happen?
+	prevResVal, ok := anyPrevResVal.(NextT)
 	if ok {
-		return result[NewResT]{
+		return result[NextT]{
 			val:   prevResVal,
 			err:   prevRes.Err(),
 			state: prevRes.State(),
 		}
 	}
 
-	// TODO: this can't happen in the current implementation,
-	//  as all type parameters used so far is the same type.
-	return ErrRes[NewResT](errors.New("TODO: unexpected"))
+	// this can't happen, as the go type system guarantees that
+	// the prevT of the previous [Promise] is the assignable to
+	// the nextT of the next [Promise].
+	panic("promise: internal: getEffectiveNextRes called with invalid NextT")
 }
 
 func handleExtCalls[T any](p *Promise[T]) (handled bool) {
@@ -425,32 +430,30 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 	res := getFinalRes(p.res)
 
 	// get a snapshot of the group calls queue to be handled.
-	p.group.core.callsQMu.RLock()
-	for call := p.group.core.callsQ.Front(); call != nil; call = call.Next() {
+	p.group.callsQMu.RLock()
+	for call := p.group.callsQ.Front(); call != nil; call = call.Next() {
 		handled = handleGroupCall(call.Value, res) || handled
 		debug(p, doneHandleGroupCall)
 	}
-	p.group.core.callsQMu.RUnlock()
+	p.group.callsQMu.RUnlock()
 
 	// save the group state and result for calls added later.
-	p.group.core.resMu.Lock()
+	p.group.resMu.Lock()
 	groupRes := GroupRes[T]{Result: res}
 
-	p.group.core.resStateHist |= res.State()
+	p.group.resStateHist |= res.State()
 
 	if p.group.core.saveAllGroupResults {
-		p.group.core.resQ.PushBack(groupRes)
+		p.group.resQ.PushBack(groupRes)
 	} else {
-		resHist, ok := p.group.core.resHist.(*groupResHistory[T])
-		if !ok {
-			resHist = &groupResHistory[T]{}
-			p.group.core.resHist = resHist
+		if p.group.resHist == nil {
+			p.group.resHist = &groupResHistory[T]{}
 		}
-		resHist.insertRes(groupRes, p.group.core.saveLastSingleGroupResult)
+		p.group.resHist.insertRes(groupRes)
 	}
 
 	debug(p, doneSaveGroupResult)
-	p.group.core.resMu.Unlock()
+	p.group.resMu.Unlock()
 
 	debug(p, endHandleGroupCalls)
 	return handled

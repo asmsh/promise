@@ -350,26 +350,26 @@ func (r errPromiseCtxNilDoneResult[T]) String() string {
 	return fmt.Sprintf("Error: %s", ErrPromiseNilCtxDone.Error())
 }
 
-// errPromiseGroupDoneResult is a static error result that returns ErrPromiseGroupDone.
-// it's used instead of saving the ErrPromiseGroupDone error in a generic errResult value.
+// errPromiseGroupDoneResult is a static error result that returns [ErrGroupDone].
+// it's used instead of saving the [ErrGroupDone] error in a generic errResult value.
 type errPromiseGroupDoneResult[T any] struct{}
 
 func (r errPromiseGroupDoneResult[T]) Val() (v T)   { return v }
-func (r errPromiseGroupDoneResult[T]) Err() error   { return ErrPromiseGroupDone }
+func (r errPromiseGroupDoneResult[T]) Err() error   { return ErrGroupDone }
 func (r errPromiseGroupDoneResult[T]) State() State { return Error }
 func (r errPromiseGroupDoneResult[T]) String() string {
-	return fmt.Sprintf("Error: %s", ErrPromiseGroupDone.Error())
+	return fmt.Sprintf("Error: %s", ErrGroupDone.Error())
 }
 
-// errPromiseGroupBusyResult is a static error result that returns ErrPromiseGroupBusy.
-// it's used instead of saving the ErrPromiseGroupBusy error in a generic errResult value.
+// errPromiseGroupBusyResult is a static error result that returns [ErrGroupBusy].
+// it's used instead of saving the [ErrGroupBusy] error in a generic errResult value.
 type errPromiseGroupBusyResult[T any] struct{}
 
 func (r errPromiseGroupBusyResult[T]) Val() (v T)   { return v }
-func (r errPromiseGroupBusyResult[T]) Err() error   { return ErrPromiseGroupBusy }
+func (r errPromiseGroupBusyResult[T]) Err() error   { return ErrGroupBusy }
 func (r errPromiseGroupBusyResult[T]) State() State { return Error }
 func (r errPromiseGroupBusyResult[T]) String() string {
-	return fmt.Sprintf("Error: %s", ErrPromiseGroupBusy.Error())
+	return fmt.Sprintf("Error: %s", ErrGroupBusy.Error())
 }
 
 func printSingleRes[T any, TElem Result[T]](

@@ -53,10 +53,6 @@ func ApplyConfig(conf GroupConfig) GroupOption {
 		if conf.SaveAllGroupResults {
 			core.saveAllGroupResults = true
 		}
-
-		if conf.SaveLastSingleGroupResult {
-			core.saveLastSingleGroupResult = true
-		}
 	}
 }
 
@@ -147,16 +143,6 @@ func SetSaveAllGroupResult(set ...bool) GroupOption {
 	}
 }
 
-func SetSaveLastSingleGroupResult(set ...bool) GroupOption {
-	return func(core *groupCore) {
-		s := true
-		if len(set) > 0 {
-			s = set[0]
-		}
-		core.saveLastSingleGroupResult = s
-	}
-}
-
 type GroupConfig struct {
 	UnhandledPanicCB func(v any)
 	UnhandledErrorCB func(err error)
@@ -196,7 +182,7 @@ type GroupConfig struct {
 	NoNilCtxDoneChan bool
 
 	// NoWaitingBusyGroup, if true, will cause new calls to [Group.Chan], [Group.Delay],
-	// and all [Group.Go] functions, to return a [Error] [Result] with [ErrPromiseGroupBusy]
+	// and all [Group.Go] functions, to return a [Error] [Result] with [ErrGroupBusy]
 	// synchronously, when the [Group] is currently handling promises that equals the [Size]
 	// value (if set).
 	// Otherwise, it will wait until there's a place for the new promise.
@@ -208,9 +194,4 @@ type GroupConfig struct {
 	//
 	// By default, we save a single Result value, the first Result.
 	SaveAllGroupResults bool
-
-	// SaveLastSingleGroupResult saves the last Result instead of the first.
-	//
-	// By default, we save the first Result.
-	SaveLastSingleGroupResult bool
 }

@@ -152,6 +152,9 @@ func (r errResult[T]) String() string {
 	return fmt.Sprintf("Error: %s", r.err.Error())
 }
 func (r valErrResult[T]) String() string {
+	if r.err == nil {
+		return fmt.Sprintf("Success: %v", r.val)
+	}
 	return fmt.Sprintf("Error: (%v, %s)", r.val, r.err.Error())
 }
 func (r panicResult[T]) String() string {

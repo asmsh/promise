@@ -17,17 +17,17 @@ var (
 	// This is a sync error that will happen before the [Promise] value is returned.
 	ErrPromiseNilCtxDone = errors.New("promise cannot be created from a Context with nil Done chan")
 
-	// ErrPromiseGroupBusy returned via [Result.Err] from [Group.Chan], [Group.Delay],
+	// ErrGroupBusy returned via [Result.Err] from [Group.Chan], [Group.Delay],
 	// and all [Group.Go] calls, when the [Group] is currently handling promises that
 	// equals the [Group]'s assigned size ([GroupConfig.Size]),
 	// and the [GroupConfig.NoWaitingBusyGroup] [Group] option is set to `ture`.
 	// This is a sync error that will happen before the [Promise] value is returned.
-	ErrPromiseGroupBusy = errors.New("group is busy with other work")
+	ErrGroupBusy = errors.New("group is busy with other work")
 
-	// ErrPromiseGroupDone returned when one of the [Group]'s Wait methods has
+	// ErrGroupDone returned when one of the [Group]'s Wait methods has
 	// been called, and a new call is made to one of the [Group]'s Go methods.
 	// This is a sync error that will happen before the [Promise] value is returned.
-	ErrPromiseGroupDone = errors.New("group is done handling new work")
+	ErrGroupDone = errors.New("group is done handling new work")
 )
 
 // PanicError wraps a panic that got caught in a promise callback.

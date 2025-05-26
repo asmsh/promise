@@ -59,3 +59,43 @@ func (sc syncCtx) Done() <-chan struct{}                   { return sc.syncChan 
 func (sc syncCtx) Err() error                              { return nil }
 func (sc syncCtx) Value(any) any                           { return nil }
 func (sc syncCtx) String() string                          { return "syncCtx" }
+
+func noopCancelFunc() {
+	// do nothing
+}
+
+// callbackCtx returns the effective Context for a callback, and its CancelFunc,
+// if one is required, given the promise's syncCtx value.
+// syncCtx should be a non-closed Context, or nil.
+func callbackCtx[T any](
+	g *Group[T],
+	syncCtx context.Context,
+) (context.Context, context.CancelFunc) {
+	// default scenario, either no Group or a Group with default behavior.
+	// we return the syncCtx with no cancellation, if one is provided,
+	// otherwise we return Background with cancellation.
+	if g == nil || (g.core.ctx == nil && !g.core.neverCancelCBCtx) {
+		if syncCtx == nil {
+			return newSyncCtx(), nil
+		}
+		return syncCtx, noopCancelFunc
+	}
+
+	// there's a Group, if it's requested to never cancel callback Context,
+	// then we return early with Background and no cancellation.
+	if g.core.neverCancelCBCtx {
+		return context.Background(), noopCancelFunc
+	}
+
+	// there's a Group with a group Context, so create the Context to be returned,
+	// and arrange to close it when the promise's syncCtx is closed, if provided.
+	if syncCtx == nil {
+		return context.WithCancel(g.core.ctx)
+	}
+
+	// TODO: these 2 context calls can be replaced by a JoinContext that will be
+	//  cancelled when any of them is cancelled.
+	ctx, cancel := context.WithCancel(g.core.ctx)
+	context.AfterFunc(syncCtx, cancel)
+	return ctx, cancel
+}

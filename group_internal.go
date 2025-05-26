@@ -48,7 +48,7 @@ type joinOperationLogic interface {
 // the resMu must be locked before entering.
 func (g *Group[T]) getSingleCallResSnapshot() GroupRes[T] {
 	if g.core.saveAllGroupResults {
-		front := g.core.resQ.Front()
+		front := g.resQ.Front()
 		if front == nil {
 			return GroupRes[T]{}
 		}
@@ -56,8 +56,7 @@ func (g *Group[T]) getSingleCallResSnapshot() GroupRes[T] {
 	}
 
 	// fetch the call's result from the history.
-	resHist, _ := g.core.resHist.(*groupResHistory[T])
-	return resHist.getRes()
+	return g.resHist.getRes()
 }
 
 func (g *Group[T]) selectRes() Result[GroupRes[T]] {
@@ -72,7 +71,7 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 	select {
 	case <-groupDone:
 		// fast-path, for a zero or a done [Group], with no unneeded allocations.
-		g.core.resMu.RLock()
+		g.resMu.RLock()
 		// for a zero [Group] we return a [Success] and empty [Result],
 		// otherwise we return the existing [Result].
 		callResState := Success
@@ -81,7 +80,7 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 			callResState = res.State()
 			callRes = res
 		}
-		g.core.resMu.RUnlock()
+		g.resMu.RUnlock()
 
 		return newSingleRes(callResState, callRes)
 	default:
@@ -90,13 +89,13 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 		var targetFound bool
 
 		// if there was a previous [Result], return early with it.
-		g.core.resMu.RLock()
+		g.resMu.RLock()
 		if res := g.getSingleCallResSnapshot(); res.Result != nil {
 			callResState = res.State()
 			callRes = res
 			targetFound = true
 		}
-		g.core.resMu.RUnlock()
+		g.resMu.RUnlock()
 
 		// we found our target, so return the expected [Result] values.
 		if targetFound {
@@ -118,12 +117,12 @@ func (g *Group[T]) selectResSlow(groupDone <-chan struct{}) Result[GroupRes[T]] 
 
 	// record this 'groupCall' in the 'callsQ' for this [Group], enforcing
 	// all promises that observe it to wait and send the result to it.
-	g.core.callsQMu.Lock()
-	call := g.core.callsQ.PushBack(groupCall[T]{
+	g.callsQMu.Lock()
+	call := g.callsQ.PushBack(groupCall[T]{
 		resChan:  resChan,
 		syncChan: syncChan,
 	})
-	g.core.callsQMu.Unlock()
+	g.callsQMu.Unlock()
 
 	// wait for a [Result], or for the [Group] to be done.
 	var callResState State
@@ -142,9 +141,9 @@ func (g *Group[T]) selectResSlow(groupDone <-chan struct{}) Result[GroupRes[T]] 
 	close(syncChan)
 
 	// remove this 'groupCall' from the 'callsQ', now that it's no longer active.
-	g.core.callsQMu.Lock()
-	g.core.callsQ.Remove(call)
-	g.core.callsQMu.Unlock()
+	g.callsQMu.Lock()
+	g.callsQ.Remove(call)
+	g.callsQMu.Unlock()
 
 	return newSingleRes(callResState, callRes)
 }
@@ -165,17 +164,16 @@ func (g *Group[T]) selectResSlow(groupDone <-chan struct{}) Result[GroupRes[T]] 
 // the 'resMu' must be locked before entering.
 func (g *Group[T]) getMultiCallResSnapshot(callResState State, callResLen int) []GroupRes[T] {
 	if g.core.saveAllGroupResults {
-		callResLen += g.core.resQ.Len()
+		callResLen += g.resQ.Len()
 		callRes := make([]GroupRes[T], 0, callResLen)
-		for res := g.core.resQ.Front(); res != nil; res = res.Next() {
+		for res := g.resQ.Front(); res != nil; res = res.Next() {
 			callRes = append(callRes, res.Value.(GroupRes[T]))
 		}
 		return callRes
 	}
 
 	// fetch the call's result from the history.
-	resHist, _ := g.core.resHist.(*groupResHistory[T])
-	res := resHist.getStateRes(callResState)
+	res := g.resHist.getStateRes(callResState)
 
 	// if no matching [Result] is found, either return nil, or return
 	// the new callResLen with the expected cap.
@@ -196,23 +194,23 @@ func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
 
 	select {
 	case <-groupDone:
-		g.core.resMu.RLock()
+		g.resMu.RLock()
 		// get the 'callResState' from the [Group]'s state history.
 		// for a zero [Group] we return a [Success] and empty [Result],
 		// otherwise we return the existing [Result].
-		callResState := op.InitState(g.core.resStateHist)
+		callResState := op.InitState(g.resStateHist)
 
 		// if this is a zero [Group], or the call ignores the current
 		// [Group] state, use the [Group]'s highest [State] instead,
 		// as there are no other promises running and the current state
 		// history is all we get.
 		if callResState == unknown {
-			callResState = calcGroupResState(g.core.resStateHist)
+			callResState = calcGroupResState(g.resStateHist)
 		}
 
 		// get the 'callRes' from this [Group] based on the 'callResState'.
 		callRes := g.getMultiCallResSnapshot(callResState, 0)
-		g.core.resMu.RUnlock()
+		g.resMu.RUnlock()
 
 		return newMultiRes(callResState, callRes)
 	default:
@@ -224,13 +222,13 @@ func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
 			var callRes []GroupRes[T]
 			var targetFound bool
 
-			g.core.resMu.RLock()
-			callResState := op.InitState(g.core.resStateHist)
+			g.resMu.RLock()
+			callResState := op.InitState(g.resStateHist)
 			if op.IsTargetState(callResState) {
 				callRes = g.getMultiCallResSnapshot(callResState, 0)
 				targetFound = true
 			}
-			g.core.resMu.RUnlock()
+			g.resMu.RUnlock()
 
 			if targetFound {
 				return newMultiRes(callResState, callRes)
@@ -258,12 +256,12 @@ func (g *Group[T]) joinResSlow(
 
 	// record this 'groupCall' in the 'callsQ' for this [Group], enforcing
 	// all promises that observe it to wait and send the result to it.
-	g.core.callsQMu.Lock()
-	call := g.core.callsQ.PushBack(groupCall[T]{
+	g.callsQMu.Lock()
+	call := g.callsQ.PushBack(groupCall[T]{
 		resChan:  resChan,
 		syncChan: syncChan,
 	})
-	g.core.callsQMu.Unlock()
+	g.callsQMu.Unlock()
 
 	// init the result fields, and account for the [Group] state.
 	var callResState State
@@ -271,8 +269,8 @@ func (g *Group[T]) joinResSlow(
 	var targetFound bool
 	if op.ReturnOnTargetState() {
 		// we want an early return, once the target [Result] is found.
-		g.core.resMu.RLock()
-		callResState = op.InitState(g.core.resStateHist)
+		g.resMu.RLock()
+		callResState = op.InitState(g.resStateHist)
 		if op.IsTargetState(callResState) {
 			// we found our target, so return the expected [Result] values.
 			callRes = g.getMultiCallResSnapshot(callResState, 0)
@@ -282,7 +280,7 @@ func (g *Group[T]) joinResSlow(
 			callResLen := g.core.sg.ActiveCount()
 			callRes = g.getMultiCallResSnapshot(callResState, int(callResLen))
 		}
-		g.core.resMu.RUnlock()
+		g.resMu.RUnlock()
 	} else {
 		// we want to wait for all promises, active and pending, so
 		// init the result array with the expected results number.
@@ -315,11 +313,11 @@ func (g *Group[T]) joinResSlow(
 
 		// get the [State] of this [Group], and a snapshot of its [Result],
 		// expecting at least all ongoing promises to be included.
-		g.core.resMu.RLock()
-		callResState = op.InitState(g.core.resStateHist)
+		g.resMu.RLock()
+		callResState = op.InitState(g.resStateHist)
 		callResLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
 		callRes = g.getMultiCallResSnapshot(callResState, int(callResLen))
-		g.core.resMu.RUnlock()
+		g.resMu.RUnlock()
 	}
 
 	// loop over the 'resChan', if the target [State] is not found yet,
@@ -352,9 +350,9 @@ resultLoop:
 	}
 
 	// remove this 'groupCall' from the 'callsQ', now that it's no longer active.
-	g.core.callsQMu.Lock()
-	g.core.callsQ.Remove(call)
-	g.core.callsQMu.Unlock()
+	g.callsQMu.Lock()
+	g.callsQ.Remove(call)
+	g.callsQMu.Unlock()
 
 	return newMultiRes(callResState, callRes)
 }

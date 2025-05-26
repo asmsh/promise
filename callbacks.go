@@ -16,60 +16,60 @@ package promise
 
 import "context"
 
-type callbackFunc[PrevResT, NewResT any] interface {
-	call(ctx context.Context, res Result[PrevResT]) Result[NewResT]
+type callbackFunc[PrevT, NextT any] interface {
+	call(ctx context.Context, res Result[PrevT]) Result[NextT]
 }
 
-type goCallback[PrevResT, NewResT any] func()
-type goErrCallback[PrevResT, NewResT any] func() error
-type goResCallback[PrevResT, NewResT any] func(ctx context.Context) Result[NewResT]
-type followCallback[PrevResT, NewResT any] func(ctx context.Context, res Result[PrevResT]) Result[NewResT]
-type finallyCallback[PrevResT, NewResT any] func(ctx context.Context)
-type callbackCallback[PrevResT, NewResT any] func(ctx context.Context, res Result[PrevResT])
+type goCallback[PrevT, NextT any] func()
+type goErrCallback[PrevT, NextT any] func() error
+type goResCallback[PrevT, NextT any] func(ctx context.Context) Result[NextT]
+type followCallback[PrevT, NextT any] func(ctx context.Context, res Result[PrevT]) Result[NextT]
+type finallyCallback[PrevT, NextT any] func(ctx context.Context)
+type callbackCallback[PrevT, NextT any] func(ctx context.Context, res Result[PrevT])
 
-func (cb goCallback[PrevResT, NewResT]) call(context.Context, Result[PrevResT]) Result[NewResT] {
+func (cb goCallback[PrevT, NextT]) call(context.Context, Result[PrevT]) Result[NextT] {
 	cb()
 	return nil
 }
-func (cb goErrCallback[PrevResT, NewResT]) call(context.Context, Result[PrevResT]) Result[NewResT] {
+func (cb goErrCallback[PrevT, NextT]) call(context.Context, Result[PrevT]) Result[NextT] {
 	if err := cb(); err != nil {
-		return ErrRes[NewResT](err)
+		return ErrRes[NextT](err)
 	}
 	return nil
 }
-func (cb goResCallback[PrevResT, NewResT]) call(ctx context.Context, _ Result[PrevResT]) Result[NewResT] {
+func (cb goResCallback[PrevT, NextT]) call(ctx context.Context, _ Result[PrevT]) Result[NextT] {
 	return cb(ctx)
 }
-func (cb followCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
+func (cb followCallback[PrevT, NextT]) call(ctx context.Context, res Result[PrevT]) Result[NextT] {
 	return cb(ctx, getFinalRes(res))
 }
-func (cb finallyCallback[PrevResT, NewResT]) call(ctx context.Context, _ Result[PrevResT]) Result[NewResT] {
+func (cb finallyCallback[PrevT, NextT]) call(ctx context.Context, _ Result[PrevT]) Result[NextT] {
 	cb(ctx)
 	return nil
 }
-func (cb callbackCallback[PrevResT, NewResT]) call(ctx context.Context, res Result[PrevResT]) Result[NewResT] {
+func (cb callbackCallback[PrevT, NextT]) call(ctx context.Context, res Result[PrevT]) Result[NextT] {
 	cb(ctx, getFinalRes(res))
 	return nil
 }
 
-func runCallbackHandler[PrevValT, NewValT any](
-	p *Promise[NewValT],
-	cb callbackFunc[PrevValT, NewValT],
-	prevRes Result[PrevValT],
+func runCallbackHandler[PrevT, NextT any](
+	nextProm *Promise[NextT],
+	cb callbackFunc[PrevT, NextT],
+	prevRes Result[PrevT],
 	supportNewResult bool,
 	supportHandleReturns bool,
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
 	// create the Result pointer, to keep track of any result returned
-	var newResP *Result[NewValT]
+	var nextResP *Result[NextT]
 	if supportNewResult {
-		newResP = new(Result[NewValT])
+		nextResP = new(Result[NextT])
 	}
 
 	// defer the return handler to handle panics and runtime.Goexit calls
 	if supportHandleReturns {
-		defer handleReturns(p, prevRes, newResP)
+		defer handleReturns(nextProm, prevRes, nextResP)
 	}
 
 	// make sure we close the context once we return from the callback.
@@ -82,7 +82,7 @@ func runCallbackHandler[PrevValT, NewValT any](
 	}
 
 	// run the callback and extract the result
-	newRes := cb.call(ctx, prevRes)
+	nextRes := cb.call(ctx, prevRes)
 
 	// if the callback doesn't support Result returning, return early, as
 	// the rest of the logic isn't relevant anymore.
@@ -91,5 +91,5 @@ func runCallbackHandler[PrevValT, NewValT any](
 	}
 
 	// set the promise result to the returned value
-	*newResP = newRes
+	*nextResP = nextRes
 }

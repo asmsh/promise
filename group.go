@@ -9,15 +9,49 @@ import (
 )
 
 type Group[T any] struct {
-	core groupCore
+	core *groupCore
+	once sync.Once
+
+	// callsQ is used for registering and tracking the [Group]'s join calls,
+	// like [Group.AnyRes], [Group.AllWaitRes], etc.
+	callsQMu sync.RWMutex
+	callsQ   list.List // of groupCall[T]
+
+	// resQ is used to hold all [Result] values returned from promises
+	// that belong to this [Group] when the [GroupConfig.SaveAllGroupResults]
+	// option is set.
+	// it's a linked-list instead of an array, because the size is unpredictable.
+	// resStateHist holds the history of [State] values for all [Promise]
+	// values that was run from this [Group].
+	// resHist holds the history of [Result] values for either first values
+	// or the last ones, depending on the [saveLastSingleGroupResult] flag.
+	// TODO: merge [resStateHist] and [resHist] somehow.
+	//  maybe by making resHist an array of 3 and check them to get
+	//  the resStateHist value, and make saving the 3 result history
+	//  mandatory for all calls.
+	// resMu protects reads and writes to them.
+	resMu        sync.RWMutex
+	resQ         list.List // of GroupRes[T]
+	resStateHist State     // Bitwise OR of previous values
+	resHist      *groupResHistory[T]
 }
 
 func NewGroup[T any](opts ...GroupOption) *Group[T] {
 	g := &Group[T]{}
+	g.init()
 	for _, opt := range opts {
-		opt(&g.core)
+		opt(g.core)
 	}
 	return g
+}
+
+func (g *Group[T]) init() {
+	if g == nil {
+		return
+	}
+	g.once.Do(func() {
+		g.core = &groupCore{}
+	})
 }
 
 func noopRegFunc() {
@@ -28,6 +62,7 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	g.init()
 	if g.isWaiting() {
 		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
 	}
@@ -57,6 +92,7 @@ func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	g.init()
 	if g.isWaiting() {
 		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
 	}
@@ -86,6 +122,7 @@ func (g *Group[T]) GoRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	g.init()
 	if g.isWaiting() {
 		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
 	}
@@ -116,6 +153,7 @@ func (g *Group[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) *Promise[T] {
+	g.init()
 	if g.isWaiting() {
 		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
 	}
@@ -145,6 +183,7 @@ func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
+	g.init()
 	if g.isWaiting() {
 		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
 	}
@@ -169,6 +208,7 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	if ctx == nil {
 		panic(nilCtxPanicMsg)
 	}
+	g.init()
 	if ctx.Done() != nil {
 		return newPromCtx[T](g, ctx)
 	} else if g != nil && g.core.noNilCtxDoneChan {
@@ -191,6 +231,7 @@ func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 //
 //	g.Wait(func() { <-signalChan })
 func (g *Group[T]) Wait(triggers ...func()) {
+	g.init()
 	// execute the trigger functions to block the wait logic until they return.
 	for _, f := range triggers {
 		f()
@@ -200,6 +241,7 @@ func (g *Group[T]) Wait(triggers ...func()) {
 }
 
 func (g *Group[T]) SelectRes(triggers ...func()) Result[GroupRes[T]] {
+	g.init()
 	for _, f := range triggers {
 		f()
 	}
@@ -207,6 +249,7 @@ func (g *Group[T]) SelectRes(triggers ...func()) Result[GroupRes[T]] {
 }
 
 func (g *Group[T]) AllRes(triggers ...func()) Result[[]GroupRes[T]] {
+	g.init()
 	for _, f := range triggers {
 		f()
 	}
@@ -227,6 +270,7 @@ func (g *Group[T]) AllRes(triggers ...func()) Result[[]GroupRes[T]] {
 // It will be a [Panic] if at least one promise was resolved to [Panic].
 // It will be an [Error] if at least one promise was resolved to [Error].
 func (g *Group[T]) AllWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
+	g.init()
 	for _, f := range triggers {
 		f()
 	}
@@ -237,6 +281,7 @@ func (g *Group[T]) AllWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 }
 
 func (g *Group[T]) AnyRes(triggers ...func()) Result[[]GroupRes[T]] {
+	g.init()
 	for _, f := range triggers {
 		f()
 	}
@@ -245,6 +290,7 @@ func (g *Group[T]) AnyRes(triggers ...func()) Result[[]GroupRes[T]] {
 }
 
 func (g *Group[T]) AnyWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
+	g.init()
 	for _, f := range triggers {
 		f()
 	}
@@ -255,6 +301,7 @@ func (g *Group[T]) AnyWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 }
 
 func (g *Group[T]) JoinRes(triggers ...func()) Result[[]GroupRes[T]] {
+	g.init()
 	for _, f := range triggers {
 		f()
 	}
@@ -284,59 +331,20 @@ type groupResHistory[T any] struct {
 }
 
 // the 'resMu' must be locked before entering.
-func (h *groupResHistory[T]) insertRes(res GroupRes[T], saveLast bool) {
+func (h *groupResHistory[T]) insertRes(res GroupRes[T]) {
 	// if we only save the first [Result], then save it in the first empty place.
-	if !saveLast {
-		for i := range h.vals {
-			// found an empty place?
-			if h.vals[i].Result == nil {
-				h.vals[i] = res
-				break
-			}
-
-			// found another [Result] with the same [State]?
-			if h.vals[i].State() == res.State() {
-				break
-			}
+	for i := range h.vals {
+		// found an empty place?
+		if h.vals[i].Result == nil {
+			h.vals[i] = res
+			break
 		}
-		return
+
+		// found another [Result] with the same [State]?
+		if h.vals[i].State() == res.State() {
+			break
+		}
 	}
-
-	// 1- remove the res at the first index, and keep it around.
-	oldRes := h.vals[0]
-
-	// 2- insert the new res at the first index.
-	h.vals[0] = res
-
-	// 3- if the removed res was empty, return.
-	if oldRes.Result == nil {
-		return
-	}
-
-	// 4- if the removed res has the same [State] as the new res, return.
-	if oldRes.State() == res.State() {
-		return
-	}
-
-	// 5- otherwise, find the res that matches the removed res, and swap.
-	// it can only be found at index 1 and 2.
-	if h.vals[1].Result == nil {
-		h.vals[1] = res
-		return
-	} else if h.vals[1].State() == res.State() {
-		h.vals[1] = res
-		return
-	}
-	if h.vals[2].Result == nil {
-		h.vals[2] = res
-		return
-	} else if h.vals[2].State() == res.State() {
-		h.vals[2] = res
-		return
-	}
-
-	// TODO: this is only for testing. make sure to remove.
-	panic("promise: internal: we shouldn't reach this point")
 }
 
 // getRes returns the first most or last most [Result], according to how
@@ -382,6 +390,8 @@ func (h *groupResHistory[T]) getStateRes(state State) (res GroupRes[T]) {
 	return res
 }
 
+// TODO: reach the below criteria.
+// groupCore contains read-only, share-able, or type-agnostic fields only.
 type groupCore struct {
 	debugCB func([]debugEvent)
 
@@ -397,28 +407,6 @@ type groupCore struct {
 	// the waiting functions.
 	sg sema.Group
 
-	// callsQ is used for registering and tracking the [Group]'s join calls,
-	// like [Group.AnyRes], [Group.AllWaitRes], etc.
-	callsQMu sync.RWMutex
-	callsQ   list.List // of groupCall[T]
-
-	// resQ is used to hold all [Result] values returned from promises
-	// that belong to this [Group] when the [GroupConfig.SaveAllGroupResults]
-	// option is set.
-	// it's a linked-list instead of an array, because the size is unpredictable.
-	// resStateHist holds the history of [State] values for all [Promise]
-	// values that was run from this [Group].
-	// resHist holds the history of [Result] values for either first values
-	// or the last ones, depending on the [saveLastSingleGroupResult] flag.
-	// TODO: merge [resStateHist] and [resHist] somehow.
-	//  maybe by making resHist an array of 3 and check them to get
-	//  the resStateHist value.
-	// resMu protects reads and writes to them.
-	resMu        sync.RWMutex
-	resQ         list.List // of GroupRes[T]
-	resStateHist State     // Bitwise OR of previous values
-	resHist      any       // of *groupResHistory[T]
-
 	// ctx will be non-nil if the Group is meant to close all Context values
 	// once any Promise that's created using it panics or returns an error.
 	// if neverCancelCBCtx is true, these 2 fields will be unset.
@@ -426,12 +414,11 @@ type groupCore struct {
 	cancel context.CancelFunc
 
 	// flags for options...
-	neverCancelCBCtx          bool
-	onetimeHandling           bool
-	noNilCtxDoneChan          bool
-	noWaitingBusyGroup        bool
-	saveAllGroupResults       bool
-	saveLastSingleGroupResult bool
+	neverCancelCBCtx    bool
+	onetimeHandling     bool
+	noNilCtxDoneChan    bool
+	noWaitingBusyGroup  bool
+	saveAllGroupResults bool
 }
 
 func (g *Group[T]) isWaiting() bool {
@@ -473,41 +460,4 @@ func (g *Group[T]) freeGoroutine() {
 		return
 	}
 	g.core.sg.Free()
-}
-
-func noopCancelFunc() {
-	// do nothing
-}
-
-// callbackCtx returns the effective Context for a callback, and its CancelFunc,
-// if one is required, given the promise's syncCtx value.
-// syncCtx should be a non-closed Context, or nil.
-func (g *Group[T]) callbackCtx(syncCtx context.Context) (context.Context, context.CancelFunc) {
-	// default scenario, either no Group or a Group with default behavior.
-	// we return the syncCtx with no cancellation, if one is provided,
-	// otherwise we return Background with cancellation.
-	if g == nil || (g.core.ctx == nil && !g.core.neverCancelCBCtx) {
-		if syncCtx == nil {
-			return newSyncCtx(), nil
-		}
-		return syncCtx, noopCancelFunc
-	}
-
-	// there's a Group, if it's requested to never cancel callback Context,
-	// then we return early with Background and no cancellation.
-	if g.core.neverCancelCBCtx {
-		return context.Background(), noopCancelFunc
-	}
-
-	// there's a Group with a group Context, so create the Context to be returned,
-	// and arrange to close it when the promise's syncCtx is closed, if provided.
-	if syncCtx == nil {
-		return context.WithCancel(g.core.ctx)
-	}
-
-	// TODO: these 2 context calls can be replaced by a JoinContext that will be
-	//  cancelled when any of them is cancelled.
-	ctx, cancel := context.WithCancel(g.core.ctx)
-	context.AfterFunc(syncCtx, cancel)
-	return ctx, cancel
 }
