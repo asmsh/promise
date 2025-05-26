@@ -435,7 +435,9 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 	// save the group state and result for calls added later.
 	p.group.core.resMu.Lock()
 	groupRes := GroupRes[T]{Result: res}
+
 	p.group.core.resStateHist |= res.State()
+
 	if p.group.core.saveAllGroupResults {
 		p.group.core.resQ.PushBack(groupRes)
 	} else {
@@ -446,6 +448,7 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 		}
 		resHist.insertRes(groupRes, p.group.core.saveLastSingleGroupResult)
 	}
+
 	debug(p, doneSaveGroupResult)
 	p.group.core.resMu.Unlock()
 

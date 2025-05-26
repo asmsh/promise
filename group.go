@@ -218,15 +218,14 @@ func (g *Group[T]) AllRes(triggers ...func()) Result[[]GroupRes[T]] {
 // on the promises that belong to this [Group].
 // It causes the [Group] to enter the wait mode, and wait for all ongoing promises
 // to return, then examine their [Result] values.
-// It returns the promises [Result] values either from the moment of calling this
-// method.
-// The [Result] of this call will be resolved to [Success] iff all the promises
-// were resolved to [Success].
-// It will be resolved to [Panic] if at least one promise was resolved to [Panic].
-// It will be resolved to [Error] if at least one promise was resolved to [Error].
+// It returns the promises [Result] values either from the start of this [Group],
+// or after the provided triggers have been called, based on the Group option
+// [GroupConfig.SaveAllGroupResults].
 //
-// TODO: // It returns the promises [Result] values either from the moment of calling this
-// // method, or from the start of this [Group], based on the Group option [GroupConfig.SaveAllGroupResults].
+// The [Result] of this call will be a [Success] iff all the promises were
+// resolved to [Success], or it's called on a zero [Group].
+// It will be a [Panic] if at least one promise was resolved to [Panic].
+// It will be an [Error] if at least one promise was resolved to [Error].
 func (g *Group[T]) AllWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 	for _, f := range triggers {
 		f()
@@ -284,7 +283,7 @@ type groupResHistory[T any] struct {
 	vals [3]GroupRes[T]
 }
 
-// the resMu must be locked before entering.
+// the 'resMu' must be locked before entering.
 func (h *groupResHistory[T]) insertRes(res GroupRes[T], saveLast bool) {
 	// if we only save the first [Result], then save it in the first empty place.
 	if !saveLast {
@@ -343,7 +342,7 @@ func (h *groupResHistory[T]) insertRes(res GroupRes[T], saveLast bool) {
 // getRes returns the first most or last most [Result], according to how
 // the values have been saved.
 //
-// the resMu must be locked before entering.
+// the 'resMu' must be locked before entering.
 func (h *groupResHistory[T]) getRes() (res GroupRes[T]) {
 	// if it's not been initialized, return nothing.
 	if h == nil {
@@ -357,7 +356,7 @@ func (h *groupResHistory[T]) getRes() (res GroupRes[T]) {
 // getStateRes returns the GroupRes for the provided [State], or nothing,
 // if no matching GroupRes has been saved for the provided [State].
 //
-// the resMu must be locked before entering.
+// the 'resMu' must be locked before entering.
 func (h *groupResHistory[T]) getStateRes(state State) (res GroupRes[T]) {
 	// if it's not been initialized, return nothing.
 	if h == nil {
@@ -398,8 +397,8 @@ type groupCore struct {
 	// the waiting functions.
 	sg sema.Group
 
-	// callsQ is used for registering and tracking the [Group] Res calls,
-	// like AnyRes, AllWaitRes, etc.
+	// callsQ is used for registering and tracking the [Group]'s join calls,
+	// like [Group.AnyRes], [Group.AllWaitRes], etc.
 	callsQMu sync.RWMutex
 	callsQ   list.List // of groupCall[T]
 
