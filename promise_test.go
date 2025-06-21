@@ -139,7 +139,7 @@ func TestRejection(t *testing.T) {
 			}
 		}()
 
-		p := GoRes(func(ctx context.Context) Result[any] {
+		p := GoCtxRes(func(ctx context.Context) Result[any] {
 			return ErrRes[any](newStrError())
 		}).Catch(func(ctx context.Context, res Result[any]) Result[any] {
 			// handle the error...
@@ -157,7 +157,7 @@ func TestRejection(t *testing.T) {
 			}
 		}()
 
-		p := GoRes(func(ctx context.Context) Result[any] {
+		p := GoCtxRes(func(ctx context.Context) Result[any] {
 			return ErrRes[any](wantErr)
 		})
 		res := p.Res()

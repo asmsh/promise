@@ -27,7 +27,7 @@ func BenchmarkChan(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Chan[any](resChan)
 		}
 		_ = p
@@ -40,7 +40,7 @@ func BenchmarkCtx(b *testing.B) {
 		ctx := context.Background()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Ctx(ctx)
 		}
 		_ = p
@@ -52,7 +52,7 @@ func BenchmarkCtx(b *testing.B) {
 		defer cancel()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Ctx(ctx)
 		}
 		_ = p
@@ -60,62 +60,36 @@ func BenchmarkCtx(b *testing.B) {
 }
 
 func BenchmarkGo(b *testing.B) {
-	b.Run("", func(b *testing.B) {
+	b.Run("Success", func(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Go(func() {})
 		}
 		_ = p
 	})
-}
 
-func BenchmarkGoErr(b *testing.B) {
-	b.Run("nil error", func(b *testing.B) {
+	b.Run("Panic", func(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = GoErr(func() error {
-				return nil
-			})
-		}
-		_ = p
-	})
-
-	b.Run("non-ptr error", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = GoErr(func() error {
-				return newStrError()
-			})
-		}
-		_ = p
-	})
-
-	b.Run("ptr error", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = GoErr(func() error {
-				return newPtrError()
+		for b.Loop() {
+			p = Go(func() {
+				panic("panic")
 			})
 		}
 		_ = p
 	})
 }
 
-func BenchmarkGoRes(b *testing.B) {
+func BenchmarkGoCtxRes(b *testing.B) {
 	b.Run("empty result", func(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = GoRes(func(ctx context.Context) Result[any] {
+		for b.Loop() {
+			p = GoCtxRes(func(ctx context.Context) Result[any] {
 				return EmptyRes[any]()
 			})
 		}
@@ -126,8 +100,8 @@ func BenchmarkGoRes(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = GoRes(func(ctx context.Context) Result[any] {
+		for b.Loop() {
+			p = GoCtxRes(func(ctx context.Context) Result[any] {
 				return ValRes[any]("golang")
 			})
 		}
@@ -138,8 +112,8 @@ func BenchmarkGoRes(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = GoRes(func(ctx context.Context) Result[any] {
+		for b.Loop() {
+			p = GoCtxRes(func(ctx context.Context) Result[any] {
 				return ValErrRes[any]("golang", nil)
 			})
 		}
@@ -150,9 +124,47 @@ func BenchmarkGoRes(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			p = GoRes(func(ctx context.Context) Result[any] {
+		for b.Loop() {
+			p = GoCtxRes(func(ctx context.Context) Result[any] {
 				return ValErrRes[any]("golang", newStrError())
+			})
+		}
+		_ = p
+	})
+}
+
+func BenchmarkGoAny(b *testing.B) {
+	b.Run("nil error", func(b *testing.B) {
+		var p *Promise[any]
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			p = GoAny[any, any](func() error {
+				return nil
+			})
+		}
+		_ = p
+	})
+
+	b.Run("non-ptr error", func(b *testing.B) {
+		var p *Promise[any]
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			p = GoAny[any, int](func() error {
+				return newStrError()
+			})
+		}
+		_ = p
+	})
+
+	b.Run("ptr error", func(b *testing.B) {
+		var p *Promise[any]
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			p = GoAny[any, any](func() error {
+				return newPtrError()
 			})
 		}
 		_ = p
@@ -164,7 +176,7 @@ func BenchmarkDelay(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Delay(EmptyRes[any](), time.Microsecond)
 		}
 		_ = p
@@ -174,7 +186,7 @@ func BenchmarkDelay(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Delay[any](nil, time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
 		}
 		_ = p
@@ -184,7 +196,7 @@ func BenchmarkDelay(b *testing.B) {
 		var p *Promise[string]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Delay(ValRes("golang"), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
 		}
 		_ = p
@@ -195,7 +207,7 @@ func BenchmarkDelay(b *testing.B) {
 		var err = newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Delay(ErrRes[string](err), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
 		}
 		_ = p
@@ -207,7 +219,7 @@ func BenchmarkWrap(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Wrap[any](nil)
 		}
 		_ = p
@@ -217,7 +229,7 @@ func BenchmarkWrap(b *testing.B) {
 		var p *Promise[string]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Wrap(ValRes("golang"))
 		}
 		_ = p
@@ -228,7 +240,7 @@ func BenchmarkWrap(b *testing.B) {
 		var err = newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Wrap(ErrRes[string](err))
 		}
 		_ = p
@@ -239,7 +251,7 @@ func BenchmarkWrap(b *testing.B) {
 		var err = newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			p = Wrap(PanicRes[string](err))
 		}
 		_ = p

@@ -104,7 +104,7 @@ func groupWaitTestHelper[PromiseResT any](
 			continue
 		}
 
-		pp.promise = g.GoRes(func(ctx context.Context) Result[PromiseResT] {
+		pp.promise = g.GoCtxRes(func(ctx context.Context) Result[PromiseResT] {
 			time.Sleep(pp.delay)
 			return pp.res
 		})
@@ -172,7 +172,7 @@ func groupResTestHelper[PromiseResT, GroupResT any](
 			continue
 		}
 
-		pp.promise = g.GoRes(func(ctx context.Context) Result[PromiseResT] {
+		pp.promise = g.GoCtxRes(func(ctx context.Context) Result[PromiseResT] {
 			time.Sleep(pp.delay)
 			return pp.res
 		})
@@ -2022,17 +2022,17 @@ func TestGroup_JoinRes(t *testing.T) {
 
 		g := NewGroup[string]()
 
-		g.GoRes(func(ctx context.Context) Result[string] {
+		g.GoCtxRes(func(ctx context.Context) Result[string] {
 			time.Sleep(1 * time.Millisecond)
 			return ErrRes[string](testStrError("promise1"))
 		})
 
-		g.GoRes(func(ctx context.Context) Result[string] {
+		g.GoCtxRes(func(ctx context.Context) Result[string] {
 			time.Sleep(2 * time.Millisecond)
 			panic(testStrError("promise2"))
 		})
 
-		g.GoRes(func(ctx context.Context) Result[string] {
+		g.GoCtxRes(func(ctx context.Context) Result[string] {
 			time.Sleep(50 * time.Millisecond)
 			panic(testStrError("promise3"))
 		})

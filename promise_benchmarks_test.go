@@ -22,7 +22,7 @@ import (
 )
 
 func getErrorBenchmarkPromise() *Promise[any] {
-	prom := GoRes(func(ctx context.Context) Result[any] {
+	prom := GoCtxRes(func(ctx context.Context) Result[any] {
 		time.Sleep(1 * time.Millisecond)
 		return ErrRes[any](newStrError())
 	})
@@ -35,7 +35,7 @@ func getSuccessBenchmarkPromise(res ...any) *Promise[any] {
 		resVal = res[0]
 	}
 
-	prom := GoRes(func(ctx context.Context) Result[any] {
+	prom := GoCtxRes(func(ctx context.Context) Result[any] {
 		time.Sleep(1 * time.Millisecond)
 		return ValRes(resVal)
 	})

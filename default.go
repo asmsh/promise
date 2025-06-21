@@ -36,34 +36,17 @@ import (
 //
 // It will panic if cb is nil.
 func Go(cb func()) *Promise[any] {
-	return (*Group[any]).Go(nil, cb)
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	p := newPromInter[any](nil)
+	ctx, cancel := callbackCtx[any](nil, p.syncCtx)
+	go goHandler(p, cb, ctx, cancel)
+	return p
 }
 
-// GoErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value that tracks the execution of cb.
-// The [Promise.Res] returns a [Result] value that allows knowing the [State]
-// of cb (via [Result.State]), and the error returned from cb (via [Result.Err]).
-//
-// The [Result.State] will either be [Panic], [Error], or [Success], based on
-// whether cb caused a panic, returned a non-nil error, or returned a nil error,
-// respectively.
-//
-// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
-// that wraps the panic value that occurred.
-// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
-// that wraps the error that cb returned.
-// If the [Result.State] is [Success], [Result.Val] will return nil.
-//
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
-//
-// It will panic if cb is nil.
-func GoErr(cb func() error) *Promise[any] {
-	// TODO: maybe add 'GoCtxErr', as a quick constructor that accepts a Context but returns just an error.
-	return (*Group[any]).GoErr(nil, cb)
-}
-
-// GoRes runs the provided function, cb, in a separate goroutine, and returns
+// GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
 // a [Promise] value that tracks the execution of cb.
 // The [Promise.Res] returns a [Result] value that allows knowing the [State]
 // of cb (via [Result.State]), the error returned from cb (via [Result.Err]),
@@ -83,8 +66,63 @@ func GoErr(cb func() error) *Promise[any] {
 // will return nil.
 //
 // It will panic if cb is nil.
-func GoRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
-	return (*Group[T]).GoRes(nil, cb)
+func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	p := newPromInter[T](nil)
+	ctx, cancel := callbackCtx[T](nil, p.syncCtx)
+	go goCtxResHandler(p, cb, ctx, cancel)
+	return p
+}
+
+// TODO: maybe add 'GoCtxErr', as a quick constructor that accepts a Context but returns just an error.
+
+func GoAny[
+	NextT any,
+	PrevT any,
+	CFuncT CallbackFunc[NextT, PrevT],
+](cb CFuncT) *Promise[NextT] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	nextProm := newPromInter[NextT](nil)
+	ctx, cancel := callbackCtx[NextT](nil, nextProm.syncCtx)
+	go goCallbackHandler(nextProm, CallbackFrom[NextT, PrevT](cb), ctx, cancel)
+	return nextProm
+}
+
+// GoCallback runs the [Callback], cb, in a separate goroutine, and returns
+// a [Promise] value that tracks the execution of cb.
+// The [Promise.Res] returns a [Result] value that allows knowing the [State]
+// of cb (via [Result.State]), and the error returned from cb (via [Result.Err]).
+//
+// The [Result.State] will either be [Panic], [Error], or [Success], based on
+// whether cb caused a panic, returned a non-nil error, or returned a nil error,
+// respectively.
+//
+// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
+// that wraps the panic value that occurred.
+// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
+// that wraps the error that cb returned.
+// If the [Result.State] is [Success], [Result.Val] will return whatever cb
+// returned as a value, if any.
+//
+// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
+// will return nil.
+//
+// It will panic if cb is nil.
+func GoCallback[NextT, PrevT any](cb Callback[NextT, PrevT]) *Promise[NextT] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	nextProm := newPromInter[NextT](nil)
+	ctx, cancel := callbackCtx[NextT](nil, nextProm.syncCtx)
+	go goCallbackHandler(nextProm, cb, ctx, cancel)
+	return nextProm
 }
 
 // Delay returns a [Promise] whose [Promise.Res] returns the provided [Result]
@@ -93,7 +131,10 @@ func GoRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
 func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) *Promise[T] {
 	// TODO: can we use a central scheduler instead of creating new goroutines?
 	// the scheduler can even be per-Group, and a single one for the default Group.
-	return (*Group[T]).Delay(nil, res, d, cond...)
+	p := newPromInter[T](nil)
+	flags := getDelayFlags(cond)
+	go delayHandler(p, res, d, flags)
+	return p
 }
 
 // Chan returns a [Promise] that wraps the provided [Result] channel, resChan,
@@ -110,7 +151,13 @@ func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) *Promise[T]
 //
 // It will panic if resChan is nil.
 func Chan[T any](resChan <-chan Result[T]) *Promise[T] {
-	return (*Group[T]).Chan(nil, resChan)
+	if resChan == nil {
+		panic(nilResChanPanicMsg)
+	}
+
+	p := newPromInter[T](nil)
+	go chanHandler(p, resChan)
+	return p
 }
 
 // Ctx returns a [Promise] that wraps the provided [context.Context] value, ctx,
@@ -127,12 +174,23 @@ func Chan[T any](resChan <-chan Result[T]) *Promise[T] {
 //
 // It will panic if ctx is nil.
 func Ctx(ctx context.Context) *Promise[any] {
-	return (*Group[any]).Ctx(nil, ctx)
+	if ctx == nil {
+		panic(nilCtxPanicMsg)
+	}
+
+	if ctx.Done() != nil {
+		return newPromCtx[any](nil, ctx)
+	}
+
+	// since this ctx value will never be closed, the equivalent outcome would
+	// be a Promise that's never resolved.
+	// so, return that equivalent value without creating any unneeded resources.
+	return newPromBlocked[any]()
 }
 
 // Wrap returns a [Promise] that wraps the provided [Result] value, res,
 // synchronously, without creating any new goroutines.
 // The [Promise.Res] will return the provided res.
 func Wrap[T any](res Result[T]) *Promise[T] {
-	return (*Group[T]).Wrap(nil, res)
+	return newPromSync[T](nil, res)
 }

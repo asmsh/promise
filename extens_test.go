@@ -27,12 +27,12 @@ import (
 func getTestAsyncPromFulfilled(g *Group[string], id int) *Promise[string] {
 	d := 5 * time.Millisecond
 	if g != nil {
-		g.GoRes(func(ctx context.Context) Result[string] {
+		g.GoCtxRes(func(ctx context.Context) Result[string] {
 			time.Sleep(d)
 			return ValRes(fmt.Sprintf("%d hello world async %s", id, d))
 		})
 	}
-	return GoRes(func(ctx context.Context) Result[string] {
+	return GoCtxRes(func(ctx context.Context) Result[string] {
 		time.Sleep(d)
 		return ValRes(fmt.Sprintf("%d hello world async %s", id, d))
 	})
@@ -40,12 +40,12 @@ func getTestAsyncPromFulfilled(g *Group[string], id int) *Promise[string] {
 func getTestAsyncPromFulfilledDelay(g *Group[string], id int) *Promise[string] {
 	d := 1000 * time.Millisecond
 	if g != nil {
-		return g.GoRes(func(ctx context.Context) Result[string] {
+		return g.GoCtxRes(func(ctx context.Context) Result[string] {
 			time.Sleep(d)
 			return ValRes(fmt.Sprintf("%d hello world async %s", id, d))
 		})
 	}
-	return GoRes(func(ctx context.Context) Result[string] {
+	return GoCtxRes(func(ctx context.Context) Result[string] {
 		time.Sleep(d)
 		return ValRes(fmt.Sprintf("%d hello world async %s", id, d))
 	})
@@ -54,12 +54,12 @@ func getTestAsyncPromFulfilledDelay(g *Group[string], id int) *Promise[string] {
 func getTestAsyncPromRejected(g *Group[string], id int) *Promise[string] {
 	d := 5 * time.Millisecond
 	if g != nil {
-		return g.GoRes(func(ctx context.Context) Result[string] {
+		return g.GoCtxRes(func(ctx context.Context) Result[string] {
 			time.Sleep(d)
 			return ErrRes[string](errors.New(fmt.Sprintf("%d hello world async %s", id, d)))
 		})
 	}
-	return GoRes(func(ctx context.Context) Result[string] {
+	return GoCtxRes(func(ctx context.Context) Result[string] {
 		time.Sleep(d)
 		return ErrRes[string](errors.New(fmt.Sprintf("%d hello world async %s", id, d)))
 	})
@@ -67,12 +67,12 @@ func getTestAsyncPromRejected(g *Group[string], id int) *Promise[string] {
 func getTestAsyncPromRejectedDelay(g *Group[string], id int) *Promise[string] {
 	d := 1000 * time.Millisecond
 	if g != nil {
-		return g.GoRes(func(ctx context.Context) Result[string] {
+		return g.GoCtxRes(func(ctx context.Context) Result[string] {
 			time.Sleep(d)
 			return ErrRes[string](errors.New(fmt.Sprintf("%d hello world async %s", id, d)))
 		})
 	}
-	return GoRes(func(ctx context.Context) Result[string] {
+	return GoCtxRes(func(ctx context.Context) Result[string] {
 		time.Sleep(d)
 		return ErrRes[string](errors.New(fmt.Sprintf("%d hello world async %s", id, d)))
 	})
@@ -81,12 +81,12 @@ func getTestAsyncPromRejectedDelay(g *Group[string], id int) *Promise[string] {
 func getTestAsyncPromPanicked(g *Group[string], id int) *Promise[string] {
 	d := 5 * time.Millisecond
 	if g != nil {
-		return g.GoRes(func(ctx context.Context) Result[string] {
+		return g.GoCtxRes(func(ctx context.Context) Result[string] {
 			time.Sleep(d)
 			panic(errors.New(fmt.Sprintf("%d hello world async %s", id, d)))
 		})
 	}
-	return GoRes(func(ctx context.Context) Result[string] {
+	return GoCtxRes(func(ctx context.Context) Result[string] {
 		time.Sleep(d)
 		panic(errors.New(fmt.Sprintf("%d hello world async %s", id, d)))
 	})
@@ -94,44 +94,44 @@ func getTestAsyncPromPanicked(g *Group[string], id int) *Promise[string] {
 func getTestAsyncPromPanickedDelay(g *Group[string], id int) *Promise[string] {
 	d := 1000 * time.Millisecond
 	if g != nil {
-		return g.GoRes(func(ctx context.Context) Result[string] {
+		return g.GoCtxRes(func(ctx context.Context) Result[string] {
 			time.Sleep(d)
 			panic(errors.New(fmt.Sprintf("%d hello world async %s", id, d)))
 		})
 	}
-	return GoRes(func(ctx context.Context) Result[string] {
+	return GoCtxRes(func(ctx context.Context) Result[string] {
 		time.Sleep(d)
 		panic(errors.New(fmt.Sprintf("%d hello world async %s", id, d)))
 	})
 }
 
 var (
-	//asyncPromFulfilled1 = GoRes(func(ctx context.Context) Result[string] {
+	//asyncPromFulfilled1 = GoCtxRes(func(ctx context.Context) Result[string] {
 	//	d := 100 * time.Millisecond
 	//	time.Sleep(d)
 	//	return ValRes("hello world async " + d.String())
 	//})
-	//asyncPromFulfilled2 = GoRes(func(ctx context.Context) Result[string] {
+	//asyncPromFulfilled2 = GoCtxRes(func(ctx context.Context) Result[string] {
 	//	d := 1000 * time.Millisecond
 	//	time.Sleep(d)
 	//	return ValRes("hello world async " + d.String())
 	//})
-	//asyncPromRejected1 = GoRes(func(ctx context.Context) Result[string] {
+	//asyncPromRejected1 = GoCtxRes(func(ctx context.Context) Result[string] {
 	//	d := 100 * time.Millisecond
 	//	time.Sleep(d)
 	//	return ErrRes[string](errors.New("hello world async error " + d.String()))
 	//})
-	//asyncPromRejected2 = GoRes(func(ctx context.Context) Result[string] {
+	//asyncPromRejected2 = GoCtxRes(func(ctx context.Context) Result[string] {
 	//	d := 1000 * time.Millisecond
 	//	time.Sleep(d)
 	//	return ErrRes[string](errors.New("hello world async error " + d.String()))
 	//})
-	//asyncPromPanicked1 = GoRes(func(ctx context.Context) Result[string] {
+	//asyncPromPanicked1 = GoCtxRes(func(ctx context.Context) Result[string] {
 	//	d := 100 * time.Millisecond
 	//	time.Sleep(d)
 	//	panic(errors.New("panic error " + d.String()))
 	//})
-	//asyncPromPanicked2 = GoRes(func(ctx context.Context) Result[string] {
+	//asyncPromPanicked2 = GoCtxRes(func(ctx context.Context) Result[string] {
 	//	d := 1000 * time.Millisecond
 	//	time.Sleep(d)
 	//	panic(errors.New("panic error " + d.String()))
@@ -343,18 +343,18 @@ func TestErrors(t *testing.T) {
 		ips  *Promise[[]IdxRes[any]]
 	}{
 		{
-			name: "GoErr",
-			p: GoErr(func() error {
+			name: "GoAny[any, any]",
+			p: GoAny[any, any](func() error {
 				return newStrError()
 			}),
 		},
 		{
 			name: "Select",
 			ip: Select(
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -362,10 +362,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "All",
 			ips: All(
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -373,10 +373,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "AllWait",
 			ips: AllWait(
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -384,10 +384,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "Any",
 			ips: Any(
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -395,10 +395,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "AnyWait",
 			ips: AnyWait(
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -406,10 +406,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "Join",
 			ips: Join(
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
-				GoErr(func() error {
+				GoAny[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -453,15 +453,15 @@ func TestPanics(t *testing.T) {
 			name:          "nil",
 			externalPanic: true,
 			p: func() *Promise[any] {
-				return GoErr(func() error {
+				return GoAny[any, any](func() error {
 					panic(nil)
 				})
 			},
 		},
 		{
-			name: "GoErr",
+			name: "GoAny[any, any]",
 			p: func() *Promise[any] {
-				return GoErr(func() error {
+				return GoAny[any, any](func() error {
 					panic(newStrError())
 				})
 			},
@@ -470,11 +470,11 @@ func TestPanics(t *testing.T) {
 			name: "Select",
 			ip: func() *Promise[IdxRes[any]] {
 				return Select(
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						panic(newStrError())
 					}),
 				)
@@ -484,17 +484,17 @@ func TestPanics(t *testing.T) {
 			name: "All",
 			ips: func() *Promise[[]IdxRes[any]] {
 				return All(
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						return nil
 					}),
 				)
@@ -504,17 +504,17 @@ func TestPanics(t *testing.T) {
 			name: "AllWait",
 			ips: func() *Promise[[]IdxRes[any]] {
 				return AllWait(
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						return nil
 					}),
 				)
@@ -524,14 +524,14 @@ func TestPanics(t *testing.T) {
 			name: "Any",
 			ips: func() *Promise[[]IdxRes[any]] {
 				return Any(
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
@@ -542,14 +542,14 @@ func TestPanics(t *testing.T) {
 			name: "AnyWait",
 			ips: func() *Promise[[]IdxRes[any]] {
 				return AnyWait(
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						return newStrError()
 					}),
 				)
@@ -560,14 +560,14 @@ func TestPanics(t *testing.T) {
 			noPanic: true,
 			ips: func() *Promise[[]IdxRes[any]] {
 				return Join(
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoErr(func() error {
+					GoAny[any, any](func() error {
 						return nil
 					}),
 				)
@@ -776,16 +776,16 @@ func TestJoin2(t *testing.T) {
 	log.SetFlags(log.Lmicroseconds)
 
 	t.Run("no-sleep", func(t *testing.T) {
-		p1 := GoErr(func() error {
+		p1 := GoAny[any, any](func() error {
 			return errors.New("p1 error")
 		})
-		p2 := GoErr(func() error {
+		p2 := GoAny[any, any](func() error {
 			return errors.New("p2 error")
 		})
-		p3 := GoRes(func(ctx context.Context) Result[any] {
+		p3 := GoCtxRes(func(ctx context.Context) Result[any] {
 			return ValErrRes[any]("never", errors.New("p3 error"))
 		})
-		p4 := GoRes(func(ctx context.Context) Result[any] {
+		p4 := GoCtxRes(func(ctx context.Context) Result[any] {
 			return p1
 		})
 
@@ -808,19 +808,19 @@ func TestJoin2(t *testing.T) {
 	})
 
 	t.Run("with-sleep", func(t *testing.T) {
-		p1 := GoErr(func() error {
+		p1 := GoAny[any, any](func() error {
 			time.Sleep(time.Millisecond * 100)
 			return errors.New("p1 error")
 		})
-		p2 := GoErr(func() error {
+		p2 := GoAny[any, any](func() error {
 			time.Sleep(time.Millisecond * 100)
 			return errors.New("p2 error")
 		})
-		p3 := GoRes(func(ctx context.Context) Result[any] {
+		p3 := GoCtxRes(func(ctx context.Context) Result[any] {
 			time.Sleep(time.Millisecond * 100)
 			return ValErrRes[any]("never", errors.New("p3 error"))
 		})
-		p4 := GoRes(func(ctx context.Context) Result[any] {
+		p4 := GoCtxRes(func(ctx context.Context) Result[any] {
 			time.Sleep(time.Millisecond * 100)
 			return p1
 		})
@@ -844,7 +844,7 @@ func TestJoin2(t *testing.T) {
 	})
 
 	t.Run("other", func(t *testing.T) {
-		p1 := GoErr(func() error {
+		p1 := GoAny[any, any](func() error {
 			panic("p1 panic")
 		})
 		join := Join(p1).Then(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {

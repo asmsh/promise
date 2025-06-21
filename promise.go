@@ -175,44 +175,6 @@ func getFinalRes[T any](res Result[T]) Result[T] {
 	return res
 }
 
-func (p *Promise[T]) Callback(
-	cb func(ctx context.Context, res Result[T]),
-) {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-	if p.group.isWaiting() {
-		return
-	}
-	if p.syncCtx == neverClosedSyncCtx {
-		return
-	}
-	if !p.group.reserveGoroutine(p.regChainRead) {
-		return
-	}
-
-	ctx, cancel := callbackCtx(p.group, nil)
-	debug(p, startHandler, startFollowHandler, startCallbackFollowHandler)
-	go callbackFollowHandler(p, cb, ctx, cancel)
-}
-
-func callbackFollowHandler[T any](
-	prevProm *Promise[T],
-	cb callbackCallback[T, T],
-	ctx context.Context,
-	cancel context.CancelFunc,
-) {
-	// make sure we free this goroutine reservation
-	defer prevProm.group.freeGoroutine()
-
-	// wait the previous promise to be resolved
-	prevProm.waitState()
-
-	// run the callback with the actual promise result
-	runCallbackHandler(nil, cb, prevProm.res, false, false, ctx, cancel)
-	debug(prevProm, endHandler, endFollowHandler, endCallbackFollowHandler)
-}
-
 func (p *Promise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
@@ -264,10 +226,48 @@ func delayFollowHandler[T any](
 	debug(prevProm, endHandler, endFollowHandler, endDelayFollowHandler)
 }
 
+func (p *Promise[T]) Callback(
+	cb func(ctx context.Context, res Result[T]),
+) {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+	if p.group.isWaiting() {
+		return
+	}
+	if p.syncCtx == neverClosedSyncCtx {
+		return
+	}
+	if !p.group.reserveGoroutine(p.regChainRead) {
+		return
+	}
+
+	ctx, cancel := callbackCtx(p.group, nil)
+	debug(p, startHandler, startFollowHandler, startCallbackFollowHandler)
+	go callbackFollowHandler(p, cb, ctx, cancel)
+}
+
+func callbackFollowHandler[T any](
+	prevProm *Promise[T],
+	cb FollowFunc[T],
+	ctx context.Context,
+	cancel context.CancelFunc,
+) {
+	// make sure we free this goroutine reservation
+	defer prevProm.group.freeGoroutine()
+
+	// wait the previous promise to be resolved
+	prevProm.waitState()
+
+	// run the callback with the actual promise result
+	runCallbackHandler[T, T](nil, followFunc[T, T](cb), prevProm.res, false, ctx, cancel)
+	debug(prevProm, endHandler, endFollowHandler, endCallbackFollowHandler)
+}
+
 func (p *Promise[T]) Follow(
-	followCb func(ctx context.Context, res Result[T]) Result[T],
+	cb func(ctx context.Context, res Result[T]) Result[T],
 ) *Promise[T] {
-	if followCb == nil {
+	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 	if p.group.isWaiting() {
@@ -283,14 +283,38 @@ func (p *Promise[T]) Follow(
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
-	go followHandler(p, nextProm, followCb, ctx, cancel)
+	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel)
 	return nextProm
 }
 
-func followHandler[PrevT, NextT any](
+func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+	if p.group.isWaiting() {
+		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	}
+	if p.syncCtx == neverClosedSyncCtx {
+		return p
+	}
+	if !p.group.reserveGoroutine(p.regChainRead) {
+		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+	}
+
+	nextProm := newPromInter[T](p.group)
+	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
+	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
+	go followHandler(p, nextProm, cb, ctx, cancel)
+	return nextProm
+}
+
+func followHandler[
+	NextT any,
+	PrevT any,
+](
 	prevProm *Promise[PrevT],
 	nextProm *Promise[NextT],
-	cb followCallback[PrevT, NextT],
+	cb Callback[NextT, PrevT],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
@@ -307,14 +331,14 @@ func followHandler[PrevT, NextT any](
 	}
 
 	// run the callback with the actual promise result
-	runCallbackHandler(nextProm, cb, res, true, true, ctx, cancel)
+	runCallbackHandler(nextProm, cb, res, true, ctx, cancel)
 	debug(prevProm, endHandler, endFollowHandler, endThenFollowHandler)
 }
 
 func (p *Promise[T]) Then(
-	thenCb func(ctx context.Context, res Result[T]) Result[T],
+	cb func(ctx context.Context, res Result[T]) Result[T],
 ) *Promise[T] {
-	if thenCb == nil {
+	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 	if p.group.isWaiting() {
@@ -330,14 +354,14 @@ func (p *Promise[T]) Then(
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
-	go thenFollowHandler(p, nextProm, thenCb, ctx, cancel)
+	go thenFollowHandler(p, nextProm, cb, ctx, cancel)
 	return nextProm
 }
 
 func thenFollowHandler[T any](
 	prevProm *Promise[T],
 	nextProm *Promise[T],
-	cb followCallback[T, T],
+	cb FollowResFunc[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
@@ -355,14 +379,14 @@ func thenFollowHandler[T any](
 		return
 	}
 
-	runCallbackHandler(nextProm, cb, res, true, true, ctx, cancel)
+	runCallbackHandler(nextProm, followResFunc[T, T](cb), res, true, ctx, cancel)
 	debug(prevProm, endHandler, endFollowHandler, endThenFollowHandler)
 }
 
 func (p *Promise[T]) Catch(
-	catchCb func(ctx context.Context, res Result[T]) Result[T],
+	cb func(ctx context.Context, res Result[T]) Result[T],
 ) *Promise[T] {
-	if catchCb == nil {
+	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 	if p.group.isWaiting() {
@@ -378,14 +402,14 @@ func (p *Promise[T]) Catch(
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startCatchFollowHandler)
-	go catchFollowHandler(p, nextProm, catchCb, ctx, cancel)
+	go catchFollowHandler(p, nextProm, cb, ctx, cancel)
 	return nextProm
 }
 
 func catchFollowHandler[T any](
 	prevProm *Promise[T],
 	nextProm *Promise[T],
-	cb followCallback[T, T],
+	cb FollowResFunc[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
@@ -403,14 +427,14 @@ func catchFollowHandler[T any](
 	// the returned res anyway.
 	res, _ := handleFollow(prevProm, nextProm, false)
 
-	runCallbackHandler(nextProm, cb, res, true, true, ctx, cancel)
+	runCallbackHandler(nextProm, followResFunc[T, T](cb), res, true, ctx, cancel)
 	debug(prevProm, endHandler, endFollowHandler, endCatchFollowHandler)
 }
 
 func (p *Promise[T]) Recover(
-	recoverCb func(ctx context.Context, res Result[T]) Result[T],
+	cb func(ctx context.Context, res Result[T]) Result[T],
 ) *Promise[T] {
-	if recoverCb == nil {
+	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 	if p.group.isWaiting() {
@@ -426,14 +450,14 @@ func (p *Promise[T]) Recover(
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startRecoverFollowHandler)
-	go recoverFollowHandler(p, nextProm, recoverCb, ctx, cancel)
+	go recoverFollowHandler(p, nextProm, cb, ctx, cancel)
 	return nextProm
 }
 
 func recoverFollowHandler[T any](
 	prevProm *Promise[T],
 	nextProm *Promise[T],
-	cb followCallback[T, T],
+	cb FollowResFunc[T, T],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
@@ -451,7 +475,7 @@ func recoverFollowHandler[T any](
 		return
 	}
 
-	runCallbackHandler(nextProm, cb, res, true, true, ctx, cancel)
+	runCallbackHandler(nextProm, followResFunc[T, T](cb), res, true, ctx, cancel)
 	debug(prevProm, endHandler, endFollowHandler, endRecoverFollowHandler)
 }
 
@@ -483,15 +507,20 @@ func (p *Promise[T]) Finally(
 // if we made the finally a normal 'follow' method(like then,..), it will be
 // possible to call it on a panicked promise and return a Success promise,
 // and the panic will be dismissed implicitly, which is something we don't want.
+//
+// Follow vs Finally: Finally doesn't mark the receiver Promise as handled,
+// which make it useful for cleanup without changing the call flow that would
+// trigger the Unhanded callbacks logic of a Group.
+// However, Follow marks the receiver Promise as handled.
 func finallyFollowHandler[T any](
 	prevProm *Promise[T],
 	nextProm *Promise[T],
-	cb finallyCallback[T, T],
+	cb CtxFunc,
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
 	defer prevProm.group.freeGoroutine()
 	prevProm.waitState()
-	runCallbackHandler(nextProm, cb, prevProm.res, false, true, ctx, cancel)
+	runCallbackHandler(nextProm, ctxFunc[T, T](cb), prevProm.res, true, ctx, cancel)
 	debug(prevProm, endHandler, endFollowHandler, endFinallyFollowHandler)
 }

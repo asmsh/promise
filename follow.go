@@ -14,9 +14,11 @@
 
 package promise
 
-import "context"
+import (
+	"fmt"
+)
 
-func followGroup[PrevT, NextT any](prevG *Group[PrevT]) (nextG *Group[NextT]) {
+func followGroup[NextT, PrevT any](prevG *Group[PrevT]) (nextG *Group[NextT]) {
 	prevG.init()
 	if prevG != nil {
 		nextG = &Group[NextT]{core: prevG.core}
@@ -24,23 +26,53 @@ func followGroup[PrevT, NextT any](prevG *Group[PrevT]) (nextG *Group[NextT]) {
 	return nextG
 }
 
-func Follow[PrevT, NextT any](
+func Follow[
+	NextT any,
+	PrevT any,
+	CT CallbackFunc[NextT, PrevT],
+](
 	p *Promise[PrevT],
-	followCb func(ctx context.Context, res Result[PrevT]) Result[NextT],
+	cb CT,
 ) *Promise[NextT] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 
-	nextGroup := followGroup[PrevT, NextT](p.group)
+	nextGroup := followGroup[NextT, PrevT](p.group)
 	if nextGroup.isWaiting() {
 		return newPromSync[NextT](nextGroup, errPromiseGroupDoneResult[NextT]{})
 	}
-
 	if p.syncCtx == neverClosedSyncCtx {
 		return newPromBlocked[NextT]()
 	}
+	if !nextGroup.reserveGoroutine(p.regChainRead) {
+		return newPromSync[NextT](nextGroup, errPromiseGroupBusyResult[NextT]{})
+	}
 
+	nextProm := newPromInter[NextT](nextGroup)
+	ctx, cancel := callbackCtx(nextGroup, nextProm.syncCtx)
+	go followHandler(p, nextProm, CallbackFrom[NextT, PrevT](cb), ctx, cancel)
+	return nextProm
+}
+
+func FollowCallback[
+	NextT any,
+	PrevT any,
+](
+	p *Promise[PrevT],
+	cb Callback[NextT, PrevT],
+) *Promise[NextT] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	nextGroup := followGroup[NextT, PrevT](p.group)
+	if nextGroup.isWaiting() {
+		return newPromSync[NextT](nextGroup, errPromiseGroupDoneResult[NextT]{})
+	}
+	if p.syncCtx == neverClosedSyncCtx {
+		return newPromBlocked[NextT]()
+	}
 	if !nextGroup.reserveGoroutine(p.regChainRead) {
 		return newPromSync[NextT](nextGroup, errPromiseGroupBusyResult[NextT]{})
 	}
@@ -49,4 +81,49 @@ func Follow[PrevT, NextT any](
 	ctx, cancel := callbackCtx(nextGroup, nextProm.syncCtx)
 	go followHandler(p, nextProm, cb, ctx, cancel)
 	return nextProm
+}
+
+func CallbackFrom[
+	NextT any,
+	PrevT any,
+	CFuncT CallbackFunc[NextT, PrevT],
+](
+	cbFunc CFuncT,
+) Callback[NextT, PrevT] {
+	switch cbFuncVal := any(cbFunc).(type) {
+	case GoFunc:
+		return goFunc[NextT, PrevT](cbFuncVal)
+	case GoErrFunc:
+		return goErrFunc[NextT, PrevT](cbFuncVal)
+	case GoValFunc[NextT]:
+		return goValFunc[NextT, PrevT](cbFuncVal)
+	case GoValErrFunc[NextT]:
+		return goValErrFunc[NextT, PrevT](cbFuncVal)
+	case GoResFunc[NextT]:
+		return goResFunc[NextT, PrevT](cbFuncVal)
+	case CtxFunc:
+		return ctxFunc[NextT, PrevT](cbFuncVal)
+	case CtxErrFunc:
+		return ctxErrFunc[NextT, PrevT](cbFuncVal)
+	case CtxValFunc[NextT]:
+		return ctxValFunc[NextT, PrevT](cbFuncVal)
+	case CtxValErrFunc[NextT]:
+		return ctxValErrFunc[NextT, PrevT](cbFuncVal)
+	case CtxResFunc[NextT]:
+		return ctxResFunc[NextT, PrevT](cbFuncVal)
+	case FollowFunc[PrevT]:
+		return followFunc[NextT, PrevT](cbFuncVal)
+	case FollowErrFunc[PrevT]:
+		return followErrFunc[NextT, PrevT](cbFuncVal)
+	case FollowValFunc[NextT, PrevT]:
+		return followValFunc[NextT, PrevT](cbFuncVal)
+	case FollowValErrFunc[NextT, PrevT]:
+		return followValErrFunc[NextT, PrevT](cbFuncVal)
+	case FollowResFunc[NextT, PrevT]:
+		return followResFunc[NextT, PrevT](cbFuncVal)
+	default:
+		// this will only happen if we added support to a new callback type,
+		// in the [CallbackFunc] constraint, without adding a case for it here.
+		panic(fmt.Sprintf("promise: internal: received unsupported callback type: %#v", cbFunc))
+	}
 }

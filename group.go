@@ -71,7 +71,7 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 	}
 
 	p := newPromInter[T](g)
-	ctx, cancel := g.callbackCtx(p.syncCtx)
+	ctx, cancel := callbackCtx(g, p.syncCtx)
 	debug(p, startHandler, startConstrHandler, startConstrGoHandler)
 	go goHandler(p, cb, ctx, cancel)
 	return p
@@ -79,16 +79,16 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 
 func goHandler[T any](
 	p *Promise[T],
-	cb goCallback[T, T],
+	cb GoFunc,
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
 	defer p.group.freeGoroutine()
-	runCallbackHandler[T, T](p, cb, nil, false, true, ctx, cancel)
+	runCallbackHandler[T, T](p, goFunc[T, T](cb), nil, true, ctx, cancel)
 	debug(p, endHandler, endConstrHandler, endConstrGoHandler)
 }
 
-func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
+func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
@@ -101,50 +101,50 @@ func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
 	}
 
 	p := newPromInter[T](g)
-	ctx, cancel := g.callbackCtx(p.syncCtx)
-	debug(p, startHandler, startConstrHandler, startConstrGoErrHandler)
-	go goErrHandler(p, cb, ctx, cancel)
-	return p
-}
-
-func goErrHandler[T any](
-	p *Promise[T],
-	cb goErrCallback[T, T],
-	ctx context.Context,
-	cancel context.CancelFunc,
-) {
-	defer p.group.freeGoroutine()
-	runCallbackHandler[T, T](p, cb, nil, true, true, ctx, cancel)
-	debug(p, endHandler, endConstrHandler, endConstrGoErrHandler)
-}
-
-func (g *Group[T]) GoRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-	g.init()
-	if g.isWaiting() {
-		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
-	}
-	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
-	}
-
-	p := newPromInter[T](g)
-	ctx, cancel := g.callbackCtx(p.syncCtx)
+	ctx, cancel := callbackCtx(g, p.syncCtx)
 	debug(p, startHandler, startConstrHandler, startConstrGoResHandler)
-	go goResHandler(p, cb, ctx, cancel)
+	go goCtxResHandler(p, cb, ctx, cancel)
 	return p
 }
 
-func goResHandler[T any](
+func goCtxResHandler[T any](
 	p *Promise[T],
-	cb goResCallback[T, T],
+	cb CtxResFunc[T],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
 	defer p.group.freeGoroutine()
-	runCallbackHandler[T, T](p, cb, nil, true, true, ctx, cancel)
+	runCallbackHandler[T, T](p, ctxResFunc[T, T](cb), nil, true, ctx, cancel)
+	debug(p, endHandler, endConstrHandler, endConstrGoResHandler)
+}
+
+func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+	g.init()
+	if g.isWaiting() {
+		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	}
+	if !g.reserveGoroutine(noopRegFunc) {
+		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+	}
+
+	p := newPromInter[T](g)
+	ctx, cancel := callbackCtx(g, p.syncCtx)
+	debug(p, startHandler, startConstrHandler, startConstrGoResHandler)
+	go goCallbackHandler(p, cb, ctx, cancel)
+	return p
+}
+
+func goCallbackHandler[NextT, PrevT any](
+	p *Promise[NextT],
+	cb Callback[NextT, PrevT],
+	ctx context.Context,
+	cancel context.CancelFunc,
+) {
+	defer p.group.freeGoroutine()
+	runCallbackHandler[NextT, PrevT](p, cb, nil, true, ctx, cancel)
 	debug(p, endHandler, endConstrHandler, endConstrGoResHandler)
 }
 
@@ -214,6 +214,7 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	} else if g != nil && g.core.noNilCtxDoneChan {
 		return newPromSync[T](g, errPromiseCtxNilDoneResult[T]{})
 	}
+
 	// since this ctx value will never be closed, the equivalent outcome would
 	// be a Promise that's never resolved.
 	// so, return that equivalent value without creating any unneeded resources.

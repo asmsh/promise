@@ -16,59 +16,66 @@ package promise
 
 import "context"
 
-type callbackFunc[PrevT, NextT any] interface {
-	call(ctx context.Context, res Result[PrevT]) Result[NextT]
+type (
+	GoFunc                  = func()
+	GoErrFunc               = func() error
+	GoValFunc[NextT any]    = func() NextT
+	GoValErrFunc[NextT any] = func() (NextT, error)
+	GoResFunc[NextT any]    = func() Result[NextT]
+
+	CtxFunc                  = func(context.Context)
+	CtxErrFunc               = func(context.Context) error
+	CtxValFunc[NextT any]    = func(context.Context) NextT
+	CtxValErrFunc[NextT any] = func(context.Context) (NextT, error)
+	CtxResFunc[NextT any]    = func(context.Context) Result[NextT]
+
+	// the following are only for Follow methods,
+	// as they accept a prevRes argument...
+
+	FollowFunc[PrevT any]              = func(context.Context, Result[PrevT])
+	FollowErrFunc[PrevT any]           = func(context.Context, Result[PrevT]) error
+	FollowValFunc[NextT, PrevT any]    = func(context.Context, Result[PrevT]) NextT
+	FollowValErrFunc[NextT, PrevT any] = func(context.Context, Result[PrevT]) (NextT, error)
+	FollowResFunc[NextT, PrevT any]    = func(context.Context, Result[PrevT]) Result[NextT]
+)
+
+// CallbackFunc is a type constraint representing the different signatures
+// for supported callback functions for the different functions and methods.
+type CallbackFunc[NextT, PrevT any] interface {
+	// no type approximation is used (~), hence no user defined types allowed.
+	// might change if this happens: https://github.com/golang/go/issues/45380
+
+	GoFunc | GoErrFunc | CtxFunc | CtxErrFunc |
+		GoValFunc[NextT] | GoResFunc[NextT] | CtxValFunc[NextT] |
+		CtxValErrFunc[NextT] | CtxResFunc[NextT] |
+		GoValErrFunc[PrevT] | FollowFunc[PrevT] | FollowErrFunc[PrevT] |
+		FollowValFunc[NextT, PrevT] | FollowValErrFunc[NextT, PrevT] |
+		FollowResFunc[NextT, PrevT]
 }
 
-type goCallback[PrevT, NextT any] func()
-type goErrCallback[PrevT, NextT any] func() error
-type goResCallback[PrevT, NextT any] func(ctx context.Context) Result[NextT]
-type followCallback[PrevT, NextT any] func(ctx context.Context, res Result[PrevT]) Result[NextT]
-type finallyCallback[PrevT, NextT any] func(ctx context.Context)
-type callbackCallback[PrevT, NextT any] func(ctx context.Context, res Result[PrevT])
-
-func (cb goCallback[PrevT, NextT]) call(context.Context, Result[PrevT]) Result[NextT] {
-	cb()
-	return nil
-}
-func (cb goErrCallback[PrevT, NextT]) call(context.Context, Result[PrevT]) Result[NextT] {
-	if err := cb(); err != nil {
-		return ErrRes[NextT](err)
-	}
-	return nil
-}
-func (cb goResCallback[PrevT, NextT]) call(ctx context.Context, _ Result[PrevT]) Result[NextT] {
-	return cb(ctx)
-}
-func (cb followCallback[PrevT, NextT]) call(ctx context.Context, res Result[PrevT]) Result[NextT] {
-	return cb(ctx, getFinalRes(res))
-}
-func (cb finallyCallback[PrevT, NextT]) call(ctx context.Context, _ Result[PrevT]) Result[NextT] {
-	cb(ctx)
-	return nil
-}
-func (cb callbackCallback[PrevT, NextT]) call(ctx context.Context, res Result[PrevT]) Result[NextT] {
-	cb(ctx, getFinalRes(res))
-	return nil
+type Callback[NextT, PrevT any] interface {
+	// Call executes the actual callback logic.
+	// prevRes might be nil, if the backing callback is called
+	// in a constructor, and not in a follow method.
+	Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT])
 }
 
-func runCallbackHandler[PrevT, NextT any](
+func runCallbackHandler[
+	NextT any,
+	PrevT any,
+](
 	nextProm *Promise[NextT],
-	cb callbackFunc[PrevT, NextT],
+	cb Callback[NextT, PrevT],
 	prevRes Result[PrevT],
-	supportNewResult bool,
 	supportHandleReturns bool,
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	// create the Result pointer, to keep track of any result returned
+	// create the Result pointer, and defer the result handler, to track
+	// any result returned, and ensure panic and runtime.Goexit recovery.
 	var nextResP *Result[NextT]
-	if supportNewResult {
-		nextResP = new(Result[NextT])
-	}
-
-	// defer the return handler to handle panics and runtime.Goexit calls
 	if supportHandleReturns {
+		nextResP = new(Result[NextT])
 		defer handleReturns(nextProm, prevRes, nextResP)
 	}
 
@@ -82,14 +89,92 @@ func runCallbackHandler[PrevT, NextT any](
 	}
 
 	// run the callback and extract the result
-	nextRes := cb.call(ctx, prevRes)
+	nextRes := cb.Call(ctx, prevRes)
 
-	// if the callback doesn't support Result returning, return early, as
-	// the rest of the logic isn't relevant anymore.
-	if !supportNewResult {
+	// if the callback doesn't support returning Result, return early,
+	// as the rest of the logic isn't relevant anymore.
+	if nextResP == nil {
 		return
 	}
 
 	// set the promise result to the returned value
 	*nextResP = nextRes
+}
+
+type (
+	goFunc[NextT, PrevT any]       func()
+	goErrFunc[NextT, PrevT any]    func() error
+	goValFunc[NextT, PrevT any]    func() NextT
+	goValErrFunc[NextT, PrevT any] func() (NextT, error)
+	goResFunc[NextT, PrevT any]    func() Result[NextT]
+
+	ctxFunc[NextT, PrevT any]       func(context.Context)
+	ctxErrFunc[NextT, PrevT any]    func(context.Context) error
+	ctxValFunc[NextT, PrevT any]    func(context.Context) NextT
+	ctxValErrFunc[NextT, PrevT any] func(context.Context) (NextT, error)
+	ctxResFunc[NextT, PrevT any]    func(context.Context) Result[NextT]
+
+	followFunc[NextT, PrevT any]       func(context.Context, Result[PrevT])
+	followErrFunc[NextT, PrevT any]    func(context.Context, Result[PrevT]) error
+	followValFunc[NextT, PrevT any]    func(context.Context, Result[PrevT]) NextT
+	followValErrFunc[NextT, PrevT any] func(context.Context, Result[PrevT]) (NextT, error)
+	followResFunc[NextT, PrevT any]    func(context.Context, Result[PrevT]) Result[NextT]
+)
+
+func (cb goFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	cb()
+	return nil
+}
+func (cb goErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	err := cb()
+	return ErrRes[NextT](err)
+}
+func (cb goValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next := cb()
+	return ValRes(next)
+}
+func (cb goValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next, err := cb()
+	return ValErrRes(next, err)
+}
+func (cb goResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	return cb()
+}
+func (cb ctxFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	cb(ctx)
+	return nil
+}
+func (cb ctxErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	err := cb(ctx)
+	return ErrRes[NextT](err)
+}
+func (cb ctxValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next := cb(ctx)
+	return ValRes(next)
+}
+func (cb ctxValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next, err := cb(ctx)
+	return ValErrRes(next, err)
+}
+func (cb ctxResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	return cb(ctx)
+}
+func (cb followFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	cb(ctx, getFinalRes(prevRes))
+	return nil
+}
+func (cb followErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	err := cb(ctx, getFinalRes(prevRes))
+	return ErrRes[NextT](err)
+}
+func (cb followValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next := cb(ctx, getFinalRes(prevRes))
+	return ValRes(next)
+}
+func (cb followValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next, err := cb(ctx, getFinalRes(prevRes))
+	return ValErrRes(next, err)
+}
+func (cb followResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	return cb(ctx, getFinalRes(prevRes))
 }
