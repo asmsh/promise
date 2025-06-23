@@ -143,7 +143,7 @@ func actualWorkPG_standardWorkerResult_standardGroupResult(
 	return pg.AllWaitRes().Val(), nil
 }
 
-func actualWorkPG_standardWorkerResult_directGroupResult(
+func actualWorkPG_standardWorkerResult_callbackGroupResult(
 	ctx context.Context,
 	inputs []workInput,
 ) ([]GroupRes[workOutput], error) {
@@ -217,13 +217,13 @@ func Benchmark_actualWorkPG_standardWorkerResult_standardGroupResult(b *testing.
 	}
 }
 
-func Benchmark_actualWorkPG_standardWorkerResult_directGroupResult(b *testing.B) {
+func Benchmark_actualWorkPG_standardWorkerResult_callbackGroupResult(b *testing.B) {
 	b.ReportAllocs()
 
 	ctx := context.Background()
 	inputs := []workInput{{"ahmad"}, {"sameh"}}
 	for b.Loop() {
-		_, err := actualWorkPG_standardWorkerResult_directGroupResult(ctx, inputs)
+		_, err := actualWorkPG_standardWorkerResult_callbackGroupResult(ctx, inputs)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -320,12 +320,12 @@ func Test_actualWorkPG_standardWorkerResult_directGroupResult(t *testing.T) {
 		{valResult[workOutput]{workOutput{Greeting: "Hello sameh"}}},
 		{valResult[workOutput]{workOutput{Greeting: "Hello ahmad"}}},
 	}
-	gotOutputs, err := actualWorkPG_standardWorkerResult_directGroupResult(ctx, inputs)
+	gotOutputs, err := actualWorkPG_standardWorkerResult_callbackGroupResult(ctx, inputs)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(gotOutputs, wantOutputs1) &&
 		!reflect.DeepEqual(gotOutputs, wantOutputs2) {
-		t.Errorf("actualWorkPG_standardWorkerResult_directGroupResult() = %#v, want %#v or %#v", gotOutputs, wantOutputs1, wantOutputs2)
+		t.Errorf("actualWorkPG_standardWorkerResult_callbackGroupResult() = %#v, want %#v or %#v", gotOutputs, wantOutputs1, wantOutputs2)
 	}
 }
