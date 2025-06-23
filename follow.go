@@ -51,7 +51,7 @@ func Follow[
 
 	nextProm := newPromInter[NextT](nextGroup)
 	ctx, cancel := callbackCtx(nextGroup, nextProm.syncCtx)
-	go followHandler(p, nextProm, CallbackFrom[NextT, PrevT](cb), ctx, cancel)
+	go followHandler(p, nextProm, CallbackFrom[NextT, PrevT](cb), ctx, cancel, followOp)
 	return nextProm
 }
 
@@ -79,7 +79,7 @@ func FollowCallback[
 
 	nextProm := newPromInter[NextT](nextGroup)
 	ctx, cancel := callbackCtx(nextGroup, nextProm.syncCtx)
-	go followHandler(p, nextProm, cb, ctx, cancel)
+	go followHandler(p, nextProm, cb, ctx, cancel, followOp)
 	return nextProm
 }
 

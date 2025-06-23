@@ -271,6 +271,102 @@ func (p *Promise[T]) resolveToResSync(res Result[T]) {
 	}
 }
 
+var (
+	callbackOp followOperationLogic = callbackOperation{}
+	followOp   followOperationLogic = followOperation{}
+	thenOp     followOperationLogic = thenOperation{}
+	catchOp    followOperationLogic = catchOperation{}
+	recoverOp  followOperationLogic = recoverOperation{}
+	finallyOp  followOperationLogic = finallyOperation{}
+)
+
+// followOperationLogic encapsulates the logic for each of the follow calls.
+type followOperationLogic interface {
+	// IsTargetState takes the current [State] value and returns whether
+	// it's the target for this call, and we should resolve/return.
+	IsTargetState(currState State) bool
+
+	// CanHandle is an identity method telling whether the operation
+	// can attempt to mark the target promise as handled or not.
+	// this will trigger the [handleFollow] logic for that operation.
+	CanHandle() bool
+
+	// ResolveOnInvalidHandle is an identity method telling whether the
+	// operation should resolve the next promise once handling the target
+	// promise is invalid or not.
+	// an invalid handling is communicated via the [handleFollow] method
+	// returning valid=false.
+	// the resolve will be taken care of by the call to [handleFollow].
+	ResolveOnInvalidHandle() bool
+
+	// ReturnOnInvalidHandle is an identity method telling whether the
+	// operation should return once handling the target promise is invalid
+	// or it should still move forward and run the callback.
+	// an invalid handling is communicated via the [handleFollow] method
+	// returning valid=false.
+	ReturnOnInvalidHandle() bool
+
+	SupportHandleReturns() bool
+}
+
+type callbackOperation struct{}
+
+func (callbackOperation) IsTargetState(_ State) bool   { return true }
+func (callbackOperation) CanHandle() bool              { return false }
+func (callbackOperation) ResolveOnInvalidHandle() bool { return false }
+func (callbackOperation) ReturnOnInvalidHandle() bool  { return false }
+func (callbackOperation) SupportHandleReturns() bool   { return false }
+
+type followOperation struct{}
+
+func (followOperation) IsTargetState(_ State) bool   { return true }
+func (followOperation) CanHandle() bool              { return true }
+func (followOperation) ResolveOnInvalidHandle() bool { return true }
+func (followOperation) ReturnOnInvalidHandle() bool  { return true }
+func (followOperation) SupportHandleReturns() bool   { return true }
+
+type thenOperation struct{}
+
+func (thenOperation) IsTargetState(s State) bool   { return s == Success }
+func (thenOperation) CanHandle() bool              { return true }
+func (thenOperation) ResolveOnInvalidHandle() bool { return true }
+func (thenOperation) ReturnOnInvalidHandle() bool  { return true }
+func (thenOperation) SupportHandleReturns() bool   { return true }
+
+type catchOperation struct{}
+
+func (catchOperation) IsTargetState(s State) bool   { return s == Error }
+func (catchOperation) CanHandle() bool              { return true }
+func (catchOperation) ResolveOnInvalidHandle() bool { return false }
+func (catchOperation) ReturnOnInvalidHandle() bool  { return false }
+func (catchOperation) SupportHandleReturns() bool   { return true }
+
+type recoverOperation struct{}
+
+func (recoverOperation) IsTargetState(s State) bool   { return s == Panic }
+func (recoverOperation) CanHandle() bool              { return true }
+func (recoverOperation) ResolveOnInvalidHandle() bool { return true }
+func (recoverOperation) ReturnOnInvalidHandle() bool  { return true }
+func (recoverOperation) SupportHandleReturns() bool   { return true }
+
+// finallyOperation can't set the 'Handled' flag(handle the promise),
+// and it can return new promise with new result.
+// if we made the finally a normal 'follow' method(like then,..), it will be
+// possible to call it on a panicked promise and return a Success promise,
+// and the panic will be dismissed implicitly, which is something we don't want.
+//
+// Follow vs Finally: Finally doesn't mark the receiver Promise as handled,
+// which make it useful for cleanup without changing the call flow that would
+// trigger the Unhanded callbacks logic of a Group.
+// However, Follow marks the receiver Promise as handled.
+type finallyOperation struct{}
+
+func (finallyOperation) IsTargetState(_ State) bool   { return true }
+func (finallyOperation) CanHandle() bool              { return false }
+func (finallyOperation) ResolveOnInvalidHandle() bool { return false }
+func (finallyOperation) ReturnOnInvalidHandle() bool  { return false }
+func (finallyOperation) SupportHandleReturns() bool   { return true }
+
 func handleFollow[PrevT, NextT any](
 	prevProm *Promise[PrevT],
 	nextProm *Promise[NextT],
@@ -327,7 +423,7 @@ func handleReturns[PrevT, NextT any](
 	nextProm.resolveToRes(nextRes)
 }
 
-func getEffectiveNextRes[PrevT, NextT any](
+func getEffectiveNextRes[NextT, PrevT any](
 	prevRes Result[PrevT],
 	nextResP *Result[NextT],
 ) (effRes Result[NextT]) {
@@ -348,31 +444,31 @@ func getEffectiveNextRes[PrevT, NextT any](
 	// no new result is set, and the previous Result is non-nil, so try
 	// to cast the previous Result to the new Result's type...
 
-	// handle having the previous [Result]'s value as nil.
-	// TODO: when can this happen?
-	anyPrevResVal := any(prevRes.Val())
-	if anyPrevResVal == nil {
-		return result[NextT]{
-			err:   prevRes.Err(),
-			state: prevRes.State(),
-		}
+	// first, try casting the whole prev Result instance...
+	if nextRes, ok := any(prevRes).(Result[NextT]); ok {
+		return nextRes
 	}
 
-	// handle having the previous [Result]'s type be compatible with the new one.
-	// TODO: when can this happen?
-	prevResVal, ok := anyPrevResVal.(NextT)
-	if ok {
-		return result[NextT]{
-			val:   prevResVal,
-			err:   prevRes.Err(),
-			state: prevRes.State(),
-		}
+	// otherwise, reconstruct the Result from the prev value...
+	nextRes := result[NextT]{
+		err:   prevRes.Err(),
+		state: prevRes.State(),
 	}
 
-	// this can't happen, as the go type system guarantees that
-	// the prevT of the previous [Promise] is the assignable to
-	// the nextT of the next [Promise].
-	panic("promise: internal: getEffectiveNextRes called with invalid NextT")
+	// try to set the next Result's val...
+	if nextResVal, ok := any(prevRes.Val()).(NextT); ok {
+		// this will only fail if prevRes.Val is nil, or if it's not
+		// of NextT type.
+		//
+		// TODO: when can it be not of NextT type?
+		// this can't happen, as the go type system guarantees that
+		// the PrevT of the previous [Promise] is assignable to NextT
+		// of the next [Promise].
+		// and since we only call this function when
+		nextRes.val = nextResVal
+	}
+
+	return nextRes
 }
 
 func handleExtCalls[T any](p *Promise[T]) (handled bool) {

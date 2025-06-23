@@ -244,24 +244,7 @@ func (p *Promise[T]) Callback(
 
 	ctx, cancel := callbackCtx(p.group, nil)
 	debug(p, startHandler, startFollowHandler, startCallbackFollowHandler)
-	go callbackFollowHandler(p, cb, ctx, cancel)
-}
-
-func callbackFollowHandler[T any](
-	prevProm *Promise[T],
-	cb FollowFunc[T],
-	ctx context.Context,
-	cancel context.CancelFunc,
-) {
-	// make sure we free this goroutine reservation
-	defer prevProm.group.freeGoroutine()
-
-	// wait the previous promise to be resolved
-	prevProm.waitState()
-
-	// run the callback with the actual promise result
-	runCallbackHandler[T, T](nil, followFunc[T, T](cb), prevProm.res, false, ctx, cancel)
-	debug(prevProm, endHandler, endFollowHandler, endCallbackFollowHandler)
+	go followHandler(p, nil, followFunc[T, T](cb), ctx, cancel, callbackOp)
 }
 
 func (p *Promise[T]) Follow(
@@ -283,7 +266,7 @@ func (p *Promise[T]) Follow(
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
-	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel)
+	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel, followOp)
 	return nextProm
 }
 
@@ -304,35 +287,8 @@ func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
-	go followHandler(p, nextProm, cb, ctx, cancel)
+	go followHandler(p, nextProm, cb, ctx, cancel, followOp)
 	return nextProm
-}
-
-func followHandler[
-	NextT any,
-	PrevT any,
-](
-	prevProm *Promise[PrevT],
-	nextProm *Promise[NextT],
-	cb Callback[NextT, PrevT],
-	ctx context.Context,
-	cancel context.CancelFunc,
-) {
-	defer prevProm.group.freeGoroutine()
-	prevProm.waitState()
-
-	// mark prev as 'Handled', and check whether we should continue or not.
-	// the res value returned will hold the correct value that should be handled
-	// by the callback.
-	res, ok := handleFollow(prevProm, nextProm, true)
-	if !ok {
-		// return, since the promise is now resolved
-		return
-	}
-
-	// run the callback with the actual promise result
-	runCallbackHandler(nextProm, cb, res, true, ctx, cancel)
-	debug(prevProm, endHandler, endFollowHandler, endThenFollowHandler)
 }
 
 func (p *Promise[T]) Then(
@@ -354,33 +310,8 @@ func (p *Promise[T]) Then(
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
-	go thenFollowHandler(p, nextProm, cb, ctx, cancel)
+	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel, thenOp)
 	return nextProm
-}
-
-func thenFollowHandler[T any](
-	prevProm *Promise[T],
-	nextProm *Promise[T],
-	cb FollowResFunc[T, T],
-	ctx context.Context,
-	cancel context.CancelFunc,
-) {
-	defer prevProm.group.freeGoroutine()
-	s := prevProm.waitState()
-
-	// 'Then' can handle only the 'Success' state, so return otherwise
-	if s != Success {
-		nextProm.resolveToRes(prevProm.res)
-		return
-	}
-
-	res, ok := handleFollow(prevProm, nextProm, true)
-	if !ok {
-		return
-	}
-
-	runCallbackHandler(nextProm, followResFunc[T, T](cb), res, true, ctx, cancel)
-	debug(prevProm, endHandler, endFollowHandler, endThenFollowHandler)
 }
 
 func (p *Promise[T]) Catch(
@@ -402,33 +333,8 @@ func (p *Promise[T]) Catch(
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startCatchFollowHandler)
-	go catchFollowHandler(p, nextProm, cb, ctx, cancel)
+	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel, catchOp)
 	return nextProm
-}
-
-func catchFollowHandler[T any](
-	prevProm *Promise[T],
-	nextProm *Promise[T],
-	cb FollowResFunc[T, T],
-	ctx context.Context,
-	cancel context.CancelFunc,
-) {
-	defer prevProm.group.freeGoroutine()
-	s := prevProm.waitState()
-
-	// 'Catch' can handle only the 'Error' state, so return otherwise
-	if s != Error {
-		nextProm.resolveToRes(prevProm.res)
-		return
-	}
-
-	// note: we don't check for the 'valid' return value, because we
-	// pass the 'resolveOnErr' as false, so we will need to handle
-	// the returned res anyway.
-	res, _ := handleFollow(prevProm, nextProm, false)
-
-	runCallbackHandler(nextProm, followResFunc[T, T](cb), res, true, ctx, cancel)
-	debug(prevProm, endHandler, endFollowHandler, endCatchFollowHandler)
 }
 
 func (p *Promise[T]) Recover(
@@ -450,39 +356,14 @@ func (p *Promise[T]) Recover(
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startRecoverFollowHandler)
-	go recoverFollowHandler(p, nextProm, cb, ctx, cancel)
+	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel, recoverOp)
 	return nextProm
 }
 
-func recoverFollowHandler[T any](
-	prevProm *Promise[T],
-	nextProm *Promise[T],
-	cb FollowResFunc[T, T],
-	ctx context.Context,
-	cancel context.CancelFunc,
-) {
-	defer prevProm.group.freeGoroutine()
-	s := prevProm.waitState()
-
-	// 'Recover' can handle only the 'Panic' state, so return otherwise
-	if s != Panic {
-		nextProm.resolveToRes(prevProm.res)
-		return
-	}
-
-	res, ok := handleFollow(prevProm, nextProm, true)
-	if !ok {
-		return
-	}
-
-	runCallbackHandler(nextProm, followResFunc[T, T](cb), res, true, ctx, cancel)
-	debug(prevProm, endHandler, endFollowHandler, endRecoverFollowHandler)
-}
-
 func (p *Promise[T]) Finally(
-	finallyCb func(ctx context.Context),
+	cb func(ctx context.Context),
 ) *Promise[T] {
-	if finallyCb == nil {
+	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 	if p.group.isWaiting() {
@@ -498,29 +379,41 @@ func (p *Promise[T]) Finally(
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
 	debug(p, startHandler, startFollowHandler, startFinallyFollowHandler)
-	go finallyFollowHandler(p, nextProm, finallyCb, ctx, cancel)
+	go followHandler(p, nextProm, ctxFunc[T, T](cb), ctx, cancel, finallyOp)
 	return nextProm
 }
 
-// finallyFollowHandler can't set the 'Handled' flag(handle the promise),
-// and it can return new promise with new result.
-// if we made the finally a normal 'follow' method(like then,..), it will be
-// possible to call it on a panicked promise and return a Success promise,
-// and the panic will be dismissed implicitly, which is something we don't want.
-//
-// Follow vs Finally: Finally doesn't mark the receiver Promise as handled,
-// which make it useful for cleanup without changing the call flow that would
-// trigger the Unhanded callbacks logic of a Group.
-// However, Follow marks the receiver Promise as handled.
-func finallyFollowHandler[T any](
-	prevProm *Promise[T],
-	nextProm *Promise[T],
-	cb CtxFunc,
+func followHandler[NextT, PrevT any](
+	prevProm *Promise[PrevT],
+	nextProm *Promise[NextT],
+	cb Callback[NextT, PrevT],
 	ctx context.Context,
 	cancel context.CancelFunc,
+	op followOperationLogic,
 ) {
 	defer prevProm.group.freeGoroutine()
-	prevProm.waitState()
-	runCallbackHandler(nextProm, ctxFunc[T, T](cb), prevProm.res, true, ctx, cancel)
-	debug(prevProm, endHandler, endFollowHandler, endFinallyFollowHandler)
+	s := prevProm.waitState()
+
+	// return and carry the current Result to the next Promise if it's not the target.
+	if !op.IsTargetState(s) {
+		nextRes := getEffectiveNextRes[NextT, PrevT](prevProm.res, nil)
+		nextProm.resolveToRes(nextRes)
+		return
+	}
+
+	// start with the previous Result.
+	res := prevProm.res
+
+	// mark prev as 'Handled', and check whether we should continue or not.
+	if op.CanHandle() {
+		var ok bool
+		res, ok = handleFollow(prevProm, nextProm, op.ResolveOnInvalidHandle())
+		if !ok && op.ReturnOnInvalidHandle() {
+			return
+		}
+	}
+
+	// run the callback with the actual promise result.
+	runCallbackHandler(nextProm, cb, res, op.SupportHandleReturns(), ctx, cancel)
+	debug(prevProm, endHandler, endFollowHandler, endThenFollowHandler)
 }

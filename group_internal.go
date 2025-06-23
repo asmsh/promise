@@ -14,37 +14,6 @@
 
 package promise
 
-var (
-	allOp     joinOperationLogic = allOperation{}
-	allWaitOp joinOperationLogic = allWaitOperation{}
-	anyOp     joinOperationLogic = anyOperation{}
-	anyWaitOp joinOperationLogic = anyWaitOperation{}
-	joinOp    joinOperationLogic = joinOperation{}
-)
-
-// joinOperationLogic encapsulates the logic for each of the join calls.
-type joinOperationLogic interface {
-	// InitState takes history [State] and returns the [Result] [State]
-	// that should be fetched from the [Group] history and be included
-	// in the [Result] returned by the current call.
-	// It returns [unknown] if no fetching from the history should be done.
-	InitState(stateHist State) State
-
-	// NextState takes the current and previous [State] values and returns
-	// the next [State], which will be the resolve state, if there are no
-	// more promises to process.
-	NextState(currState State, prevState State) (nextState State)
-
-	// ReturnOnTargetState is an identity method telling whether the current
-	// operation should return once the target [State] is found or it should
-	// keep going until all promises are processed.
-	ReturnOnTargetState() bool
-
-	// IsTargetState takes the current [State] value and returns whether
-	// it's the target for this call, and we should resolve/return.
-	IsTargetState(currState State) bool
-}
-
 // the resMu must be locked before entering.
 func (g *Group[T]) getSingleCallResSnapshot() GroupRes[T] {
 	if g.core.saveAllGroupResults {
@@ -355,6 +324,37 @@ resultLoop:
 	g.callsQMu.Unlock()
 
 	return newMultiRes(callResState, callRes)
+}
+
+var (
+	allOp     joinOperationLogic = allOperation{}
+	allWaitOp joinOperationLogic = allWaitOperation{}
+	anyOp     joinOperationLogic = anyOperation{}
+	anyWaitOp joinOperationLogic = anyWaitOperation{}
+	joinOp    joinOperationLogic = joinOperation{}
+)
+
+// joinOperationLogic encapsulates the logic for each of the join calls.
+type joinOperationLogic interface {
+	// InitState takes history [State] and returns the [Result] [State]
+	// that should be fetched from the [Group] history and be included
+	// in the [Result] returned by the current call.
+	// It returns [unknown] if no fetching from the history should be done.
+	InitState(stateHist State) State
+
+	// NextState takes the current and previous [State] values and returns
+	// the next [State], which will be the resolve state, if there are no
+	// more promises to process.
+	NextState(currState State, prevState State) (nextState State)
+
+	// ReturnOnTargetState is an identity method telling whether the current
+	// operation should return once the target [State] is found or it should
+	// keep going until all promises are processed.
+	ReturnOnTargetState() bool
+
+	// IsTargetState takes the current [State] value and returns whether
+	// it's the target for this call, and we should resolve/return.
+	IsTargetState(currState State) bool
 }
 
 type allOperation struct{}
