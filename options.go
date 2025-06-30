@@ -28,7 +28,7 @@ func ApplyConfig(conf GroupConfig) GroupOption {
 			core.unhandledErrorCB = cb
 		}
 
-		core.sg.Init(int64(conf.Size))
+		core.sg.SetSize(conf.Size)
 
 		if conf.FailuresCancelCBCtx {
 			core.ctx, core.cancel = context.WithCancel(context.Background())
@@ -70,7 +70,7 @@ func UnhandledErrorCB(cb func(error)) GroupOption {
 
 func Size(size int) GroupOption {
 	return func(core *groupCore) {
-		core.sg.Init(int64(size))
+		core.sg.SetSize(size)
 	}
 }
 

@@ -1,2 +1,4 @@
+github.com/asmsh/sema v1.0.0 h1:owlYY5dO0sJOqYnTFluUUY6phFjT2H0+C4Mq6bGtsdA=
+github.com/asmsh/sema v1.0.0/go.mod h1:H/ommkdxUJ4zIEYusgM0key2GG29PS7/3DQ0WvOQmaY=
 github.com/asmsh/uniquerand v1.0.0 h1:XXzCkVMDzkIwbIfoiO/troSBn4inwaTNGVfoLrhS2Gw=
 github.com/asmsh/uniquerand v1.0.0/go.mod h1:rNrv53YBqKJrNQuYS2sL2t2FhOuQ68LkFmhQBzpsoD4=

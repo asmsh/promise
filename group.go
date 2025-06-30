@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/asmsh/sema"
 )
 
 type Group[T any] struct {
@@ -438,7 +440,7 @@ func (g *Group[T]) reserveGoroutine(chainRegFunc func()) bool {
 
 	// either block until a place is available, or return an error with no waiting.
 	if g.core.noWaitingBusyGroup {
-		if g.core.sg.TryReserve() {
+		if g.core.sg.TryReserveN(1) {
 			// since we entered this case, and this is a non-blocking select,
 			// this case will happen immediately.
 			chainRegFunc()
