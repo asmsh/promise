@@ -16,41 +16,29 @@ package promise
 
 import "context"
 
-type (
-	GoFunc                  = func()
-	GoErrFunc               = func() error
-	GoValFunc[NextT any]    = func() NextT
-	GoValErrFunc[NextT any] = func() (NextT, error)
-	GoResFunc[NextT any]    = func() Result[NextT]
-
-	CtxFunc                  = func(context.Context)
-	CtxErrFunc               = func(context.Context) error
-	CtxValFunc[NextT any]    = func(context.Context) NextT
-	CtxValErrFunc[NextT any] = func(context.Context) (NextT, error)
-	CtxResFunc[NextT any]    = func(context.Context) Result[NextT]
-
-	// the following are only for Follow methods,
-	// as they accept a prevRes argument...
-
-	FollowFunc[PrevT any]              = func(context.Context, Result[PrevT])
-	FollowErrFunc[PrevT any]           = func(context.Context, Result[PrevT]) error
-	FollowValFunc[NextT, PrevT any]    = func(context.Context, Result[PrevT]) NextT
-	FollowValErrFunc[NextT, PrevT any] = func(context.Context, Result[PrevT]) (NextT, error)
-	FollowResFunc[NextT, PrevT any]    = func(context.Context, Result[PrevT]) Result[NextT]
-)
-
 // CallbackFunc is a type constraint representing the different signatures
 // for supported callback functions for the different functions and methods.
 type CallbackFunc[NextT, PrevT any] interface {
 	// no type approximation is used (~), hence no user defined types allowed.
 	// might change if this happens: https://github.com/golang/go/issues/45380
 
-	GoFunc | GoErrFunc | CtxFunc | CtxErrFunc |
-		GoValFunc[NextT] | GoResFunc[NextT] | CtxValFunc[NextT] |
-		CtxValErrFunc[NextT] | CtxResFunc[NextT] |
-		GoValErrFunc[PrevT] | FollowFunc[PrevT] | FollowErrFunc[PrevT] |
-		FollowValFunc[NextT, PrevT] | FollowValErrFunc[NextT, PrevT] |
-		FollowResFunc[NextT, PrevT]
+	func() |
+		func() error |
+		func() NextT |
+		func() (NextT, error) |
+		func() Result[NextT] |
+
+		func(context.Context) |
+		func(context.Context) error |
+		func(context.Context) NextT |
+		func(context.Context) (NextT, error) |
+		func(context.Context) Result[NextT] |
+
+		func(context.Context, Result[PrevT]) |
+		func(context.Context, Result[PrevT]) error |
+		func(context.Context, Result[PrevT]) NextT |
+		func(context.Context, Result[PrevT]) (NextT, error) |
+		func(context.Context, Result[PrevT]) Result[NextT]
 }
 
 type Callback[NextT, PrevT any] interface {

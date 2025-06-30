@@ -15,6 +15,7 @@
 package promise
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -38,21 +39,7 @@ func Follow[
 		panic(nilCallbackPanicMsg)
 	}
 
-	nextGroup := followGroup[NextT, PrevT](p.group)
-	if nextGroup.isWaiting() {
-		return newPromSync[NextT](nextGroup, errPromiseGroupDoneResult[NextT]{})
-	}
-	if p.syncCtx == neverClosedSyncCtx {
-		return newPromBlocked[NextT]()
-	}
-	if !nextGroup.reserveGoroutine(p.regChainRead) {
-		return newPromSync[NextT](nextGroup, errPromiseGroupBusyResult[NextT]{})
-	}
-
-	nextProm := newPromInter[NextT](nextGroup)
-	ctx, cancel := callbackCtx(nextGroup, nextProm.syncCtx)
-	go followHandler(p, nextProm, CallbackFrom[NextT, PrevT](cb), ctx, cancel, followOp)
-	return nextProm
+	return FollowCallback(p, CallbackFrom[NextT, PrevT](cb))
 }
 
 func FollowCallback[
@@ -91,35 +78,35 @@ func CallbackFrom[
 	cbFunc CFuncT,
 ) Callback[NextT, PrevT] {
 	switch cbFuncVal := any(cbFunc).(type) {
-	case GoFunc:
+	case func():
 		return goFunc[NextT, PrevT](cbFuncVal)
-	case GoErrFunc:
+	case func() error:
 		return goErrFunc[NextT, PrevT](cbFuncVal)
-	case GoValFunc[NextT]:
+	case func() NextT:
 		return goValFunc[NextT, PrevT](cbFuncVal)
-	case GoValErrFunc[NextT]:
+	case func() (NextT, error):
 		return goValErrFunc[NextT, PrevT](cbFuncVal)
-	case GoResFunc[NextT]:
+	case func() Result[NextT]:
 		return goResFunc[NextT, PrevT](cbFuncVal)
-	case CtxFunc:
+	case func(context.Context):
 		return ctxFunc[NextT, PrevT](cbFuncVal)
-	case CtxErrFunc:
+	case func(context.Context) error:
 		return ctxErrFunc[NextT, PrevT](cbFuncVal)
-	case CtxValFunc[NextT]:
+	case func(context.Context) NextT:
 		return ctxValFunc[NextT, PrevT](cbFuncVal)
-	case CtxValErrFunc[NextT]:
+	case func(context.Context) (NextT, error):
 		return ctxValErrFunc[NextT, PrevT](cbFuncVal)
-	case CtxResFunc[NextT]:
+	case func(context.Context) Result[NextT]:
 		return ctxResFunc[NextT, PrevT](cbFuncVal)
-	case FollowFunc[PrevT]:
+	case func(context.Context, Result[PrevT]):
 		return followFunc[NextT, PrevT](cbFuncVal)
-	case FollowErrFunc[PrevT]:
+	case func(context.Context, Result[PrevT]) error:
 		return followErrFunc[NextT, PrevT](cbFuncVal)
-	case FollowValFunc[NextT, PrevT]:
+	case func(context.Context, Result[PrevT]) NextT:
 		return followValFunc[NextT, PrevT](cbFuncVal)
-	case FollowValErrFunc[NextT, PrevT]:
+	case func(context.Context, Result[PrevT]) (NextT, error):
 		return followValErrFunc[NextT, PrevT](cbFuncVal)
-	case FollowResFunc[NextT, PrevT]:
+	case func(context.Context, Result[PrevT]) Result[NextT]:
 		return followResFunc[NextT, PrevT](cbFuncVal)
 	default:
 		// this will only happen if we added support to a new callback type,

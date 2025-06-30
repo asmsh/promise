@@ -79,7 +79,7 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 
 func goHandler[T any](
 	p *Promise[T],
-	cb GoFunc,
+	cb func(),
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
@@ -109,7 +109,7 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 
 func goCtxResHandler[T any](
 	p *Promise[T],
-	cb CtxResFunc[T],
+	cb func(context.Context) Result[T],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
