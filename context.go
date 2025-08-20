@@ -74,7 +74,7 @@ func callbackCtx[T any](
 	// default scenario, either no Group or a Group with default behavior.
 	// we return the syncCtx with no cancellation, if one is provided,
 	// otherwise we return Background with cancellation.
-	if g == nil || (g.core.ctx == nil && !g.core.neverCancelCBCtx) {
+	if g == nil || (g.core.ctx == nil && !g.core.options.IsNeverCancelCBCtx()) {
 		if syncCtx == nil {
 			return newSyncCtx(), nil
 		}
@@ -83,7 +83,7 @@ func callbackCtx[T any](
 
 	// there's a Group, if it's requested to never cancel callback Context,
 	// then we return early with Background and no cancellation.
-	if g.core.neverCancelCBCtx {
+	if g.core.options.IsNeverCancelCBCtx() {
 		return context.Background(), noopCancelFunc
 	}
 

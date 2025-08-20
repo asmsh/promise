@@ -108,7 +108,7 @@ func (p *Promise[T]) isOnetimePromise() bool {
 	if p.group == nil {
 		return false
 	}
-	return p.group.core.onetimeHandling
+	return p.group.core.options.IsOnetimeHandling()
 }
 
 func (p *Promise[T]) unhandledPanic() {
@@ -539,7 +539,7 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 
 	p.group.resStateHist |= res.State()
 
-	if p.group.core.saveAllGroupResults {
+	if p.group.core.options.IsSaveAllGroupResults() {
 		p.group.resQ.PushBack(groupRes)
 	} else {
 		if p.group.resHist == nil {

@@ -35,23 +35,23 @@ func ApplyConfig(conf GroupConfig) GroupOption {
 		}
 
 		if conf.NeverCancelCBCtx && !conf.FailuresCancelCBCtx {
-			core.neverCancelCBCtx = true
+			core.options.SetNeverCancelCBCtx()
 		}
 
 		if conf.OnetimeHandling {
-			core.onetimeHandling = true
+			core.options.SetOnetimeHandling()
 		}
 
 		if conf.NoNilCtxDoneChan {
-			core.noNilCtxDoneChan = true
+			core.options.SetNoNilCtxDoneChan()
 		}
 
 		if conf.NoWaitingBusyGroup {
-			core.noWaitingBusyGroup = true
+			core.options.SetNoWaitingBusyGroup()
 		}
 
 		if conf.SaveAllGroupResults {
-			core.saveAllGroupResults = true
+			core.options.SetSaveAllGroupResults()
 		}
 	}
 }
@@ -82,7 +82,7 @@ func SetFailuresCancelCBCtx(set ...bool) GroupOption {
 		}
 		if s {
 			core.ctx, core.cancel = context.WithCancel(context.Background())
-			core.neverCancelCBCtx = false
+			core.options.SetNeverCancelCBCtxTo(false)
 		} else {
 			core.ctx, core.cancel = nil, nil
 		}
@@ -96,9 +96,9 @@ func SetNeverCancelCBCtx(set ...bool) GroupOption {
 			s = set[0]
 		}
 		if s && core.ctx == nil {
-			core.neverCancelCBCtx = true
+			core.options.SetNeverCancelCBCtxTo(true)
 		} else if !s {
-			core.neverCancelCBCtx = false
+			core.options.SetNeverCancelCBCtxTo(false)
 		}
 	}
 }
@@ -109,7 +109,7 @@ func SetOnetimeHandling(set ...bool) GroupOption {
 		if len(set) > 0 {
 			s = set[0]
 		}
-		core.onetimeHandling = s
+		core.options.SetOnetimeHandlingTo(s)
 	}
 }
 
@@ -119,7 +119,7 @@ func SetNoNilCtxDoneChan(set ...bool) GroupOption {
 		if len(set) > 0 {
 			s = set[0]
 		}
-		core.noNilCtxDoneChan = s
+		core.options.SetNoNilCtxDoneChanTo(s)
 	}
 }
 
@@ -129,7 +129,7 @@ func SetNoWaitingBusyGroup(set ...bool) GroupOption {
 		if len(set) > 0 {
 			s = set[0]
 		}
-		core.noWaitingBusyGroup = s
+		core.options.SetNoWaitingBusyGroupTo(s)
 	}
 }
 
@@ -139,7 +139,7 @@ func SetSaveAllGroupResult(set ...bool) GroupOption {
 		if len(set) > 0 {
 			s = set[0]
 		}
-		core.saveAllGroupResults = s
+		core.options.SetSaveAllGroupResultsTo(s)
 	}
 }
 
@@ -148,7 +148,7 @@ type GroupConfig struct {
 	UnhandledErrorCB func(err error)
 
 	// Size is the number of goroutines which this group is allowed to run.
-	// This includes goroutines created for both, constructor calls(Go, GoRes, etc.),
+	// This includes goroutines created for both, constructor calls(Go, GoCtxRes, etc.),
 	// and follow calls([Promise.Then], [Promise.Catch], etc.).
 	// If it's 0 or less, then the group size is unlimited.
 	Size int

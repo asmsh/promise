@@ -213,7 +213,7 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	g.init()
 	if ctx.Done() != nil {
 		return newPromCtx[T](g, ctx)
-	} else if g != nil && g.core.noNilCtxDoneChan {
+	} else if g != nil && g.core.options.IsNoNilCtxDoneChan() {
 		return newPromSync[T](g, errPromiseCtxNilDoneResult[T]{})
 	}
 
@@ -256,8 +256,7 @@ func (g *Group[T]) AllRes(triggers ...func()) Result[[]GroupRes[T]] {
 	for _, f := range triggers {
 		f()
 	}
-	res := g.joinRes(allOp)
-	return res
+	return g.joinRes(allOp)
 }
 
 // AllWaitRes behaves like the [AllWait] extension function, but only operates
@@ -288,8 +287,7 @@ func (g *Group[T]) AnyRes(triggers ...func()) Result[[]GroupRes[T]] {
 	for _, f := range triggers {
 		f()
 	}
-	res := g.joinRes(anyOp)
-	return res
+	return g.joinRes(anyOp)
 }
 
 func (g *Group[T]) AnyWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
@@ -416,7 +414,12 @@ type groupCore struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	// flags for options...
+	// options is generated from groupOptions.
+	options groupOptionsBitFlags
+}
+
+//go:generate genflagged -type=groupOptions -outType=groupOptionsBitFlags -outFile=group_options_flagged.go
+type groupOptions struct {
 	neverCancelCBCtx    bool
 	onetimeHandling     bool
 	noNilCtxDoneChan    bool
@@ -439,7 +442,7 @@ func (g *Group[T]) reserveGoroutine(chainRegFunc func()) bool {
 	}
 
 	// either block until a place is available, or return an error with no waiting.
-	if g.core.noWaitingBusyGroup {
+	if g.core.options.IsNoWaitingBusyGroup() {
 		if g.core.sg.TryReserveN(1) {
 			// since we entered this case, and this is a non-blocking select,
 			// this case will happen immediately.

@@ -16,7 +16,7 @@ package promise
 
 // the resMu must be locked before entering.
 func (g *Group[T]) getSingleCallResSnapshot() GroupRes[T] {
-	if g.core.saveAllGroupResults {
+	if g.core.options.IsSaveAllGroupResults() {
 		front := g.resQ.Front()
 		if front == nil {
 			return GroupRes[T]{}
@@ -132,7 +132,7 @@ func (g *Group[T]) selectResSlow(groupDone <-chan struct{}) Result[GroupRes[T]] 
 //
 // the 'resMu' must be locked before entering.
 func (g *Group[T]) getMultiCallResSnapshot(callResState State, callResLen int) []GroupRes[T] {
-	if g.core.saveAllGroupResults {
+	if g.core.options.IsSaveAllGroupResults() {
 		callResLen += g.resQ.Len()
 		callRes := make([]GroupRes[T], 0, callResLen)
 		for res := g.resQ.Front(); res != nil; res = res.Next() {

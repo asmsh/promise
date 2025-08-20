@@ -55,8 +55,14 @@ var testsCases_Group_callbackCtx = []struct {
 	},
 	{
 		// when a Group is available with neverCancelCBCtx=true.
-		name:            "non-nil_group,nil_group_ctx,never-cancel-callback-ctx,nil_syncCtx",
-		g:               &Group[any]{core: &groupCore{neverCancelCBCtx: true}},
+		name: "non-nil_group,nil_group_ctx,never-cancel-callback-ctx,nil_syncCtx",
+		g: &Group[any]{core: &groupCore{
+			options: func() groupOptionsBitFlags {
+				options := groupOptionsBitFlags(0)
+				options.SetNeverCancelCBCtx()
+				return options
+			}(),
+		}},
 		expectedCtxName: "context.Background",
 	},
 	{
@@ -82,8 +88,14 @@ var testsCases_Group_callbackCtx = []struct {
 	},
 	{
 		// when a Group is available with neverCancelCBCtx=true.
-		name:            "non-nil_group,nil_group_ctx,never-cancel-callback-ctx,non-nil_syncCtx",
-		g:               &Group[any]{core: &groupCore{neverCancelCBCtx: true}},
+		name: "non-nil_group,nil_group_ctx,never-cancel-callback-ctx,non-nil_syncCtx",
+		g: &Group[any]{core: &groupCore{
+			options: func() groupOptionsBitFlags {
+				options := groupOptionsBitFlags(0)
+				options.SetNeverCancelCBCtx()
+				return options
+			}(),
+		}},
 		syncCtx:         syncCtx{syncChan: make(chan struct{})},
 		expectedCtxName: "context.Background",
 	},

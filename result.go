@@ -82,7 +82,7 @@ func (ir IdxRes[T]) String() string {
 // that generated that group's result.
 type GroupRes[T any] struct {
 	// possible fields:
-	// - InitType(constructor type): enum(Go, Ctx, GoRes, GoErr)
+	// - InitType(constructor type): enum(Go, Ctx, GoCtxRes, GoErr)
 	Result[T]
 }
 
