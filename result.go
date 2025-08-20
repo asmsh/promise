@@ -93,6 +93,35 @@ func (gr GroupRes[T]) String() string {
 	return fmt.Sprintf("%v", gr.Result)
 }
 
+// UnwrapMultiRes returns the values wrapped inside a multi result value.
+//
+// Examples:
+//
+// Working with plain [Promise] values.
+//
+//	p := All[any]( /* list of promises */ )
+//	multiRes := p.Res()
+//	vals := UnwrapMultiRes(multiRes)
+//	// do something with vals...
+//
+// Working with a [Group] value.
+//
+//	var pg Group[any]
+//	/* start some promises on pg */
+//	multiRes := pg.AllWaitRes()
+//	vals := UnwrapMultiRes(multiRes)
+//	// do something with vals...
+func UnwrapMultiRes[T any, TRes Result[T], TMRes Result[[]TRes]](
+	multiRes TMRes,
+) []T {
+	multiResVal := multiRes.Val()
+	res := make([]T, 0, len(multiResVal))
+	for _, r := range multiResVal {
+		res = append(res, r.Val())
+	}
+	return res
+}
+
 type emptyResult[T any] struct{}
 type valResult[T any] struct{ val T }
 type errResult[T any] struct{ err error }
