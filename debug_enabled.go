@@ -16,6 +16,8 @@
 
 package promise
 
+var debugEnabled = true
+
 func debug[T any](p *Promise[T], de ...debugEvent) {
 	if p.group == nil {
 		return

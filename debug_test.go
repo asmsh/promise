@@ -65,58 +65,66 @@ func (de debugEvent) String() string {
 		return "startHandler"
 	case endHandler:
 		return "endHandler"
-	case startConstrHandler:
-		return "startConstrHandler"
-	case startConstrChanHandler:
-		return "startConstrChanHandler"
-	case startConstrGoHandler:
-		return "startConstrGoHandler"
-	case startConstrGoErrHandler:
-		return "startConstrGoErrHandler"
-	case startConstrGoResHandler:
-		return "startConstrGoResHandler"
-	case startConstrDelayHandler:
-		return "startConstrDelayHandler"
-	case endConstrHandler:
-		return "endConstrHandler"
-	case endConstrChanHandler:
-		return "endConstrChanHandler"
-	case endConstrGoHandler:
-		return "endConstrGoHandler"
-	case endConstrGoErrHandler:
-		return "endConstrGoErrHandler"
-	case endConstrGoResHandler:
-		return "endConstrGoResHandler"
-	case endConstrDelayHandler:
-		return "endConstrDelayHandler"
-	case startFollowHandler:
-		return "startFollowHandler"
-	case startCallbackFollowHandler:
-		return "startCallbackFollowHandler"
-	case startDelayFollowHandler:
-		return "startDelayFollowHandler"
-	case startThenFollowHandler:
-		return "startThenFollowHandler"
-	case startCatchFollowHandler:
-		return "startCatchFollowHandler"
-	case startRecoverFollowHandler:
-		return "startRecoverFollowHandler"
-	case startFinallyFollowHandler:
-		return "startFinallyFollowHandler"
-	case endFollowHandler:
-		return "endFollowHandler"
-	case endCallbackFollowHandler:
-		return "endCallbackFollowHandler"
-	case endDelayFollowHandler:
-		return "endDelayFollowHandler"
-	case endThenFollowHandler:
-		return "endThenFollowHandler"
-	case endCatchFollowHandler:
-		return "endCatchFollowHandler"
-	case endRecoverFollowHandler:
-		return "endRecoverFollowHandler"
-	case endFinallyFollowHandler:
-		return "endFinallyFollowHandler"
+	case startGroupHandler:
+		return "startGroupHandler"
+	case startGroupChanHandler:
+		return "startGroupChanHandler"
+	case startGroupGoHandler:
+		return "startGoHandler"
+	case startGroupGoErrHandler:
+		return "startGroupGoErrHandler"
+	case startGroupGoResHandler:
+		return "startGroupGoResHandler"
+	case startGroupDelayHandler:
+		return "startGroupDelayHandler"
+	case endGroupHandler:
+		return "endGroupHandler"
+	case endGroupChanHandler:
+		return "endGroupChanHandler"
+	case endGroupGoHandler:
+		return "endGroupGoHandler"
+	case endGroupGoErrHandler:
+		return "endGroupGoErrHandler"
+	case endGroupGoResHandler:
+		return "endGroupGoResHandler"
+	case endGroupDelayHandler:
+		return "endGroupDelayHandler"
+	case startPromiseHandler:
+		return "startPromiseHandler"
+	case startPromiseDelayHandler:
+		return "startPromiseDelayHandler"
+	case startPromiseCallbackHandler:
+		return "startPromiseCallbackHandler"
+	case startPromiseFollowHandler:
+		return "startPromiseFollowHandler"
+	case startPromiseFollowCallbackHandler:
+		return "startPromiseFollowCallbackHandler"
+	case startPromiseThenHandler:
+		return "startPromiseThenHandler"
+	case startPromiseCatchHandler:
+		return "startPromiseCatchHandler"
+	case startPromiseRecoverHandler:
+		return "startPromiseRecoverHandler"
+	case startPromiseFinallyHandler:
+		return "startPromiseFinallyHandler"
+	case endPromiseHandler:
+		return "endPromiseHandler"
+	case endPromiseDelayHandler:
+		return "endPromiseDelayHandler"
+	case endPromiseCallbackHandler:
+		return "endPromiseCallbackHandler"
+	case endPromiseFollowHandler:
+		return "endPromiseFollowHandler"
+	case endPromiseFollowCallbackHandler:
+		return "endPromiseFollowCallbackHandler"
+	case endPromiseThenHandler:
+		return "endPromiseThenHandler"
+	case endPromiseCatchHandler:
+		return "endPromiseCatchHandler"
+	case endPromiseRecoverHandler:
+		return "endPromiseRecoverHandler"
+	case endPromiseFinallyHandler:
+		return "endPromiseFinallyHandler"
 	default:
 		return "unknown"
 	}
@@ -159,6 +167,10 @@ func createDebugMetricsCB() (*debugMetricsResult, func([]debugEvent)) {
 	return dm, func(des []debugEvent) {
 		dm.mu.Lock()
 		for _, de := range des {
+			if de == 0 {
+				continue
+			}
+
 			c, ok := dm.em[de]
 			if !ok {
 				c = new(atomic.Int64)

@@ -74,7 +74,7 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 
 	p := newPromInter[T](g)
 	ctx, cancel := callbackCtx(g, p.syncCtx)
-	debug(p, startHandler, startConstrHandler, startConstrGoHandler)
+	debug(p, startHandler, startGroupHandler, startGroupGoHandler)
 	go goHandler(p, cb, ctx, cancel)
 	return p
 }
@@ -87,7 +87,7 @@ func goHandler[T any](
 ) {
 	defer p.group.freeGoroutine()
 	runCallbackHandler[T, T](p, goFunc[T, T](cb), nil, true, ctx, cancel)
-	debug(p, endHandler, endConstrHandler, endConstrGoHandler)
+	debug(p, endHandler, endGroupHandler, endGroupGoHandler)
 }
 
 func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
@@ -104,7 +104,7 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 
 	p := newPromInter[T](g)
 	ctx, cancel := callbackCtx(g, p.syncCtx)
-	debug(p, startHandler, startConstrHandler, startConstrGoResHandler)
+	debug(p, startHandler, startGroupHandler, startGroupGoResHandler)
 	go goCtxResHandler(p, cb, ctx, cancel)
 	return p
 }
@@ -117,7 +117,7 @@ func goCtxResHandler[T any](
 ) {
 	defer p.group.freeGoroutine()
 	runCallbackHandler[T, T](p, ctxResFunc[T, T](cb), nil, true, ctx, cancel)
-	debug(p, endHandler, endConstrHandler, endConstrGoResHandler)
+	debug(p, endHandler, endGroupHandler, endGroupGoResHandler)
 }
 
 func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
@@ -134,7 +134,7 @@ func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
 
 	p := newPromInter[T](g)
 	ctx, cancel := callbackCtx(g, p.syncCtx)
-	debug(p, startHandler, startConstrHandler, startConstrGoResHandler)
+	debug(p, startHandler, startGroupHandler, startGroupGoResHandler)
 	go goCallbackHandler(p, cb, ctx, cancel)
 	return p
 }
@@ -147,7 +147,7 @@ func goCallbackHandler[NextT, PrevT any](
 ) {
 	defer p.group.freeGoroutine()
 	runCallbackHandler[NextT, PrevT](p, cb, nil, true, ctx, cancel)
-	debug(p, endHandler, endConstrHandler, endConstrGoResHandler)
+	debug(p, endHandler, endGroupHandler, endGroupGoResHandler)
 }
 
 func (g *Group[T]) Delay(
@@ -165,7 +165,7 @@ func (g *Group[T]) Delay(
 
 	p := newPromInter[T](g)
 	flags := getDelayFlags(cond)
-	debug(p, startHandler, startConstrHandler, startConstrDelayHandler)
+	debug(p, startHandler, startGroupHandler, startGroupDelayHandler)
 	go delayHandler(p, res, d, flags)
 	return p
 }
@@ -178,7 +178,7 @@ func delayHandler[T any](
 ) {
 	defer p.group.freeGoroutine()
 	p.resolveToResWithDelay(res, dd, flags)
-	debug(p, endHandler, endConstrHandler, endConstrDelayHandler)
+	debug(p, endHandler, endGroupHandler, endGroupDelayHandler)
 }
 
 func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
@@ -194,7 +194,7 @@ func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 	}
 
 	p := newPromInter[T](g)
-	debug(p, startHandler, startConstrHandler, startConstrChanHandler)
+	debug(p, startHandler, startGroupHandler, startGroupChanHandler)
 	go chanHandler(p, resChan)
 	return p
 }
@@ -203,7 +203,7 @@ func chanHandler[T any](p *Promise[T], resChan <-chan Result[T]) {
 	defer p.group.freeGoroutine()
 	res := <-resChan
 	p.resolveToRes(res)
-	debug(p, endHandler, endConstrHandler, endConstrChanHandler)
+	debug(p, endHandler, endGroupHandler, endGroupChanHandler)
 }
 
 func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {

@@ -66,7 +66,17 @@ func FollowCallback[
 
 	nextProm := newPromInter[NextT](nextGroup)
 	ctx, cancel := callbackCtx(nextGroup, nextProm.syncCtx)
-	go followHandler(p, nextProm, cb, ctx, cancel, followOp)
+	debug(p, startHandler, startPromiseFollowCallbackHandler)
+	go followHandler(
+		p,
+		nextProm,
+		cb,
+		ctx,
+		cancel,
+		followOp,
+		endHandler,
+		endPromiseFollowCallbackHandler,
+	)
 	return nextProm
 }
 

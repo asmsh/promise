@@ -51,37 +51,41 @@ const (
 	startHandler
 	endHandler
 
-	// constructor (functions) values
+	// constructor (Group functions) values
 	// start values...
-	startConstrHandler
-	startConstrChanHandler
-	startConstrGoHandler
-	startConstrGoErrHandler
-	startConstrGoResHandler
-	startConstrDelayHandler
+	startGroupHandler
+	startGroupChanHandler
+	startGroupGoHandler
+	startGroupGoErrHandler
+	startGroupGoResHandler
+	startGroupDelayHandler
 	// end values...
-	endConstrHandler
-	endConstrChanHandler
-	endConstrGoHandler
-	endConstrGoErrHandler
-	endConstrGoResHandler
-	endConstrDelayHandler
+	endGroupHandler
+	endGroupChanHandler
+	endGroupGoHandler
+	endGroupGoErrHandler
+	endGroupGoResHandler
+	endGroupDelayHandler
 
-	// follow (methods) values
+	// follow (Promise methods) values
 	// start values...
-	startFollowHandler
-	startCallbackFollowHandler
-	startDelayFollowHandler
-	startThenFollowHandler
-	startCatchFollowHandler
-	startRecoverFollowHandler
-	startFinallyFollowHandler
+	startPromiseHandler
+	startPromiseDelayHandler
+	startPromiseCallbackHandler
+	startPromiseFollowHandler
+	startPromiseFollowCallbackHandler
+	startPromiseThenHandler
+	startPromiseCatchHandler
+	startPromiseRecoverHandler
+	startPromiseFinallyHandler
 	// end values...
-	endFollowHandler
-	endCallbackFollowHandler
-	endDelayFollowHandler
-	endThenFollowHandler
-	endCatchFollowHandler
-	endRecoverFollowHandler
-	endFinallyFollowHandler
+	endPromiseHandler
+	endPromiseDelayHandler
+	endPromiseCallbackHandler
+	endPromiseFollowHandler
+	endPromiseFollowCallbackHandler
+	endPromiseThenHandler
+	endPromiseCatchHandler
+	endPromiseRecoverHandler
+	endPromiseFinallyHandler
 )

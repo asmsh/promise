@@ -195,7 +195,7 @@ func (p *Promise[T]) Delay(
 
 	nextProm := newPromInter[T](p.group)
 	flags := getDelayFlags(cond)
-	debug(p, startHandler, startFollowHandler, startDelayFollowHandler)
+	debug(p, startHandler, startPromiseHandler, startPromiseDelayHandler)
 	go delayFollowHandler(p, nextProm, d, flags)
 	return nextProm
 }
@@ -223,7 +223,7 @@ func delayFollowHandler[T any](
 	}
 
 	nextProm.resolveToResWithDelay(res, dd, flags)
-	debug(prevProm, endHandler, endFollowHandler, endDelayFollowHandler)
+	debug(prevProm, endHandler, endPromiseHandler, endPromiseDelayHandler)
 }
 
 func (p *Promise[T]) Callback(
@@ -243,8 +243,18 @@ func (p *Promise[T]) Callback(
 	}
 
 	ctx, cancel := callbackCtx(p.group, nil)
-	debug(p, startHandler, startFollowHandler, startCallbackFollowHandler)
-	go followHandler(p, nil, followFunc[T, T](cb), ctx, cancel, callbackOp)
+	debug(p, startHandler, startPromiseHandler, startPromiseCallbackHandler)
+	go followHandler(
+		p,
+		nil,
+		followFunc[T, T](cb),
+		ctx,
+		cancel,
+		callbackOp,
+		endHandler,
+		endPromiseHandler,
+		endPromiseCallbackHandler,
+	)
 }
 
 func (p *Promise[T]) Follow(
@@ -265,8 +275,18 @@ func (p *Promise[T]) Follow(
 
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
-	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
-	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel, followOp)
+	debug(p, startHandler, startPromiseHandler, startPromiseFollowHandler)
+	go followHandler(
+		p,
+		nextProm,
+		followResFunc[T, T](cb),
+		ctx,
+		cancel,
+		followOp,
+		endHandler,
+		endPromiseHandler,
+		endPromiseFollowHandler,
+	)
 	return nextProm
 }
 
@@ -286,8 +306,18 @@ func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
 
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
-	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
-	go followHandler(p, nextProm, cb, ctx, cancel, followOp)
+	debug(p, startHandler, startPromiseHandler, startPromiseFollowCallbackHandler)
+	go followHandler(
+		p,
+		nextProm,
+		cb,
+		ctx,
+		cancel,
+		followOp,
+		endHandler,
+		endPromiseHandler,
+		endPromiseFollowCallbackHandler,
+	)
 	return nextProm
 }
 
@@ -309,8 +339,18 @@ func (p *Promise[T]) Then(
 
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
-	debug(p, startHandler, startFollowHandler, startThenFollowHandler)
-	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel, thenOp)
+	debug(p, startHandler, startPromiseHandler, startPromiseThenHandler)
+	go followHandler(
+		p,
+		nextProm,
+		followResFunc[T, T](cb),
+		ctx,
+		cancel,
+		thenOp,
+		endHandler,
+		endPromiseHandler,
+		endPromiseThenHandler,
+	)
 	return nextProm
 }
 
@@ -332,8 +372,18 @@ func (p *Promise[T]) Catch(
 
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
-	debug(p, startHandler, startFollowHandler, startCatchFollowHandler)
-	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel, catchOp)
+	debug(p, startHandler, startPromiseHandler, startPromiseCatchHandler)
+	go followHandler(
+		p,
+		nextProm,
+		followResFunc[T, T](cb),
+		ctx,
+		cancel,
+		catchOp,
+		endHandler,
+		endPromiseHandler,
+		endPromiseCatchHandler,
+	)
 	return nextProm
 }
 
@@ -355,8 +405,18 @@ func (p *Promise[T]) Recover(
 
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
-	debug(p, startHandler, startFollowHandler, startRecoverFollowHandler)
-	go followHandler(p, nextProm, followResFunc[T, T](cb), ctx, cancel, recoverOp)
+	debug(p, startHandler, startPromiseHandler, startPromiseRecoverHandler)
+	go followHandler(
+		p,
+		nextProm,
+		followResFunc[T, T](cb),
+		ctx,
+		cancel,
+		recoverOp,
+		endHandler,
+		endPromiseHandler,
+		endPromiseRecoverHandler,
+	)
 	return nextProm
 }
 
@@ -378,8 +438,18 @@ func (p *Promise[T]) Finally(
 
 	nextProm := newPromInter[T](p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
-	debug(p, startHandler, startFollowHandler, startFinallyFollowHandler)
-	go followHandler(p, nextProm, ctxFunc[T, T](cb), ctx, cancel, finallyOp)
+	debug(p, startHandler, startPromiseHandler, startPromiseFinallyHandler)
+	go followHandler(
+		p,
+		nextProm,
+		ctxFunc[T, T](cb),
+		ctx,
+		cancel,
+		finallyOp,
+		endHandler,
+		endPromiseHandler,
+		endPromiseFinallyHandler,
+	)
 	return nextProm
 }
 
@@ -390,6 +460,7 @@ func followHandler[NextT, PrevT any](
 	ctx context.Context,
 	cancel context.CancelFunc,
 	op followOperationLogic,
+	endDebugEvents ...debugEvent,
 ) {
 	defer prevProm.group.freeGoroutine()
 	s := prevProm.waitState()
@@ -415,5 +486,5 @@ func followHandler[NextT, PrevT any](
 
 	// run the callback with the actual promise result.
 	runCallbackHandler(nextProm, cb, res, op.SupportHandleReturns(), ctx, cancel)
-	debug(prevProm, endHandler, endFollowHandler, endThenFollowHandler)
+	debug(prevProm, endDebugEvents...)
 }

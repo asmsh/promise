@@ -1031,8 +1031,10 @@ func BenchmarkAllWait(b *testing.B) {
 }
 
 func BenchmarkAllWait_LeakDetector(b *testing.B) {
-	// TODO: skip based on the present build tags.
-	b.Skip()
+	// skip based on the present build tags.
+	if !debugEnabled {
+		b.Skip("the 'enable_promise_debug' build tag isn't enabled")
+	}
 
 	log.SetFlags(log.Lmicroseconds)
 
