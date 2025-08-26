@@ -42,21 +42,6 @@ func (w workOutput) State() State {
 	return Success
 }
 
-func workerWg(
-	ctx context.Context,
-	in <-chan workInput,
-	out chan<- workOutput,
-	wg *sync.WaitGroup,
-) {
-	defer wg.Done()
-
-	for w := range in {
-		time.Sleep(100 * time.Microsecond) // simulates some work
-
-		out <- workOutput{Greeting: "Hello " + w.Name}
-	}
-}
-
 func actualWorkWG(
 	ctx context.Context,
 	inputs []workInput,
@@ -69,7 +54,15 @@ func actualWorkWG(
 	for range inputs {
 		wg.Add(1)
 
-		go workerWg(ctx, workInputsChan, workOutputsChan, &wg)
+		go func() {
+			defer wg.Done()
+
+			for w := range workInputsChan {
+				time.Sleep(100 * time.Microsecond) // simulates some work
+
+				workOutputsChan <- workOutput{Greeting: "Hello " + w.Name}
+			}
+		}()
 	}
 
 	for _, input := range inputs {
@@ -83,7 +76,7 @@ func actualWorkWG(
 		close(workOutputsChan)
 	}()
 
-	outputs := make([]workOutput, 0)
+	outputs := make([]workOutput, 0, len(inputs))
 
 	for output := range workOutputsChan {
 		outputs = append(outputs, output)
