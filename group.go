@@ -64,15 +64,22 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+	// make sure the group is initiated.
 	g.init()
+	// return an error if the group is in the waiting mode,
+	// disallowing the initiation of any new work.
 	if g.isWaiting() {
 		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
 	}
+	// attempt to reserve a goroutine for the callback,
+	// or return an error if there's no available ones.
 	if !g.reserveGoroutine(noopRegFunc) {
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
 	}
 
 	p := newPromInter[T](g)
+	// derive the context used in the callback from the group's, and from
+	// the new promise's, making the callback context a child of both.
 	ctx, cancel := callbackCtx(g, p.syncCtx)
 	debug(p, startHandler, startGroupHandler, startGroupGoHandler)
 	go goHandler(p, cb, ctx, cancel)
@@ -434,6 +441,7 @@ func (g *Group[T]) isWaiting() bool {
 	return g.core.waiting.Load()
 }
 
+// note: once it returns true, an arrangement must be made for calling freeGoroutine.
 func (g *Group[T]) reserveGoroutine(chainRegFunc func()) bool {
 	if g == nil {
 		// execute the register func and mark this reservation successful.

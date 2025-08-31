@@ -168,6 +168,8 @@ func (p *Promise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) *Promise[T] {
+	// return an error if its group is in the waiting mode,
+	// disallowing the initiation of any new work.
 	if p.group.isWaiting() {
 		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
 	}
@@ -178,6 +180,8 @@ func (p *Promise[T]) Delay(
 		// Context value that's never canceled(nil Done) to the Ctx constructor.
 		return p
 	}
+	// attempt to reserve a goroutine for the rescheduling,
+	// or return an error if there's no available ones.
 	if !p.group.reserveGoroutine(p.regChainRead) {
 		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
 	}
