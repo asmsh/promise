@@ -26,8 +26,10 @@ const (
 	nilCallbackPanicMsg = "promise: the provided function value is nil"
 )
 
+type chainStatus = uint32
+
 const (
-	chainStatusEmpty = iota
+	chainStatusEmpty chainStatus = iota
 	chainStatusWait
 	chainStatusRead
 	chainStatusHandled
@@ -75,8 +77,6 @@ func (p *Promise[T]) readState() State {
 }
 
 // waitState waits for the promise p to be resolved, and returns its [State].
-// by either blocking on receiving
-// from the syncChan
 func (p *Promise[T]) waitState() State {
 	// the Context will be closed by the previous promise,
 	// after setting the res and status fields as expected.
@@ -215,15 +215,15 @@ func (p *Promise[T]) resolveToPanicRes(
 	debug(p, resolve, resolvePanic)
 	// save the result before executing any callbacks.
 	p.res = res
-	if p.chainStatus.Load() == chainStatusEmpty {
-		// if the chain is empty (no follow, read or wait calls), execute
-		// the unhandled panic logic.
-		// otherwise, it will be delayed until the last call in the chain.
-		p.unhandledPanic()
-	}
-	closeSyncCtx(p.syncCtx) // unblocks all calls waiting on p.
-	handleExtCalls(p)       // handles all extension calls that involve p.
-	handleGroupCalls(p)     // handles all group calls which p is part of.
+	// execute the side effects, if the chain doesn't have a wait or read calls,
+	// nor is already handled
+	p.chainSideEffects(p.chainStatus.Load(), false)
+	// unblock all calls waiting on p.
+	closeSyncCtx(p.syncCtx)
+	// handle all extension calls that involve p.
+	handleExtCalls(p)
+	// handle all group calls for p's group.
+	handleGroupCalls(p)
 
 	// note: any code that gets added after closeSyncCtx isn't guaranteed
 	// to be executed without extra wait arrangements (via Group Wait methods,
@@ -235,9 +235,7 @@ func (p *Promise[T]) resolveToErrorRes(
 ) {
 	debug(p, resolve, resolveError)
 	p.res = res
-	if p.chainStatus.Load() == chainStatusEmpty {
-		p.unhandledError()
-	}
+	p.chainSideEffects(p.chainStatus.Load(), false)
 	closeSyncCtx(p.syncCtx)
 	handleExtCalls(p)
 	handleGroupCalls(p)
@@ -248,26 +246,38 @@ func (p *Promise[T]) resolveToSuccessRes(
 ) {
 	debug(p, resolve, resolveSuccess)
 	p.res = res
+	// no side effects to be done for Success result.
 	closeSyncCtx(p.syncCtx)
 	handleExtCalls(p)
 	handleGroupCalls(p)
 }
 
-func (p *Promise[T]) resolveToResSync(res Result[T]) {
-	if res == nil {
+// note: if there's a result to be set, it must be set before calling it.
+func (p *Promise[T]) chainSideEffects(cs chainStatus, waitCall bool) {
+	if p.res == nil {
 		return
 	}
 
-	p.res = res
-	switch state := res.State(); state {
+	// if the chain is not empty (there's a follow, read or wait calls), return
+	// early, unless it's a wait call and the waitCall logic is the caller.
+	// as the unhandled logic will be delayed until the last call in the chain.
+	// otherwise, execute the unhandled panic logic.
+	switch {
+	case cs == chainStatusHandled:
+		return
+	case cs == chainStatusRead:
+		return
+	case cs == chainStatusWait && !waitCall:
+		return
+	}
+
+	// at this point, the promise is not handled and doesn't have a read call,
+	// so call the unhandled handlers if the state is one of a failure.
+	switch state := p.res.State(); state {
 	case Panic:
 		p.unhandledPanic()
 	case Error:
 		p.unhandledError()
-	case Success:
-		// nothing special to be done.
-	default:
-		panic("promise: unexpected Result State: " + state.String())
 	}
 }
 
@@ -600,9 +610,10 @@ func newPromSync[T any](g *Group[T], res Result[T]) *Promise[T] {
 	p := &Promise[T]{
 		group:   g,
 		syncCtx: closedSyncCtx,
+		res:     res,
 		// no other fields are needed, since sync promises are resolved directly
-		// after created, so any extension call will depend on the syncChan.
+		// after created, so any extension call will depend on the syncCtx chan.
 	}
-	p.resolveToResSync(res)
+	p.chainSideEffects(chainStatusRead, false) // anything other than empty or handled.
 	return p
 }

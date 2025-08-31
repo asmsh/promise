@@ -119,21 +119,10 @@ func (p *Promise[T]) WaitChan() <-chan struct{} {
 
 func (p *Promise[T]) waitCall() {
 	// wait the promise to be resolved and get its [State]
-	s := p.waitState()
-
-	// if the chain has a read call or is already handled, return early
-	if p.chainStatus.Load() >= chainStatusRead {
-		return
-	}
-
-	// at this point, the promise is not handled and doesn't have a read call,
-	// so call the unhandled handlers if the state is one of a failure.
-	switch s {
-	case Error:
-		p.unhandledError()
-	case Panic:
-		p.unhandledPanic()
-	}
+	p.waitState()
+	// execute the side effects, if the chain doesn't have a read call nor
+	// is already handled
+	p.chainSideEffects(p.chainStatus.Load(), true)
 }
 
 func (p *Promise[T]) Res() Result[T] {
