@@ -161,7 +161,7 @@ func Chan[T any](resChan <-chan Result[T]) *Promise[T] {
 }
 
 // Ctx returns a [Promise] that wraps the provided [context.Context] value, ctx,
-// synchronously, without creating any new goroutines.
+// that's resolved once the ctx is canceled.
 // The [Promise.Res] returns a [Result] value that allows knowing the [State]
 // of ctx (via [Result.State]), and the error returned from ctx (via [Result.Err]).
 //
@@ -178,14 +178,19 @@ func Ctx(ctx context.Context) *Promise[any] {
 		panic(nilCtxPanicMsg)
 	}
 
-	if ctx.Done() != nil {
-		return newPromCtx[any](nil, ctx)
+	// handle contexts with nil done channel, as a nil channel is never closed,
+	// and if used with this package it will block follow calls on it forever.
+	if ctx.Done() == nil {
+		// since this ctx value will never be closed, the equivalent
+		// outcome would be a Promise that's never resolved.
+		// so, return that equivalent value without creating any unneeded
+		// resources.
+		return newPromBlocked[any]()
 	}
 
-	// since this ctx value will never be closed, the equivalent outcome would
-	// be a Promise that's never resolved.
-	// so, return that equivalent value without creating any unneeded resources.
-	return newPromBlocked[any]()
+	p := newPromCtx[any](nil, ctx)
+	go ctxHandler(p)
+	return p
 }
 
 // Wrap returns a [Promise] that wraps the provided [Result] value, res,

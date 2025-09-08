@@ -218,16 +218,37 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 		panic(nilCtxPanicMsg)
 	}
 	g.init()
-	if ctx.Done() != nil {
-		return newPromCtx[T](g, ctx)
-	} else if g != nil && g.core.options.IsNoNilCtxDoneChan() {
-		return newPromSync[T](g, errPromiseCtxNilDoneResult[T]{})
+	if g.isWaiting() {
+		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	}
+	// handle contexts with nil done channel, as a nil channel is never closed,
+	// and if used with this package it will block follow calls on it forever.
+	if ctx.Done() == nil {
+		if g != nil && g.core.options.IsNoNilCtxDoneChan() {
+			return newPromSync[T](g, errPromiseCtxNilDoneResult[T]{})
+		} else {
+			// since this ctx value will never be closed, the equivalent
+			// outcome would be a Promise that's never resolved.
+			// so, return that equivalent value without creating any unneeded
+			// resources.
+			return newPromBlocked[T]()
+		}
+	}
+	if !g.reserveGoroutine(noopRegFunc) {
+		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
 	}
 
-	// since this ctx value will never be closed, the equivalent outcome would
-	// be a Promise that's never resolved.
-	// so, return that equivalent value without creating any unneeded resources.
-	return newPromBlocked[T]()
+	p := newPromCtx[T](g, ctx)
+	debug(p, startHandler, startGroupHandler, startGroupCtxHandler)
+	go ctxHandler(p)
+	return p
+}
+
+func ctxHandler[T any](p *Promise[T]) {
+	defer p.group.freeGoroutine()
+	p.waitState()
+	p.resolveToRes(p.res)
+	debug(p, endHandler, endGroupHandler, endGroupCtxHandler)
 }
 
 func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {

@@ -55,6 +55,7 @@ const (
 	// start values...
 	startGroupHandler
 	startGroupChanHandler
+	startGroupCtxHandler
 	startGroupGoHandler
 	startGroupGoErrHandler
 	startGroupGoResHandler
@@ -62,6 +63,7 @@ const (
 	// end values...
 	endGroupHandler
 	endGroupChanHandler
+	endGroupCtxHandler
 	endGroupGoHandler
 	endGroupGoErrHandler
 	endGroupGoResHandler

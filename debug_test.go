@@ -69,6 +69,8 @@ func (de debugEvent) String() string {
 		return "startGroupHandler"
 	case startGroupChanHandler:
 		return "startGroupChanHandler"
+	case startGroupCtxHandler:
+		return "startGroupCtxHandler"
 	case startGroupGoHandler:
 		return "startGoHandler"
 	case startGroupGoErrHandler:
@@ -81,6 +83,8 @@ func (de debugEvent) String() string {
 		return "endGroupHandler"
 	case endGroupChanHandler:
 		return "endGroupChanHandler"
+	case endGroupCtxHandler:
+		return "endGroupCtxHandler"
 	case endGroupGoHandler:
 		return "endGroupGoHandler"
 	case endGroupGoErrHandler:

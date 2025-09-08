@@ -577,8 +577,8 @@ func handleGroupCall[T any](callVal any, res Result[T]) bool {
 	}
 }
 
-// newPromInter creates a new Promise which is resolved internally,
-// using an internal allocated channel.
+// newPromInter creates a new Promise which is resolved asynchronously,
+// via an internal allocated channel.
 func newPromInter[T any](g *Group[T]) *Promise[T] {
 	return &Promise[T]{
 		group:   g,
@@ -586,6 +586,8 @@ func newPromInter[T any](g *Group[T]) *Promise[T] {
 	}
 }
 
+// newPromCtx creates a new Promise which is resolved asynchronously,
+// via the channel from the passed context.
 func newPromCtx[T any](g *Group[T], ctx context.Context) *Promise[T] {
 	return &Promise[T]{
 		group:   g,
