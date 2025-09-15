@@ -23,19 +23,12 @@ type Group[T any] struct {
 	// that belong to this [Group] when the [GroupConfig.SaveAllGroupResults]
 	// option is set.
 	// it's a linked-list instead of an array, because the size is unpredictable.
-	// resStateHist holds the history of [State] values for all [Promise]
-	// values that was run from this [Group].
 	// resHist holds the history of [Result] values for either first values
 	// or the last ones, depending on the [saveLastSingleGroupResult] flag.
-	// TODO: merge [resStateHist] and [resHist] somehow.
-	//  maybe by making resHist an array of 3 and check them to get
-	//  the resStateHist value, and make saving the 3 result history
-	//  mandatory for all calls.
 	// resMu protects reads and writes to them.
-	resMu        sync.RWMutex
-	resQ         list.List // of GroupRes[T]
-	resStateHist State     // Bitwise OR of previous values
-	resHist      *groupResHistory[T]
+	resMu   sync.RWMutex
+	resQ    list.List // of GroupRes[T]
+	resHist groupResHistory[T]
 }
 
 func NewGroup[T any](opts ...GroupOption) *Group[T] {
@@ -359,7 +352,7 @@ type groupResHistory[T any] struct {
 	vals [3]GroupRes[T]
 }
 
-// the 'resMu' must be locked before entering.
+// the 'resMu' must be write-locked before entering.
 func (h *groupResHistory[T]) insertRes(res GroupRes[T]) {
 	// if we only save the first [Result], then save it in the first empty place.
 	for i := range h.vals {
@@ -379,27 +372,31 @@ func (h *groupResHistory[T]) insertRes(res GroupRes[T]) {
 // getRes returns the first most or last most [Result], according to how
 // the values have been saved.
 //
-// the 'resMu' must be locked before entering.
+// the 'resMu' must be read-locked before entering.
 func (h *groupResHistory[T]) getRes() (res GroupRes[T]) {
-	// if it's not been initialized, return nothing.
-	if h == nil {
-		return res
-	}
-
 	// the [Result] we're interested in is always at index 0.
 	return h.vals[0]
 }
 
-// getStateRes returns the GroupRes for the provided [State], or nothing,
+// getStateHist returns the Bitwise-OR of all different states that have
+// been sent on this group.
+//
+// the 'resMu' must be read-locked before entering.
+func (h *groupResHistory[T]) getStateHist() (state State) {
+	for i := range h.vals {
+		if h.vals[i].Result == nil {
+			continue
+		}
+		state |= h.vals[i].State()
+	}
+	return state
+}
+
+// getResForState returns the GroupRes for the provided [State], or nothing,
 // if no matching GroupRes has been saved for the provided [State].
 //
-// the 'resMu' must be locked before entering.
-func (h *groupResHistory[T]) getStateRes(state State) (res GroupRes[T]) {
-	// if it's not been initialized, return nothing.
-	if h == nil {
-		return res
-	}
-
+// the 'resMu' must be read-locked before entering.
+func (h *groupResHistory[T]) getResForState(state State) (res GroupRes[T]) {
 	// the call doesn't expect a result to be added from the history.
 	if state == unknown {
 		return res
@@ -410,7 +407,7 @@ func (h *groupResHistory[T]) getStateRes(state State) (res GroupRes[T]) {
 		if h.vals[i].Result == nil {
 			continue
 		}
-		if h.vals[i].State() == state {
+		if h.vals[i].Result.State() == state {
 			return h.vals[i]
 		}
 	}

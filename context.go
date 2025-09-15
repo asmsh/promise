@@ -87,12 +87,16 @@ func callbackCtx[T any](
 		return context.Background(), noopCancelFunc
 	}
 
-	// there's a Group with a group Context, so create the Context to be returned,
-	// and arrange to close it when the promise's syncCtx is closed, if provided.
+	// there's a Group with a group Context, but no promise syncCtx is provided,
+	// which only happens from Callback calls where there's no next promise,
+	// so create the Context to be returned only from the group's.
 	if syncCtx == nil {
 		return context.WithCancel(g.core.ctx)
 	}
 
+	// there's a Group with a group Context, and a promise's syncCtx, so create
+	// the Context to be returned, and arrange to close it when either the group's
+	// Context or the promise's syncCtx is close.
 	// TODO: these 2 context calls can be replaced by a JoinContext that will be
 	//  cancelled when any of them is cancelled.
 	ctx, cancel := context.WithCancel(g.core.ctx)

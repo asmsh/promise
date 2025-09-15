@@ -67,7 +67,7 @@ func (e IdxError) Unwrap() error {
 }
 
 // GroupError is the error container for an error returned from
-// the the [Group.AllWaitRes] or [Group.AnyWaitRes] group calls.
+// the [Group.AllWaitRes] or [Group.AnyWaitRes] group calls.
 // It's also one of the container types for the MultiError's elements.
 type GroupError struct {
 	Err error
@@ -84,7 +84,7 @@ func (e GroupError) Unwrap() error {
 // [All](and [AllWait]), [Any](and [AnyWait]) or [Join] extension calls,
 // and the [Group.AllWaitRes] or [Group.AnyWaitRes] group calls.
 type MultiError struct {
-	errs []error // either a []IdxError or []GroupError
+	errs []error // either a [][IdxError] or [][GroupError]
 }
 
 func (e MultiError) Error() string {

@@ -547,15 +547,10 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 	p.group.resMu.Lock()
 	groupRes := GroupRes[T]{Result: res}
 
-	p.group.resStateHist |= res.State()
+	p.group.resHist.insertRes(groupRes)
 
 	if p.group.core.options.IsSaveAllGroupResults() {
 		p.group.resQ.PushBack(groupRes)
-	} else {
-		if p.group.resHist == nil {
-			p.group.resHist = &groupResHistory[T]{}
-		}
-		p.group.resHist.insertRes(groupRes)
 	}
 
 	debug(p, doneSaveGroupResult)

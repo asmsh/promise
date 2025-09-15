@@ -142,7 +142,7 @@ func (g *Group[T]) getMultiCallResSnapshot(callResState State, callResLen int) [
 	}
 
 	// fetch the call's result from the history.
-	res := g.resHist.getStateRes(callResState)
+	res := g.resHist.getResForState(callResState)
 
 	// if no matching [Result] is found, either return nil, or return
 	// the new callResLen with the expected cap.
@@ -164,17 +164,18 @@ func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
 	select {
 	case <-groupDone:
 		g.resMu.RLock()
+		resStateHist := g.resHist.getStateHist()
 		// get the 'callResState' from the [Group]'s state history.
 		// for a zero [Group] we return a [Success] and empty [Result],
 		// otherwise we return the existing [Result].
-		callResState := op.InitState(g.resStateHist)
+		callResState := op.InitState(resStateHist)
 
 		// if this is a zero [Group], or the call ignores the current
 		// [Group] state, use the [Group]'s highest [State] instead,
 		// as there are no other promises running and the current state
 		// history is all we get.
 		if callResState == unknown {
-			callResState = calcGroupResState(g.resStateHist)
+			callResState = calcGroupResState(resStateHist)
 		}
 
 		// get the 'callRes' from this [Group] based on the 'callResState'.
@@ -192,7 +193,8 @@ func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
 			var targetFound bool
 
 			g.resMu.RLock()
-			callResState := op.InitState(g.resStateHist)
+			resStateHist := g.resHist.getStateHist()
+			callResState := op.InitState(resStateHist)
 			if op.IsTargetState(callResState) {
 				callRes = g.getMultiCallResSnapshot(callResState, 0)
 				targetFound = true
@@ -217,7 +219,7 @@ func (g *Group[T]) joinResSlow(
 	resChan := make(chan GroupRes[T])
 
 	// create the syncChan to handle unblocking promises once the target
-	// value is received, but onl if we are expecting an early return.
+	// value is received, but only if we are expecting an early return.
 	var syncChan chan struct{}
 	if op.ReturnOnTargetState() {
 		syncChan = make(chan struct{})
@@ -239,7 +241,8 @@ func (g *Group[T]) joinResSlow(
 	if op.ReturnOnTargetState() {
 		// we want an early return, once the target [Result] is found.
 		g.resMu.RLock()
-		callResState = op.InitState(g.resStateHist)
+		resStateHist := g.resHist.getStateHist()
+		callResState = op.InitState(resStateHist)
 		if op.IsTargetState(callResState) {
 			// we found our target, so return the expected [Result] values.
 			callRes = g.getMultiCallResSnapshot(callResState, 0)
@@ -247,7 +250,7 @@ func (g *Group[T]) joinResSlow(
 		} else {
 			// expect at least all active promises to be included.
 			callResLen := g.core.sg.ActiveCount()
-			callRes = g.getMultiCallResSnapshot(callResState, int(callResLen))
+			callRes = g.getMultiCallResSnapshot(callResState, callResLen)
 		}
 		g.resMu.RUnlock()
 	} else {
@@ -283,9 +286,10 @@ func (g *Group[T]) joinResSlow(
 		// get the [State] of this [Group], and a snapshot of its [Result],
 		// expecting at least all ongoing promises to be included.
 		g.resMu.RLock()
-		callResState = op.InitState(g.resStateHist)
+		resStateHist := g.resHist.getStateHist()
+		callResState = op.InitState(resStateHist)
 		callResLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
-		callRes = g.getMultiCallResSnapshot(callResState, int(callResLen))
+		callRes = g.getMultiCallResSnapshot(callResState, callResLen)
 		g.resMu.RUnlock()
 	}
 
@@ -294,7 +298,7 @@ func (g *Group[T]) joinResSlow(
 resultLoop:
 	for !targetFound {
 		// the 2 select cases below can't be ready at the same time.
-		// because the 'groupDone' channel is closed once all Promise values
+		// because the 'groupDone' channel is closed once all Promise goroutines
 		// exits, which happens after the 'handleGroupCall' method returns,
 		// and the 'handleGroupCall' method is responsible for sending on
 		// the 'resChan'.
