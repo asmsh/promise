@@ -14,33 +14,33 @@ type _groupOptionsBitFlagsInterface interface {
 	SetTypedFlags(flags groupOptions)
 
 	IsNeverCancelCBCtx() (set bool)
-	IsOnetimeHandling() (set bool)
-	IsNoNilCtxDoneChan() (set bool)
-	IsNoWaitingBusyGroup() (set bool)
-	IsSaveAllGroupResults() (set bool)
-
 	SetNeverCancelCBCtx() (old bool)
-	SetOnetimeHandling() (old bool)
-	SetNoNilCtxDoneChan() (old bool)
-	SetNoWaitingBusyGroup() (old bool)
-	SetSaveAllGroupResults() (old bool)
-
 	ResetNeverCancelCBCtx() (old bool)
-	ResetOnetimeHandling() (old bool)
-	ResetNoNilCtxDoneChan() (old bool)
-	ResetNoWaitingBusyGroup() (old bool)
-	ResetSaveAllGroupResults() (old bool)
-
 	SetNeverCancelCBCtxTo(new bool) (old bool)
-	SetOnetimeHandlingTo(new bool) (old bool)
-	SetNoNilCtxDoneChanTo(new bool) (old bool)
-	SetNoWaitingBusyGroupTo(new bool) (old bool)
-	SetSaveAllGroupResultsTo(new bool) (old bool)
-
 	ToggleNeverCancelCBCtx() (new bool)
+
+	IsOnetimeHandling() (set bool)
+	SetOnetimeHandling() (old bool)
+	ResetOnetimeHandling() (old bool)
+	SetOnetimeHandlingTo(new bool) (old bool)
 	ToggleOnetimeHandling() (new bool)
+
+	IsNoNilCtxDoneChan() (set bool)
+	SetNoNilCtxDoneChan() (old bool)
+	ResetNoNilCtxDoneChan() (old bool)
+	SetNoNilCtxDoneChanTo(new bool) (old bool)
 	ToggleNoNilCtxDoneChan() (new bool)
+
+	IsNoWaitingBusyGroup() (set bool)
+	SetNoWaitingBusyGroup() (old bool)
+	ResetNoWaitingBusyGroup() (old bool)
+	SetNoWaitingBusyGroupTo(new bool) (old bool)
 	ToggleNoWaitingBusyGroup() (new bool)
+
+	IsSaveAllGroupResults() (set bool)
+	SetSaveAllGroupResults() (old bool)
+	ResetSaveAllGroupResults() (old bool)
+	SetSaveAllGroupResultsTo(new bool) (old bool)
 	ToggleSaveAllGroupResults() (new bool)
 }
 
@@ -89,78 +89,78 @@ func (f *groupOptionsBitFlags) SetTypedFlags(flags groupOptions) {
 func (f *groupOptionsBitFlags) IsNeverCancelCBCtx() (set bool) {
 	return f.BitFlags().Is(_groupOptionsNeverCancelCBCtxBitIndex)
 }
-func (f *groupOptionsBitFlags) IsOnetimeHandling() (set bool) {
-	return f.BitFlags().Is(_groupOptionsOnetimeHandlingBitIndex)
-}
-func (f *groupOptionsBitFlags) IsNoNilCtxDoneChan() (set bool) {
-	return f.BitFlags().Is(_groupOptionsNoNilCtxDoneChanBitIndex)
-}
-func (f *groupOptionsBitFlags) IsNoWaitingBusyGroup() (set bool) {
-	return f.BitFlags().Is(_groupOptionsNoWaitingBusyGroupBitIndex)
-}
-func (f *groupOptionsBitFlags) IsSaveAllGroupResults() (set bool) {
-	return f.BitFlags().Is(_groupOptionsSaveAllGroupResultsBitIndex)
-}
-
 func (f *groupOptionsBitFlags) SetNeverCancelCBCtx() (old bool) {
 	return f.SetNeverCancelCBCtxTo(true)
+}
+func (f *groupOptionsBitFlags) ResetNeverCancelCBCtx() (old bool) {
+	return f.SetNeverCancelCBCtxTo(false)
+}
+func (f *groupOptionsBitFlags) SetNeverCancelCBCtxTo(new bool) (old bool) {
+	return f.BitFlags().SetTo(_groupOptionsNeverCancelCBCtxBitIndex, new)
+}
+func (f *groupOptionsBitFlags) ToggleNeverCancelCBCtx() (new bool) {
+	return f.BitFlags().Toggle(_groupOptionsNeverCancelCBCtxBitIndex)
+}
+
+func (f *groupOptionsBitFlags) IsOnetimeHandling() (set bool) {
+	return f.BitFlags().Is(_groupOptionsOnetimeHandlingBitIndex)
 }
 func (f *groupOptionsBitFlags) SetOnetimeHandling() (old bool) {
 	return f.SetOnetimeHandlingTo(true)
 }
-func (f *groupOptionsBitFlags) SetNoNilCtxDoneChan() (old bool) {
-	return f.SetNoNilCtxDoneChanTo(true)
-}
-func (f *groupOptionsBitFlags) SetNoWaitingBusyGroup() (old bool) {
-	return f.SetNoWaitingBusyGroupTo(true)
-}
-func (f *groupOptionsBitFlags) SetSaveAllGroupResults() (old bool) {
-	return f.SetSaveAllGroupResultsTo(true)
-}
-
-func (f *groupOptionsBitFlags) ResetNeverCancelCBCtx() (old bool) {
-	return f.SetNeverCancelCBCtxTo(false)
-}
 func (f *groupOptionsBitFlags) ResetOnetimeHandling() (old bool) {
 	return f.SetOnetimeHandlingTo(false)
-}
-func (f *groupOptionsBitFlags) ResetNoNilCtxDoneChan() (old bool) {
-	return f.SetNoNilCtxDoneChanTo(false)
-}
-func (f *groupOptionsBitFlags) ResetNoWaitingBusyGroup() (old bool) {
-	return f.SetNoWaitingBusyGroupTo(false)
-}
-func (f *groupOptionsBitFlags) ResetSaveAllGroupResults() (old bool) {
-	return f.SetSaveAllGroupResultsTo(false)
-}
-
-func (f *groupOptionsBitFlags) SetNeverCancelCBCtxTo(new bool) (old bool) {
-	return f.BitFlags().SetTo(_groupOptionsNeverCancelCBCtxBitIndex, new)
 }
 func (f *groupOptionsBitFlags) SetOnetimeHandlingTo(new bool) (old bool) {
 	return f.BitFlags().SetTo(_groupOptionsOnetimeHandlingBitIndex, new)
 }
-func (f *groupOptionsBitFlags) SetNoNilCtxDoneChanTo(new bool) (old bool) {
-	return f.BitFlags().SetTo(_groupOptionsNoNilCtxDoneChanBitIndex, new)
-}
-func (f *groupOptionsBitFlags) SetNoWaitingBusyGroupTo(new bool) (old bool) {
-	return f.BitFlags().SetTo(_groupOptionsNoWaitingBusyGroupBitIndex, new)
-}
-func (f *groupOptionsBitFlags) SetSaveAllGroupResultsTo(new bool) (old bool) {
-	return f.BitFlags().SetTo(_groupOptionsSaveAllGroupResultsBitIndex, new)
-}
-
-func (f *groupOptionsBitFlags) ToggleNeverCancelCBCtx() (new bool) {
-	return f.BitFlags().Toggle(_groupOptionsNeverCancelCBCtxBitIndex)
-}
 func (f *groupOptionsBitFlags) ToggleOnetimeHandling() (new bool) {
 	return f.BitFlags().Toggle(_groupOptionsOnetimeHandlingBitIndex)
+}
+
+func (f *groupOptionsBitFlags) IsNoNilCtxDoneChan() (set bool) {
+	return f.BitFlags().Is(_groupOptionsNoNilCtxDoneChanBitIndex)
+}
+func (f *groupOptionsBitFlags) SetNoNilCtxDoneChan() (old bool) {
+	return f.SetNoNilCtxDoneChanTo(true)
+}
+func (f *groupOptionsBitFlags) ResetNoNilCtxDoneChan() (old bool) {
+	return f.SetNoNilCtxDoneChanTo(false)
+}
+func (f *groupOptionsBitFlags) SetNoNilCtxDoneChanTo(new bool) (old bool) {
+	return f.BitFlags().SetTo(_groupOptionsNoNilCtxDoneChanBitIndex, new)
 }
 func (f *groupOptionsBitFlags) ToggleNoNilCtxDoneChan() (new bool) {
 	return f.BitFlags().Toggle(_groupOptionsNoNilCtxDoneChanBitIndex)
 }
+
+func (f *groupOptionsBitFlags) IsNoWaitingBusyGroup() (set bool) {
+	return f.BitFlags().Is(_groupOptionsNoWaitingBusyGroupBitIndex)
+}
+func (f *groupOptionsBitFlags) SetNoWaitingBusyGroup() (old bool) {
+	return f.SetNoWaitingBusyGroupTo(true)
+}
+func (f *groupOptionsBitFlags) ResetNoWaitingBusyGroup() (old bool) {
+	return f.SetNoWaitingBusyGroupTo(false)
+}
+func (f *groupOptionsBitFlags) SetNoWaitingBusyGroupTo(new bool) (old bool) {
+	return f.BitFlags().SetTo(_groupOptionsNoWaitingBusyGroupBitIndex, new)
+}
 func (f *groupOptionsBitFlags) ToggleNoWaitingBusyGroup() (new bool) {
 	return f.BitFlags().Toggle(_groupOptionsNoWaitingBusyGroupBitIndex)
+}
+
+func (f *groupOptionsBitFlags) IsSaveAllGroupResults() (set bool) {
+	return f.BitFlags().Is(_groupOptionsSaveAllGroupResultsBitIndex)
+}
+func (f *groupOptionsBitFlags) SetSaveAllGroupResults() (old bool) {
+	return f.SetSaveAllGroupResultsTo(true)
+}
+func (f *groupOptionsBitFlags) ResetSaveAllGroupResults() (old bool) {
+	return f.SetSaveAllGroupResultsTo(false)
+}
+func (f *groupOptionsBitFlags) SetSaveAllGroupResultsTo(new bool) (old bool) {
+	return f.BitFlags().SetTo(_groupOptionsSaveAllGroupResultsBitIndex, new)
 }
 func (f *groupOptionsBitFlags) ToggleSaveAllGroupResults() (new bool) {
 	return f.BitFlags().Toggle(_groupOptionsSaveAllGroupResultsBitIndex)
