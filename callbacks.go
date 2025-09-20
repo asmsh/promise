@@ -55,26 +55,21 @@ func runCallbackHandler[
 	nextProm *Promise[NextT],
 	cb Callback[NextT, PrevT],
 	prevRes Result[PrevT],
-	supportHandleReturns bool,
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
 	// create the Result pointer, and defer the result handler, to track
 	// any result returned, and ensure panic and runtime.Goexit recovery.
+	// note: this will only happen for calls that returns a next promise,
+	// otherwise, the nextProm is nil.
 	var nextResP *Result[NextT]
-	if supportHandleReturns {
+	if nextProm != nil {
 		nextResP = new(Result[NextT])
 		defer handleReturns(nextProm, prevRes, nextResP)
 	}
 
 	// make sure we close the context once we return from the callback.
-	// if cancel is nil, then the Context is a syncCtx created specifically
-	// for this callback handler.
-	if cancel != nil {
-		defer cancel()
-	} else {
-		defer closeSyncCtx(ctx)
-	}
+	defer cancel()
 
 	// run the callback and extract the result
 	nextRes := cb.Call(ctx, prevRes)

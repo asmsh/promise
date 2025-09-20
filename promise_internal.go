@@ -292,31 +292,28 @@ var (
 
 // followOperationLogic encapsulates the logic for each of the follow calls.
 type followOperationLogic interface {
-	// IsTargetState takes the current [State] value and returns whether
-	// it's the target for this call, and we should resolve/return.
-	IsTargetState(currState State) bool
+	// IsTargetState takes the previous [Promise] [State] value and returns
+	// whether the current follow operation is allowed on it, or we should
+	// resolve to an error.
+	IsTargetState(prevState State) bool
 
 	// CanHandle is an identity method telling whether the operation
 	// can attempt to mark the target promise as handled or not.
-	// this will trigger the [handleFollow] logic for that operation.
+	//
+	// this will trigger the [handleFollow] logic for that operation,
+	// which depends on both previous and next promises.
 	CanHandle() bool
 
 	// ResolveOnInvalidHandle is an identity method telling whether the
 	// operation should resolve the next promise once handling the target
-	// promise is invalid or not.
+	// is invalid or it should still move forward and run the callback.
+	//
 	// an invalid handling is communicated via the [handleFollow] method
 	// returning valid=false.
 	// the resolve will be taken care of by the call to [handleFollow].
+	//
+	// this is only relevant if CanHandle() returns true.
 	ResolveOnInvalidHandle() bool
-
-	// ReturnOnInvalidHandle is an identity method telling whether the
-	// operation should return once handling the target promise is invalid
-	// or it should still move forward and run the callback.
-	// an invalid handling is communicated via the [handleFollow] method
-	// returning valid=false.
-	ReturnOnInvalidHandle() bool
-
-	SupportHandleReturns() bool
 }
 
 type callbackOperation struct{}
@@ -324,40 +321,30 @@ type callbackOperation struct{}
 func (callbackOperation) IsTargetState(_ State) bool   { return true }
 func (callbackOperation) CanHandle() bool              { return false }
 func (callbackOperation) ResolveOnInvalidHandle() bool { return false }
-func (callbackOperation) ReturnOnInvalidHandle() bool  { return false }
-func (callbackOperation) SupportHandleReturns() bool   { return false }
 
 type followOperation struct{}
 
 func (followOperation) IsTargetState(_ State) bool   { return true }
 func (followOperation) CanHandle() bool              { return true }
 func (followOperation) ResolveOnInvalidHandle() bool { return true }
-func (followOperation) ReturnOnInvalidHandle() bool  { return true }
-func (followOperation) SupportHandleReturns() bool   { return true }
 
 type thenOperation struct{}
 
 func (thenOperation) IsTargetState(s State) bool   { return s == Success }
 func (thenOperation) CanHandle() bool              { return true }
 func (thenOperation) ResolveOnInvalidHandle() bool { return true }
-func (thenOperation) ReturnOnInvalidHandle() bool  { return true }
-func (thenOperation) SupportHandleReturns() bool   { return true }
 
 type catchOperation struct{}
 
 func (catchOperation) IsTargetState(s State) bool   { return s == Error }
 func (catchOperation) CanHandle() bool              { return true }
 func (catchOperation) ResolveOnInvalidHandle() bool { return false }
-func (catchOperation) ReturnOnInvalidHandle() bool  { return false }
-func (catchOperation) SupportHandleReturns() bool   { return true }
 
 type recoverOperation struct{}
 
 func (recoverOperation) IsTargetState(s State) bool   { return s == Panic }
 func (recoverOperation) CanHandle() bool              { return true }
 func (recoverOperation) ResolveOnInvalidHandle() bool { return true }
-func (recoverOperation) ReturnOnInvalidHandle() bool  { return true }
-func (recoverOperation) SupportHandleReturns() bool   { return true }
 
 // finallyOperation can't set the 'Handled' flag(handle the promise),
 // and it can return new promise with new result.
@@ -374,8 +361,6 @@ type finallyOperation struct{}
 func (finallyOperation) IsTargetState(_ State) bool   { return true }
 func (finallyOperation) CanHandle() bool              { return false }
 func (finallyOperation) ResolveOnInvalidHandle() bool { return false }
-func (finallyOperation) ReturnOnInvalidHandle() bool  { return false }
-func (finallyOperation) SupportHandleReturns() bool   { return true }
 
 func handleFollow[PrevT, NextT any](
 	prevProm *Promise[PrevT],

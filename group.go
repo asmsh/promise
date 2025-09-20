@@ -70,24 +70,24 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
 	}
 
-	p := newPromInter[T](g)
+	nextProm := newPromInter[T](g)
 	// derive the context used in the callback from the group's, and from
 	// the new promise's, making the callback context a child of both.
-	ctx, cancel := callbackCtx(g, p.syncCtx)
-	debug(p, startHandler, startGroupHandler, startGroupGoHandler)
-	go goHandler(p, cb, ctx, cancel)
-	return p
+	ctx, cancel := callbackCtx(g, nextProm.syncCtx)
+	debug(nextProm, startHandler, startGroupHandler, startGroupGoHandler)
+	go goHandler(nextProm, cb, ctx, cancel)
+	return nextProm
 }
 
 func goHandler[T any](
-	p *Promise[T],
+	nextProm *Promise[T],
 	cb func(),
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	defer p.group.freeGoroutine()
-	runCallbackHandler[T, T](p, goFunc[T, T](cb), nil, true, ctx, cancel)
-	debug(p, endHandler, endGroupHandler, endGroupGoHandler)
+	defer nextProm.group.freeGoroutine()
+	runCallbackHandler[T, T](nextProm, goFunc[T, T](cb), nil, ctx, cancel)
+	debug(nextProm, endHandler, endGroupHandler, endGroupGoHandler)
 }
 
 func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
@@ -102,22 +102,22 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
 	}
 
-	p := newPromInter[T](g)
-	ctx, cancel := callbackCtx(g, p.syncCtx)
-	debug(p, startHandler, startGroupHandler, startGroupGoResHandler)
-	go goCtxResHandler(p, cb, ctx, cancel)
-	return p
+	nextProm := newPromInter[T](g)
+	ctx, cancel := callbackCtx(g, nextProm.syncCtx)
+	debug(nextProm, startHandler, startGroupHandler, startGroupGoResHandler)
+	go goCtxResHandler(nextProm, cb, ctx, cancel)
+	return nextProm
 }
 
 func goCtxResHandler[T any](
-	p *Promise[T],
+	nextProm *Promise[T],
 	cb func(context.Context) Result[T],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	defer p.group.freeGoroutine()
-	runCallbackHandler[T, T](p, ctxResFunc[T, T](cb), nil, true, ctx, cancel)
-	debug(p, endHandler, endGroupHandler, endGroupGoResHandler)
+	defer nextProm.group.freeGoroutine()
+	runCallbackHandler[T, T](nextProm, ctxResFunc[T, T](cb), nil, ctx, cancel)
+	debug(nextProm, endHandler, endGroupHandler, endGroupGoResHandler)
 }
 
 func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
@@ -132,22 +132,22 @@ func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
 	}
 
-	p := newPromInter[T](g)
-	ctx, cancel := callbackCtx(g, p.syncCtx)
-	debug(p, startHandler, startGroupHandler, startGroupGoResHandler)
-	go goCallbackHandler(p, cb, ctx, cancel)
-	return p
+	nextProm := newPromInter[T](g)
+	ctx, cancel := callbackCtx(g, nextProm.syncCtx)
+	debug(nextProm, startHandler, startGroupHandler, startGroupGoResHandler)
+	go goCallbackHandler(nextProm, cb, ctx, cancel)
+	return nextProm
 }
 
 func goCallbackHandler[NextT, PrevT any](
-	p *Promise[NextT],
+	nextProm *Promise[NextT],
 	cb Callback[NextT, PrevT],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
-	defer p.group.freeGoroutine()
-	runCallbackHandler[NextT, PrevT](p, cb, nil, true, ctx, cancel)
-	debug(p, endHandler, endGroupHandler, endGroupGoResHandler)
+	defer nextProm.group.freeGoroutine()
+	runCallbackHandler[NextT, PrevT](nextProm, cb, nil, ctx, cancel)
+	debug(nextProm, endHandler, endGroupHandler, endGroupGoResHandler)
 }
 
 func (g *Group[T]) Delay(
@@ -163,22 +163,22 @@ func (g *Group[T]) Delay(
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
 	}
 
-	p := newPromInter[T](g)
+	nextProm := newPromInter[T](g)
 	flags := getDelayFlags(cond)
-	debug(p, startHandler, startGroupHandler, startGroupDelayHandler)
-	go delayHandler(p, res, d, flags)
-	return p
+	debug(nextProm, startHandler, startGroupHandler, startGroupDelayHandler)
+	go delayHandler(nextProm, res, d, flags)
+	return nextProm
 }
 
 func delayHandler[T any](
-	p *Promise[T],
+	nextProm *Promise[T],
 	res Result[T],
 	dd time.Duration,
 	flags delayFlags,
 ) {
-	defer p.group.freeGoroutine()
-	p.resolveToResWithDelay(res, dd, flags)
-	debug(p, endHandler, endGroupHandler, endGroupDelayHandler)
+	defer nextProm.group.freeGoroutine()
+	nextProm.resolveToResWithDelay(res, dd, flags)
+	debug(nextProm, endHandler, endGroupHandler, endGroupDelayHandler)
 }
 
 func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
@@ -193,17 +193,17 @@ func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
 	}
 
-	p := newPromInter[T](g)
-	debug(p, startHandler, startGroupHandler, startGroupChanHandler)
-	go chanHandler(p, resChan)
-	return p
+	nextProm := newPromInter[T](g)
+	debug(nextProm, startHandler, startGroupHandler, startGroupChanHandler)
+	go chanHandler(nextProm, resChan)
+	return nextProm
 }
 
-func chanHandler[T any](p *Promise[T], resChan <-chan Result[T]) {
-	defer p.group.freeGoroutine()
+func chanHandler[T any](nextProm *Promise[T], resChan <-chan Result[T]) {
+	defer nextProm.group.freeGoroutine()
 	res := <-resChan
-	p.resolveToRes(res)
-	debug(p, endHandler, endGroupHandler, endGroupChanHandler)
+	nextProm.resolveToRes(res)
+	debug(nextProm, endHandler, endGroupHandler, endGroupChanHandler)
 }
 
 func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
@@ -231,17 +231,17 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
 	}
 
-	p := newPromCtx[T](g, ctx)
-	debug(p, startHandler, startGroupHandler, startGroupCtxHandler)
-	go ctxHandler(p)
-	return p
+	nextProm := newPromCtx[T](g, ctx)
+	debug(nextProm, startHandler, startGroupHandler, startGroupCtxHandler)
+	go ctxHandler(nextProm)
+	return nextProm
 }
 
-func ctxHandler[T any](p *Promise[T]) {
-	defer p.group.freeGoroutine()
-	p.waitState()
-	p.resolveToRes(p.res)
-	debug(p, endHandler, endGroupHandler, endGroupCtxHandler)
+func ctxHandler[T any](nextProm *Promise[T]) {
+	defer nextProm.group.freeGoroutine()
+	nextProm.waitState()
+	nextProm.resolveToRes(nextProm.res)
+	debug(nextProm, endHandler, endGroupHandler, endGroupCtxHandler)
 }
 
 func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {

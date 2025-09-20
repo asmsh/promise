@@ -460,6 +460,12 @@ func followHandler[NextT, PrevT any](
 
 	// return and carry the current Result to the next Promise if it's not the target.
 	if !op.IsTargetState(s) {
+		if nextProm == nil {
+			// this should not happen, as operations that defines a certain
+			// set of target states must create and pass a next promise.
+			panic("promise: internal: next promise is unexpectedly nil")
+		}
+
 		nextRes := getEffectiveNextRes[NextT, PrevT](prevProm.res, nil)
 		nextProm.resolveToRes(nextRes)
 		return
@@ -468,16 +474,22 @@ func followHandler[NextT, PrevT any](
 	// start with the previous Result.
 	res := prevProm.res
 
-	// mark prev as 'Handled', and check whether we should continue or not.
+	// mark prev Handled and check whether we should resolve next or continue.
 	if op.CanHandle() {
-		var ok bool
-		res, ok = handleFollow(prevProm, nextProm, op.ResolveOnInvalidHandle())
-		if !ok && op.ReturnOnInvalidHandle() {
+		if nextProm == nil {
+			// this should not happen, as operations that can handle a target
+			// promise must create and pass a next promise.
+			panic("promise: internal: next promise is unexpectedly nil")
+		}
+
+		var valid bool
+		res, valid = handleFollow(prevProm, nextProm, op.ResolveOnInvalidHandle())
+		if !valid && op.ResolveOnInvalidHandle() {
 			return
 		}
 	}
 
 	// run the callback with the actual promise result.
-	runCallbackHandler(nextProm, cb, res, op.SupportHandleReturns(), ctx, cancel)
+	runCallbackHandler(nextProm, cb, res, ctx, cancel)
 	debug(prevProm, endDebugEvents...)
 }

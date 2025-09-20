@@ -40,10 +40,10 @@ func Go(cb func()) *Promise[any] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	p := newPromInter[any](nil)
-	ctx, cancel := callbackCtx[any](nil, p.syncCtx)
-	go goHandler(p, cb, ctx, cancel)
-	return p
+	nextProm := newPromInter[any](nil)
+	ctx, cancel := callbackCtx[any](nil, nextProm.syncCtx)
+	go goHandler(nextProm, cb, ctx, cancel)
+	return nextProm
 }
 
 // GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
@@ -71,10 +71,10 @@ func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	p := newPromInter[T](nil)
-	ctx, cancel := callbackCtx[T](nil, p.syncCtx)
-	go goCtxResHandler(p, cb, ctx, cancel)
-	return p
+	nextProm := newPromInter[T](nil)
+	ctx, cancel := callbackCtx[T](nil, nextProm.syncCtx)
+	go goCtxResHandler(nextProm, cb, ctx, cancel)
+	return nextProm
 }
 
 // TODO: maybe add 'GoCtxErr', as a quick constructor that accepts a Context but returns just an error.
@@ -131,10 +131,10 @@ func GoCallback[NextT, PrevT any](cb Callback[NextT, PrevT]) *Promise[NextT] {
 func Delay[T any](res Result[T], d time.Duration, cond ...DelayCond) *Promise[T] {
 	// TODO: can we use a central scheduler instead of creating new goroutines?
 	// the scheduler can even be per-Group, and a single one for the default Group.
-	p := newPromInter[T](nil)
+	nextProm := newPromInter[T](nil)
 	flags := getDelayFlags(cond)
-	go delayHandler(p, res, d, flags)
-	return p
+	go delayHandler(nextProm, res, d, flags)
+	return nextProm
 }
 
 // Chan returns a [Promise] that wraps the provided [Result] channel, resChan,
@@ -155,9 +155,9 @@ func Chan[T any](resChan <-chan Result[T]) *Promise[T] {
 		panic(nilResChanPanicMsg)
 	}
 
-	p := newPromInter[T](nil)
-	go chanHandler(p, resChan)
-	return p
+	nextProm := newPromInter[T](nil)
+	go chanHandler(nextProm, resChan)
+	return nextProm
 }
 
 // Ctx returns a [Promise] that wraps the provided [context.Context] value, ctx,
@@ -188,9 +188,9 @@ func Ctx(ctx context.Context) *Promise[any] {
 		return newPromBlocked[any]()
 	}
 
-	p := newPromCtx[any](nil, ctx)
-	go ctxHandler(p)
-	return p
+	nextProm := newPromCtx[any](nil, ctx)
+	go ctxHandler(nextProm)
+	return nextProm
 }
 
 // Wrap returns a [Promise] that wraps the provided [Result] value, res,
