@@ -33,29 +33,29 @@ func (t *testContext) String() string { return "testContext" }
 var testCtx, testCtxCancel = newTestContext()
 
 var testsCases_Group_callbackCtx = []struct {
-	name             string
-	g                *Group[any]
-	syncCtx          context.Context
-	expectedCtxName  string
-	expectsNilCancel bool
+	name            string
+	g               *Group[any]
+	syncCtx         context.Context
+	expectedCtxName string
 }{
-	// CallbackFunc2 cases (nil syncCtx is passes)...
+	// Callback cases (nil syncCtx is passes)...
 	{
 		// when no Group is available.
-		name:             "nil_group,nil_syncCtx",
-		expectedCtxName:  "syncCtx",
-		expectsNilCancel: true,
+		name:            "Callback:nil_group,nil_syncCtx",
+		g:               nil,
+		syncCtx:         nil,
+		expectedCtxName: "syncCtx",
 	},
 	{
 		// when a Group is available with neverCancelCBCtx=false.
-		name:             "non-nil_group,nil_group_ctx,cancel-callback-ctx,nil_syncCtx",
-		g:                &Group[any]{core: &groupCore{}},
-		expectedCtxName:  "syncCtx",
-		expectsNilCancel: true,
+		name:            "Callback:non-nil_group,nil_group_ctx,cancel-callback-ctx,nil_syncCtx",
+		g:               &Group[any]{core: &groupCore{}},
+		syncCtx:         nil,
+		expectedCtxName: "syncCtx",
 	},
 	{
 		// when a Group is available with neverCancelCBCtx=true.
-		name: "non-nil_group,nil_group_ctx,never-cancel-callback-ctx,nil_syncCtx",
+		name: "Callback:non-nil_group,nil_group_ctx,never-cancel-callback-ctx,nil_syncCtx",
 		g: &Group[any]{core: &groupCore{
 			options: func() groupOptionsBitFlags {
 				options := groupOptionsBitFlags(0)
@@ -63,32 +63,38 @@ var testsCases_Group_callbackCtx = []struct {
 				return options
 			}(),
 		}},
+		syncCtx:         nil,
 		expectedCtxName: "context.Background",
 	},
 	{
 		// when a Group is available with the group Context set.
-		name:            "non-nil_group,non-nil_group_ctx,cancel-callback-ctx,nil_syncCtx",
-		g:               &Group[any]{core: &groupCore{ctx: testCtx, cancel: testCtxCancel}},
+		name: "Callback:non-nil_group,non-nil_group_ctx,cancel-callback-ctx,nil_syncCtx",
+		g: &Group[any]{core: &groupCore{
+			ctx:    testCtx,
+			cancel: testCtxCancel,
+		}},
+		syncCtx:         nil,
 		expectedCtxName: "testContext.WithCancel",
 	},
 
 	// Follow cases (non-nil syncCtx is passes)...
 	{
 		// when no Group is available.
-		name:            "nil_group,non-nil_syncCtx",
+		name:            "Follow:nil_group,non-nil_syncCtx",
+		g:               nil,
 		syncCtx:         syncCtx{syncChan: make(chan struct{})},
 		expectedCtxName: "syncCtx",
 	},
 	{
 		// when a Group is available with neverCancelCBCtx=false.
-		name:            "non-nil_group,nil_group_ctx,cancel-callback-ctx,non-nil_syncCtx",
+		name:            "Follow:non-nil_group,nil_group_ctx,cancel-callback-ctx,non-nil_syncCtx",
 		g:               &Group[any]{core: &groupCore{}},
 		syncCtx:         syncCtx{syncChan: make(chan struct{})},
 		expectedCtxName: "syncCtx",
 	},
 	{
 		// when a Group is available with neverCancelCBCtx=true.
-		name: "non-nil_group,nil_group_ctx,never-cancel-callback-ctx,non-nil_syncCtx",
+		name: "Follow:non-nil_group,nil_group_ctx,never-cancel-callback-ctx,non-nil_syncCtx",
 		g: &Group[any]{core: &groupCore{
 			options: func() groupOptionsBitFlags {
 				options := groupOptionsBitFlags(0)
@@ -101,8 +107,11 @@ var testsCases_Group_callbackCtx = []struct {
 	},
 	{
 		// when a Group is available with the group Context set.
-		name:            "non-nil_group,non-nil_group_ctx,cancel-callback-ctx,non-nil_syncCtx",
-		g:               &Group[any]{core: &groupCore{ctx: testCtx, cancel: testCtxCancel}},
+		name: "Follow:non-nil_group,non-nil_group_ctx,cancel-callback-ctx,non-nil_syncCtx",
+		g: &Group[any]{core: &groupCore{
+			ctx:    testCtx,
+			cancel: testCtxCancel,
+		}},
 		syncCtx:         syncCtx{syncChan: make(chan struct{})},
 		expectedCtxName: "testContext.WithCancel",
 	},
@@ -115,7 +124,7 @@ func TestGroup_callbackCtx(t *testing.T) {
 			if ctx == nil {
 				t.Errorf("nil ctx")
 			}
-			if cancel == nil && !test.expectsNilCancel {
+			if cancel == nil {
 				t.Errorf("nil cancel")
 			}
 			ctxName := fmt.Sprintf("%s", ctx)
@@ -135,7 +144,7 @@ func BenchmarkGroup_callbackCtx(b *testing.B) {
 				if ctx == nil {
 					b.Errorf("nil ctx")
 				}
-				if cancel == nil && !bm.expectsNilCancel {
+				if cancel == nil {
 					b.Errorf("nil cancel")
 				}
 			}

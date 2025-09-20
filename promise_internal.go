@@ -219,7 +219,7 @@ func (p *Promise[T]) resolveToPanicRes(
 	// nor is already handled
 	p.chainSideEffects(p.chainStatus.Load(), false)
 	// unblock all calls waiting on p.
-	closeSyncCtx(p.syncCtx)
+	p.syncCtx.(syncCtx).cancel()
 	// handle all extension calls that involve p.
 	handleExtCalls(p)
 	// handle all group calls for p's group.
@@ -236,7 +236,7 @@ func (p *Promise[T]) resolveToErrorRes(
 	debug(p, resolve, resolveError)
 	p.res = res
 	p.chainSideEffects(p.chainStatus.Load(), false)
-	closeSyncCtx(p.syncCtx)
+	p.syncCtx.(syncCtx).cancel()
 	handleExtCalls(p)
 	handleGroupCalls(p)
 }
@@ -247,7 +247,7 @@ func (p *Promise[T]) resolveToSuccessRes(
 	debug(p, resolve, resolveSuccess)
 	p.res = res
 	// no side effects to be done for Success result.
-	closeSyncCtx(p.syncCtx)
+	p.syncCtx.(syncCtx).cancel()
 	handleExtCalls(p)
 	handleGroupCalls(p)
 }

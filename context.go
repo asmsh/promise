@@ -32,13 +32,9 @@ func newSyncCtx() context.Context {
 	return syncCtx{syncChan: make(chan struct{})}
 }
 
-func closeSyncCtx(ctx context.Context) {
-	sc := ctx.(syncCtx)
-	// Note: no need to arrange for this close call to be executed
-	// only once, as, from current usage, this closeSyncCtx func
-	// is only used from one goroutine, the runCallbackHandler, so
-	// that's taken care of.
-	close(sc.syncChan)
+func newSyncCtxWithCancel() (context.Context, context.CancelFunc) {
+	sc := syncCtx{syncChan: make(chan struct{})}
+	return sc, sc.cancel
 }
 
 // syncCtx is a sync context.Context value, which doesn't
@@ -59,6 +55,7 @@ func (sc syncCtx) Done() <-chan struct{}                   { return sc.syncChan 
 func (sc syncCtx) Err() error                              { return nil }
 func (sc syncCtx) Value(any) any                           { return nil }
 func (sc syncCtx) String() string                          { return "syncCtx" }
+func (sc syncCtx) cancel()                                 { close(sc.syncChan) }
 
 func noopCancelFunc() {
 	// do nothing
@@ -69,16 +66,21 @@ func noopCancelFunc() {
 // syncCtx should be a non-closed Context, or nil.
 func callbackCtx[T any](
 	g *Group[T],
-	syncCtx context.Context,
+	sc context.Context,
 ) (context.Context, context.CancelFunc) {
 	// default scenario, either no Group or a Group with default behavior.
 	// we return the syncCtx with no cancellation, if one is provided,
 	// otherwise we return Background with cancellation.
 	if g == nil || (g.core.ctx == nil && !g.core.options.IsNeverCancelCBCtx()) {
-		if syncCtx == nil {
-			return newSyncCtx(), nil
+		// the syncCtx will be nil only when there's no next promise,
+		// which only happens from [Promise.Callback] calls for now.
+		if sc == nil {
+			return newSyncCtxWithCancel()
 		}
-		return syncCtx, noopCancelFunc
+
+		// no cancellation needs to be arranged in this case, as the syncCtx
+		// will be already canceled (closed) once the promise is resolved.
+		return sc, noopCancelFunc
 	}
 
 	// there's a Group, if it's requested to never cancel callback Context,
@@ -87,19 +89,11 @@ func callbackCtx[T any](
 		return context.Background(), noopCancelFunc
 	}
 
-	// there's a Group with a group Context, but no promise syncCtx is provided,
-	// which only happens from Callback calls where there's no next promise,
-	// so create the Context to be returned only from the group's.
-	if syncCtx == nil {
-		return context.WithCancel(g.core.ctx)
-	}
-
-	// there's a Group with a group Context, and a promise's syncCtx, so create
-	// the Context to be returned, and arrange to close it when either the group's
-	// Context or the promise's syncCtx is close.
-	// TODO: these 2 context calls can be replaced by a JoinContext that will be
-	//  cancelled when any of them is cancelled.
-	ctx, cancel := context.WithCancel(g.core.ctx)
-	context.AfterFunc(syncCtx, cancel)
-	return ctx, cancel
+	// there's a Group with a group Context, so create the Context to be
+	// returned only from the group's.
+	// note: the ctx returned will be canceled after the execution of
+	// the [Callback.Call] in [runCallbackHandler], by the same goroutine
+	// resolving Promise and closing the syncCtx.
+	// in contrast to returning a syncCtx, which gets canceled in [handleReturns].
+	return context.WithCancel(g.core.ctx)
 }
