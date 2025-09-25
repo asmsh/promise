@@ -19,7 +19,7 @@ import "context"
 // CallbackFunc is a type constraint representing the different signatures
 // for supported callback functions for the different functions and methods.
 type CallbackFunc[NextT, PrevT any] interface {
-	// no type approximation is used (~), hence no user defined types allowed.
+	// no type approximation is used (~), hence no user defined function types allowed.
 	// might change if this happens: https://github.com/golang/go/issues/45380
 
 	func() |
@@ -28,11 +28,29 @@ type CallbackFunc[NextT, PrevT any] interface {
 		func() (NextT, error) |
 		func() Result[NextT] |
 
+		func(PrevT) |
+		func(PrevT) error |
+		func(PrevT) NextT |
+		func(PrevT) (NextT, error) |
+		func(PrevT) Result[NextT] |
+
+		func(Result[PrevT]) |
+		func(Result[PrevT]) error |
+		func(Result[PrevT]) NextT |
+		func(Result[PrevT]) (NextT, error) |
+		func(Result[PrevT]) Result[NextT] |
+
 		func(context.Context) |
 		func(context.Context) error |
 		func(context.Context) NextT |
 		func(context.Context) (NextT, error) |
 		func(context.Context) Result[NextT] |
+
+		func(context.Context, PrevT) |
+		func(context.Context, PrevT) error |
+		func(context.Context, PrevT) NextT |
+		func(context.Context, PrevT) (NextT, error) |
+		func(context.Context, PrevT) Result[NextT] |
 
 		func(context.Context, Result[PrevT]) |
 		func(context.Context, Result[PrevT]) error |
@@ -85,79 +103,159 @@ func runCallbackHandler[
 }
 
 type (
-	goFunc[NextT, PrevT any]       func()
-	goErrFunc[NextT, PrevT any]    func() error
-	goValFunc[NextT, PrevT any]    func() NextT
-	goValErrFunc[NextT, PrevT any] func() (NextT, error)
-	goResFunc[NextT, PrevT any]    func() Result[NextT]
+	goFunc[NextT, PrevT any]           func()
+	goNextErrFunc[NextT, PrevT any]    func() error
+	goNextValFunc[NextT, PrevT any]    func() NextT
+	goNextValErrFunc[NextT, PrevT any] func() (NextT, error)
+	goNextResFunc[NextT, PrevT any]    func() Result[NextT]
 
-	ctxFunc[NextT, PrevT any]       func(context.Context)
-	ctxErrFunc[NextT, PrevT any]    func(context.Context) error
-	ctxValFunc[NextT, PrevT any]    func(context.Context) NextT
-	ctxValErrFunc[NextT, PrevT any] func(context.Context) (NextT, error)
-	ctxResFunc[NextT, PrevT any]    func(context.Context) Result[NextT]
+	prevValFunc[NextT, PrevT any]           func(PrevT)
+	prevValNextErrFunc[NextT, PrevT any]    func(PrevT) error
+	prevValNextValFunc[NextT, PrevT any]    func(PrevT) NextT
+	prevValNextValErrFunc[NextT, PrevT any] func(PrevT) (NextT, error)
+	prevValNextResFunc[NextT, PrevT any]    func(PrevT) Result[NextT]
 
-	followFunc[NextT, PrevT any]       func(context.Context, Result[PrevT])
-	followErrFunc[NextT, PrevT any]    func(context.Context, Result[PrevT]) error
-	followValFunc[NextT, PrevT any]    func(context.Context, Result[PrevT]) NextT
-	followValErrFunc[NextT, PrevT any] func(context.Context, Result[PrevT]) (NextT, error)
-	followResFunc[NextT, PrevT any]    func(context.Context, Result[PrevT]) Result[NextT]
+	prevResFunc[NextT, PrevT any]           func(Result[PrevT])
+	prevResNextErrFunc[NextT, PrevT any]    func(Result[PrevT]) error
+	prevResNextValFunc[NextT, PrevT any]    func(Result[PrevT]) NextT
+	prevResNextValErrFunc[NextT, PrevT any] func(Result[PrevT]) (NextT, error)
+	prevResNextResFunc[NextT, PrevT any]    func(Result[PrevT]) Result[NextT]
+
+	ctxFunc[NextT, PrevT any]           func(context.Context)
+	ctxNextErrFunc[NextT, PrevT any]    func(context.Context) error
+	ctxNextValFunc[NextT, PrevT any]    func(context.Context) NextT
+	ctxNextValErrFunc[NextT, PrevT any] func(context.Context) (NextT, error)
+	ctxNextResFunc[NextT, PrevT any]    func(context.Context) Result[NextT]
+
+	followValFunc[NextT, PrevT any]           func(context.Context, PrevT)
+	followValNextErrFunc[NextT, PrevT any]    func(context.Context, PrevT) error
+	followValNextValFunc[NextT, PrevT any]    func(context.Context, PrevT) NextT
+	followValNextValErrFunc[NextT, PrevT any] func(context.Context, PrevT) (NextT, error)
+	followValNextResFunc[NextT, PrevT any]    func(context.Context, PrevT) Result[NextT]
+
+	followResFunc[NextT, PrevT any]           func(context.Context, Result[PrevT])
+	followResNextErrFunc[NextT, PrevT any]    func(context.Context, Result[PrevT]) error
+	followResNextValFunc[NextT, PrevT any]    func(context.Context, Result[PrevT]) NextT
+	followResNextValErrFunc[NextT, PrevT any] func(context.Context, Result[PrevT]) (NextT, error)
+	followResNextResFunc[NextT, PrevT any]    func(context.Context, Result[PrevT]) Result[NextT]
 )
 
 func (cb goFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	cb()
 	return nil
 }
-func (cb goErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb goNextErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	err := cb()
 	return ErrRes[NextT](err)
 }
-func (cb goValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb goNextValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	next := cb()
 	return ValRes(next)
 }
-func (cb goValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb goNextValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	next, err := cb()
 	return ValErrRes(next, err)
 }
-func (cb goResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb goNextResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	return cb()
 }
+
+func (cb prevValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	cb(getFinalRes(prevRes).Val())
+	return
+}
+func (cb prevValNextErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	err := cb(getFinalRes(prevRes).Val())
+	return ErrRes[NextT](err)
+}
+func (cb prevValNextValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next := cb(getFinalRes(prevRes).Val())
+	return ValRes(next)
+}
+func (cb prevValNextValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next, err := cb(getFinalRes(prevRes).Val())
+	return ValErrRes(next, err)
+}
+func (cb prevValNextResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	return cb(getFinalRes(prevRes).Val())
+}
+
+func (cb prevResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	cb(getFinalRes(prevRes))
+	return
+}
+func (cb prevResNextErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	err := cb(getFinalRes(prevRes))
+	return ErrRes[NextT](err)
+}
+func (cb prevResNextValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next := cb(getFinalRes(prevRes))
+	return ValRes(next)
+}
+func (cb prevResNextValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next, err := cb(getFinalRes(prevRes))
+	return ValErrRes(next, err)
+}
+func (cb prevResNextResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	return cb(getFinalRes(prevRes))
+}
+
 func (cb ctxFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	cb(ctx)
 	return nil
 }
-func (cb ctxErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb ctxNextErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	err := cb(ctx)
 	return ErrRes[NextT](err)
 }
-func (cb ctxValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb ctxNextValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	next := cb(ctx)
 	return ValRes(next)
 }
-func (cb ctxValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb ctxNextValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	next, err := cb(ctx)
 	return ValErrRes(next, err)
 }
-func (cb ctxResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb ctxNextResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	return cb(ctx)
 }
-func (cb followFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+
+func (cb followValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	cb(ctx, getFinalRes(prevRes).Val())
+	return nil
+}
+func (cb followValNextErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	err := cb(ctx, getFinalRes(prevRes).Val())
+	return ErrRes[NextT](err)
+}
+func (cb followValNextValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next := cb(ctx, getFinalRes(prevRes).Val())
+	return ValRes(next)
+}
+func (cb followValNextValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	next, err := cb(ctx, getFinalRes(prevRes).Val())
+	return ValErrRes(next, err)
+}
+func (cb followValNextResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+	return cb(ctx, getFinalRes(prevRes).Val())
+}
+
+func (cb followResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	cb(ctx, getFinalRes(prevRes))
 	return nil
 }
-func (cb followErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb followResNextErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	err := cb(ctx, getFinalRes(prevRes))
 	return ErrRes[NextT](err)
 }
-func (cb followValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb followResNextValFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	next := cb(ctx, getFinalRes(prevRes))
 	return ValRes(next)
 }
-func (cb followValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb followResNextValErrFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	next, err := cb(ctx, getFinalRes(prevRes))
 	return ValErrRes(next, err)
 }
-func (cb followResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
+func (cb followResNextResFunc[NextT, PrevT]) Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT]) {
 	return cb(ctx, getFinalRes(prevRes))
 }

@@ -116,7 +116,7 @@ func goCtxResHandler[T any](
 	cancel context.CancelFunc,
 ) {
 	defer nextProm.group.freeGoroutine()
-	runCallbackHandler[T, T](nextProm, ctxResFunc[T, T](cb), nil, ctx, cancel)
+	runCallbackHandler[T, T](nextProm, ctxNextResFunc[T, T](cb), nil, ctx, cancel)
 	debug(nextProm, endHandler, endGroupHandler, endGroupGoResHandler)
 }
 

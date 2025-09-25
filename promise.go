@@ -240,7 +240,7 @@ func (p *Promise[T]) Callback(
 	go followHandler(
 		p,
 		nil,
-		followFunc[T, T](cb),
+		followResFunc[T, T](cb),
 		ctx,
 		cancel,
 		callbackOp,
@@ -272,7 +272,7 @@ func (p *Promise[T]) Follow(
 	go followHandler(
 		p,
 		nextProm,
-		followResFunc[T, T](cb),
+		followResNextResFunc[T, T](cb),
 		ctx,
 		cancel,
 		followOp,
@@ -336,7 +336,7 @@ func (p *Promise[T]) Then(
 	go followHandler(
 		p,
 		nextProm,
-		followResFunc[T, T](cb),
+		followResNextResFunc[T, T](cb),
 		ctx,
 		cancel,
 		thenOp,
@@ -369,7 +369,7 @@ func (p *Promise[T]) Catch(
 	go followHandler(
 		p,
 		nextProm,
-		followResFunc[T, T](cb),
+		followResNextResFunc[T, T](cb),
 		ctx,
 		cancel,
 		catchOp,
@@ -402,7 +402,7 @@ func (p *Promise[T]) Recover(
 	go followHandler(
 		p,
 		nextProm,
-		followResFunc[T, T](cb),
+		followResNextResFunc[T, T](cb),
 		ctx,
 		cancel,
 		recoverOp,

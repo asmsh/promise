@@ -22,8 +22,31 @@ import (
 	"testing"
 )
 
+// intPtrToStringCB is used to test passing a custom implementation of [Callback].
+type intPtrToStringCB struct{}
+
+func (intPtrToStringCB) Call(_ context.Context, prevRes Result[*int]) (nextRes Result[string]) {
+	return ValRes(fmt.Sprintf("%d", *prevRes.Val()))
+}
+
+// stringToIntCB is used to test passing a custom implementation of [Callback].
+type stringToIntCB struct{}
+
+func (stringToIntCB) Call(_ context.Context, prevRes Result[string]) (nextRes Result[int]) {
+	return ValErrRes(strconv.Atoi(prevRes.Val()))
+}
+
+// testResult is used to test returning a custom implementation of [Result].
+type testResult struct {
+	val string
+}
+
+func (t testResult) Val() string { return t.val }
+func (testResult) Err() error    { return nil }
+func (testResult) State() State  { return Success }
+
 func TestFollow(t *testing.T) {
-	t.Run("successful follow", func(t *testing.T) {
+	t.Run("standard Result", func(t *testing.T) {
 		pAny := GoCtxRes(func(ctx context.Context) Result[*int] {
 			v := 10
 			return ValRes(&v)
@@ -55,29 +78,86 @@ func TestFollow(t *testing.T) {
 		fmt.Printf("pStr: %+v\n", pStr.Res())
 		fmt.Printf("pInt: %+v\n", pInt.Res())
 	})
-}
 
-type numberStringToInt struct {
-	fn func(ctx context.Context)
-}
+	t.Run("custom Result", func(t *testing.T) {
+		pAny := GoCtxRes(func(ctx context.Context) Result[*int] {
+			v := 10
+			return ValRes(&v)
+		})
+		pStr := Follow[string](
+			pAny,
+			func(ctx context.Context, res Result[*int]) Result[string] {
+				return testResult{fmt.Sprintf("%d", *res.Val())}
+			},
+		)
+		pInt := Follow[int](
+			pStr,
+			func(ctx context.Context, res Result[string]) Result[int] {
+				return ValErrRes(strconv.Atoi(res.Val()))
+			},
+		)
 
-func (m numberStringToInt) Call(ctx context.Context, prevRes Result[string]) (nextRes Result[int]) {
-	return ValErrRes(strconv.Atoi(prevRes.Val()))
+		if want, got := 10, pAny.Val(); !reflect.DeepEqual(got, &want) {
+			t.Errorf("pAny.Val(): %v, want: %v\n", *got, want)
+		}
+		if want, got := "10", pStr.Val(); !reflect.DeepEqual(got, want) {
+			t.Errorf("pStr.Val(): %v, want: %v\n", want, got)
+		}
+		if want, got := 10, pInt.Val(); !reflect.DeepEqual(got, want) {
+			t.Errorf("pInt.Val(): %v, want: %v\n", want, got)
+		}
+
+		fmt.Printf("pAny: %+v\n", pAny.Res())
+		fmt.Printf("pStr: %+v\n", pStr.Res())
+		fmt.Printf("pInt: %+v\n", pInt.Res())
+	})
 }
 
 func TestFollowCallback(t *testing.T) {
-	t.Run("successful follow", func(t *testing.T) {
-		pAny := GoCallback(CallbackFrom[*int, any](func(ctx context.Context) *int {
-			v := 10
-			return &v
-		}))
+	t.Run("standard Callback", func(t *testing.T) {
+		pAny := GoCallback(
+			CallbackFrom[*int, any](func(ctx context.Context) *int {
+				v := 10
+				return &v
+			}),
+		)
 		pStr := FollowCallback(
 			pAny,
-			CallbackFrom[string, *int](func(ctx context.Context, res Result[*int]) Result[string] {
+			CallbackFrom[string, *int](func(res Result[*int]) Result[string] {
 				return ValRes(fmt.Sprintf("%d", *res.Val()))
 			}),
 		)
-		pInt := FollowCallback[int](pStr, numberStringToInt{})
+		pInt := FollowCallback(
+			pStr,
+			CallbackFrom[int, string](func(res Result[string]) Result[int] {
+				return ValErrRes(strconv.Atoi(res.Val()))
+			}),
+		)
+
+		if want, got := 10, pAny.Val(); !reflect.DeepEqual(got, &want) {
+			t.Errorf("pAny.Val(): %v, want: %v\n", *got, want)
+		}
+		if want, got := "10", pStr.Val(); !reflect.DeepEqual(got, want) {
+			t.Errorf("pStr.Val(): %v, want: %v\n", want, got)
+		}
+		if want, got := 10, pInt.Val(); !reflect.DeepEqual(got, want) {
+			t.Errorf("pInt.Val(): %v, want: %v\n", want, got)
+		}
+
+		fmt.Printf("pAny: %+v\n", pAny.Res())
+		fmt.Printf("pStr: %+v\n", pStr.Res())
+		fmt.Printf("pInt: %+v\n", pInt.Res())
+	})
+
+	t.Run("custom Callback", func(t *testing.T) {
+		pAny := GoCallback(
+			CallbackFrom[*int, any](func(ctx context.Context) *int {
+				v := 10
+				return &v
+			}),
+		)
+		pStr := FollowCallback(pAny, intPtrToStringCB{})
+		pInt := FollowCallback(pStr, stringToIntCB{})
 
 		if want, got := 10, pAny.Val(); !reflect.DeepEqual(got, &want) {
 			t.Errorf("pAny.Val(): %v, want: %v\n", *got, want)
@@ -137,8 +217,21 @@ func BenchmarkFollowCallback(b *testing.B) {
 			return ValRes("10")
 		})
 		for b.Loop() {
-			pStr := FollowCallback(pBase, numberStringToInt{})
+			pStr := FollowCallback(pBase, stringToIntCB{})
 			pStr = pStr
+		}
+	})
+}
+
+func BenchmarkCallbackFrom(b *testing.B) {
+	b.Run("Standard Callback", func(b *testing.B) {
+		b.ReportAllocs()
+
+		for b.Loop() {
+			cb := CallbackFrom[int, string](func() int {
+				return 10
+			})
+			cb = cb
 		}
 	})
 }
@@ -159,29 +252,94 @@ func TestCallbackFrom_SupportedSignatures(t *testing.T) {
 			},
 		},
 		{
-			name: "GoErrFunc",
+			name: "GoNextErrFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func() error { return nil })
 			},
 		},
 		{
-			name: "GoValFunc",
+			name: "GoNextValFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func() any { return nil })
 			},
 		},
 		{
-			name: "GoValErrFunc",
+			name: "GoNextValErrFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func() (any, error) { return nil, nil })
 			},
 		},
 		{
-			name: "GoResFunc",
+			name: "GoNextResFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func() Result[any] { return nil })
 			},
 		},
+
+		// PrevVal callbacks.
+		{
+			name: "PrevValFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(any) {})
+			},
+		},
+		{
+			name: "PrevValNextErrFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(any) error { return nil })
+			},
+		},
+		{
+			name: "PrevValNextValFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(any) any { return nil })
+			},
+		},
+		{
+			name: "PrevValNextValErrFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(any) (any, error) { return nil, nil })
+			},
+		},
+		{
+			name: "PrevValNextResFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(any) Result[any] { return nil })
+			},
+		},
+
+		// PrevRes callbacks.
+		{
+			name: "PrevResFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(Result[any]) {})
+			},
+		},
+		{
+			name: "PrevResNextErrFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(Result[any]) error { return nil })
+			},
+		},
+		{
+			name: "PrevResNextValFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(Result[any]) any { return nil })
+			},
+		},
+		{
+			name: "PrevResNextValErrFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(Result[any]) (any, error) { return nil, nil })
+			},
+		},
+		{
+			name: "PrevResNextResFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(Result[any]) Result[any] { return nil })
+			},
+		},
+
 		// Ctx callbacks.
 		{
 			name: "CtxFunc",
@@ -190,56 +348,89 @@ func TestCallbackFrom_SupportedSignatures(t *testing.T) {
 			},
 		},
 		{
-			name: "CtxErrFunc",
+			name: "CtxNextErrFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func(context.Context) error { return nil })
 			},
 		},
 		{
-			name: "CtxValFunc",
+			name: "CtxNextValFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func(context.Context) any { return nil })
 			},
 		},
 		{
-			name: "CtxValErrFunc",
+			name: "CtxNextValErrFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func(context.Context) (any, error) { return nil, nil })
 			},
 		},
 		{
-			name: "CtxResFunc",
+			name: "CtxNextResFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func(context.Context) Result[any] { return nil })
 			},
 		},
-		// Follow callbacks.
+
+		// FollowVal callbacks.
 		{
-			name: "FollowFunc",
+			name: "FollowValFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(context.Context, any) {})
+			},
+		},
+		{
+			name: "FollowValNextErrFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(context.Context, any) error { return nil })
+			},
+		},
+		{
+			name: "FollowValNextValFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(context.Context, any) any { return nil })
+			},
+		},
+		{
+			name: "FollowValNextValErrFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(context.Context, any) (any, error) { return nil, nil })
+			},
+		},
+		{
+			name: "FollowValNextResFunc",
+			constr: func() Callback[any, any] {
+				return CallbackFrom[any, any](func(context.Context, any) Result[any] { return nil })
+			},
+		},
+
+		// FollowRes callbacks.
+		{
+			name: "FollowResFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func(context.Context, Result[any]) {})
 			},
 		},
 		{
-			name: "FollowErrFunc",
+			name: "FollowResNextErrFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func(context.Context, Result[any]) error { return nil })
 			},
 		},
 		{
-			name: "FollowValFunc",
+			name: "FollowResNextValFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func(context.Context, Result[any]) any { return nil })
 			},
 		},
 		{
-			name: "FollowValErrFunc",
+			name: "FollowResNextValErrFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func(context.Context, Result[any]) (any, error) { return nil, nil })
 			},
 		},
 		{
-			name: "FollowResFunc",
+			name: "FollowResNextResFunc",
 			constr: func() Callback[any, any] {
 				return CallbackFrom[any, any](func(context.Context, Result[any]) Result[any] { return nil })
 			},

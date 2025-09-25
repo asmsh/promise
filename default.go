@@ -82,8 +82,8 @@ func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
 func GoAny[
 	NextT any,
 	PrevT any,
-	CFuncT CallbackFunc[NextT, PrevT],
-](cb CFuncT) *Promise[NextT] {
+	CBFuncT CallbackFunc[NextT, PrevT],
+](cb CBFuncT) *Promise[NextT] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
