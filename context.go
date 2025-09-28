@@ -20,12 +20,12 @@ import (
 )
 
 var neverClosedSyncCtx context.Context = syncCtx{}
-var closedSyncCtx context.Context
+var alreadyClosedSyncCtx context.Context
 
 func init() {
-	closedChan := make(chan struct{})
-	close(closedChan)
-	closedSyncCtx = syncCtx{syncChan: closedChan}
+	var cancel context.CancelFunc
+	alreadyClosedSyncCtx, cancel = newSyncCtxWithCancel()
+	cancel()
 }
 
 func newSyncCtx() context.Context {

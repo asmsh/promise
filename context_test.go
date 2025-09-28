@@ -153,3 +153,27 @@ func BenchmarkGroup_callbackCtx(b *testing.B) {
 		})
 	}
 }
+
+func Test_neverClosedSyncCtx(t *testing.T) {
+	done := neverClosedSyncCtx.Done()
+	// run it multiple times, just to make sure the behavior never changes.
+	for range 10 {
+		select {
+		case <-done:
+			t.Errorf("neverClosedSyncCtx is closed")
+		default:
+		}
+	}
+}
+
+func Test_alreadyClosedSyncCtx(t *testing.T) {
+	done := alreadyClosedSyncCtx.Done()
+	// run it multiple times, just to make sure the behavior never changes.
+	for range 10 {
+		select {
+		case <-done:
+		default:
+			t.Errorf("alreadyClosedSyncCtx is not closed")
+		}
+	}
+}

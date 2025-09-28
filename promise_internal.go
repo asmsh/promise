@@ -598,7 +598,7 @@ func newPromBlocked[T any]() *Promise[T] {
 func newPromSync[T any](g *Group[T], res Result[T]) *Promise[T] {
 	p := &Promise[T]{
 		group:   g,
-		syncCtx: closedSyncCtx,
+		syncCtx: alreadyClosedSyncCtx,
 		res:     res,
 		// no other fields are needed, since sync promises are resolved directly
 		// after created, so any extension call will depend on the syncCtx chan.
