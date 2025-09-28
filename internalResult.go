@@ -339,15 +339,15 @@ func (r errPromiseConsumedResult[T]) String() string {
 	return fmt.Sprintf("Error: %s", ErrPromiseConsumed.Error())
 }
 
-// errPromiseCtxNilDoneResult is a static error result that returns [ErrPromiseNilCtxDone].
-// it's used instead of saving the [ErrPromiseNilCtxDone] error in a generic errResult value.
-type errPromiseCtxNilDoneResult[T any] struct{}
+// errCtxNilDoneResult is a static error result that returns [ErrNilCtxDone].
+// it's used instead of saving the [ErrNilCtxDone] error in a generic errResult value.
+type errCtxNilDoneResult[T any] struct{}
 
-func (r errPromiseCtxNilDoneResult[T]) Val() (v T)   { return v }
-func (r errPromiseCtxNilDoneResult[T]) Err() error   { return ErrPromiseNilCtxDone }
-func (r errPromiseCtxNilDoneResult[T]) State() State { return Error }
-func (r errPromiseCtxNilDoneResult[T]) String() string {
-	return fmt.Sprintf("Error: %s", ErrPromiseNilCtxDone.Error())
+func (r errCtxNilDoneResult[T]) Val() (v T)   { return v }
+func (r errCtxNilDoneResult[T]) Err() error   { return ErrNilCtxDone }
+func (r errCtxNilDoneResult[T]) State() State { return Error }
+func (r errCtxNilDoneResult[T]) String() string {
+	return fmt.Sprintf("Error: %s", ErrNilCtxDone.Error())
 }
 
 // errGroupBusyResult is a static error result that returns [ErrGroupBusy].

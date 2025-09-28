@@ -255,7 +255,7 @@ type GroupConfig struct {
 	FailuresCancelGroup bool
 
 	// NoNilCtxDoneChan causes new calls to [Group.Ctx] to return an [Error] [Result]
-	// with the [ErrPromiseNilCtxDone] err, when the [context.Context] value passed
+	// with the [ErrNilCtxDone] err, when the [context.Context] value passed
 	// has a nil Done channel ([context.Context.Done]).
 	// Otherwise, it will allow the creation of the [Promise], which will be a never
 	// resolved promise, causing all follow calls to be blocked as well.

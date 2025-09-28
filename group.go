@@ -218,7 +218,7 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	// and if used with this package it will block follow calls on it forever.
 	if ctx.Done() == nil {
 		if g != nil && g.core.options.IsNoNilCtxDoneChan() {
-			return newPromSync[T](g, errPromiseCtxNilDoneResult[T]{})
+			return newPromSync[T](g, errCtxNilDoneResult[T]{})
 		} else {
 			// since this ctx value will never be closed, the equivalent
 			// outcome would be a Promise that's never resolved.

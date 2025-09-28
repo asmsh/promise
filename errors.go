@@ -26,13 +26,13 @@ var (
 	// All equality checks must be only done with the [errors.Is] function.
 	ErrPromiseConsumed = errors.New("promise already handled")
 
-	// ErrPromiseNilCtxDone is returned via [Result.Err] from [Group.Ctx] when
+	// ErrNilCtxDone is returned via [Result.Err] from [Group.Ctx] when
 	// the [context.Context] value passed has a nil Done channel ([context.Context.Done]),
 	// and the [GroupConfig.NoNilCtxDoneChan] flag is set to `true`.
 	//
 	// This is a synchronous error that will happen before the [Promise] value is returned.
 	// All equality checks must be only done with the [errors.Is] function.
-	ErrPromiseNilCtxDone = errors.New("promise cannot be created from a Context with nil Done chan")
+	ErrNilCtxDone = errors.New("nil Done chan found in Context")
 
 	// ErrGroupBusy returned via [Result.Err] from a [Group]'s [Promise] constructor
 	// when the number of promises the [Group] is currently handling equals the [GroupConfig.Size]
