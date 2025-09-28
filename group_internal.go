@@ -71,7 +71,7 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 			return newSingleRes(callResState, callRes)
 		}
 
-		// target is not found, move forward to the async handling...
+		// target is not found, move forward to the async (slow) handling...
 
 		return g.selectResSlow(groupDone)
 	}
@@ -205,7 +205,7 @@ func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
 				return newMultiRes(callResState, callRes)
 			}
 
-			// target is not found, move forward to the async handling...
+			// target is not found, move forward to the async (slow) handling...
 		}
 
 		return g.joinResSlow(groupDone, op)

@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// All the different errors below must be checked with the [errors.Is] function,
+// and any type casting must only be done via the [errors.As] function.
 var (
 	// ErrPromisePanicked is returned via [Result.Err] when a [Promise]'s callback
 	// has caused a panic while being executed.
