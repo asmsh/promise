@@ -361,15 +361,15 @@ func (r errGroupBusyResult[T]) String() string {
 	return fmt.Sprintf("Error: %s", ErrGroupBusy.Error())
 }
 
-// errGroupDoneResult is a static error result that returns [ErrGroupDone].
-// it's used instead of saving the [ErrGroupDone] error in a generic errResult value.
-type errGroupDoneResult[T any] struct{}
+// errGroupWaitingResult is a static error result that returns [ErrGroupWaiting].
+// it's used instead of saving the [ErrGroupWaiting] error in a generic errResult value.
+type errGroupWaitingResult[T any] struct{}
 
-func (r errGroupDoneResult[T]) Val() (v T)   { return v }
-func (r errGroupDoneResult[T]) Err() error   { return ErrGroupDone }
-func (r errGroupDoneResult[T]) State() State { return Error }
-func (r errGroupDoneResult[T]) String() string {
-	return fmt.Sprintf("Error: %s", ErrGroupDone.Error())
+func (r errGroupWaitingResult[T]) Val() (v T)   { return v }
+func (r errGroupWaitingResult[T]) Err() error   { return ErrGroupWaiting }
+func (r errGroupWaitingResult[T]) State() State { return Error }
+func (r errGroupWaitingResult[T]) String() string {
+	return fmt.Sprintf("Error: %s", ErrGroupWaiting.Error())
 }
 
 // errGroupCanceledResult is a static error result that returns [ErrGroupCanceled].

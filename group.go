@@ -463,7 +463,7 @@ type groupOptions struct {
 // because of either it is in Waiting mode, or it has been Canceled due to a failure.
 func (g *Group[T]) validateActive() Result[T] {
 	if g.isWaiting() {
-		return errGroupDoneResult[T]{}
+		return errGroupWaitingResult[T]{}
 	}
 	if g.isCanceled() {
 		return errGroupCanceledResult[T]{}

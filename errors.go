@@ -45,7 +45,7 @@ var (
 	// [Group.Chan], and [Group.Ctx] methods
 	ErrGroupBusy = errors.New("group is busy with other work")
 
-	// ErrGroupDone is returned via [Result.Err] from a [Group]'s [Promise] constructor
+	// ErrGroupWaiting is returned via [Result.Err] from a [Group]'s [Promise] constructor
 	// when one of the [Group]'s Wait methods has been called.
 	//
 	// This is a synchronous error that will happen before the [Promise] value is returned.
@@ -56,7 +56,7 @@ var (
 	//
 	// The Group's Wait methods are the [Group.Wait], [Group.AllWaitRes],
 	// [Group.AnyWaitRes], and [Group.JoinRes].
-	ErrGroupDone = errors.New("group is done handling new work")
+	ErrGroupWaiting = errors.New("group is waiting ongoing work")
 
 	// ErrGroupCanceled is returned via [Result.Err] from a [Group]'s [Promise] constructor
 	// if one of the [Group]'s previous promises produces an [Error] or a [Panic] [Result]
