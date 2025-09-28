@@ -201,7 +201,7 @@ type GroupConfig struct {
 
 	// OnetimeHandling enforces that the [Result] value returned from any
 	// callback is only used one-time (via [Promise.Res] or as an argument
-	// to any other callbacks).
+	// to any other callback that accepts a [Result] value).
 	// This will cause any further attempt to use that [Result] value to
 	// return an [Error] [Result] with the [ErrPromiseConsumed] error.
 	OnetimeHandling bool

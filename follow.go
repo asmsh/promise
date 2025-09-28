@@ -61,7 +61,7 @@ func FollowCallback[
 		return newPromBlocked[NextT]()
 	}
 	if !nextGroup.reserveGoroutine(p.regChainRead) {
-		return newPromSync[NextT](nextGroup, errPromiseGroupBusyResult[NextT]{})
+		return newPromSync[NextT](nextGroup, errGroupBusyResult[NextT]{})
 	}
 
 	nextProm := newPromInter[NextT](nextGroup)

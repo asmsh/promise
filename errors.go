@@ -7,39 +7,69 @@ import (
 )
 
 var (
+	// ErrPromisePanicked is returned via [Result.Err] when a [Promise]'s callback
+	// has caused a panic while being executed.
+	// The panic value can be retrieved from the [PanicError.V] after type casting
+	// the [Result.Err] to [PanicError] via [errors.As].
+	//
+	// All equality checks must be only done with the [errors.Is] function.
+	// All type casting must be only done with the [errors.As] function.
 	ErrPromisePanicked = errors.New("promise panicked")
 
+	// ErrPromiseConsumed is returned via [Result.Err] when a [Promise]'s [Result]
+	// is being accessed for the second or more time, and the [GroupConfig.OnetimeHandling]
+	// flag is set to `true`.
+	//
+	// Accessing a [Promise]'s [Result] is done via [Promise.Res] or as an argument
+	// to any other callback that accepts a [Result] value.
+	//
+	// All equality checks must be only done with the [errors.Is] function.
 	ErrPromiseConsumed = errors.New("promise already handled")
 
-	// ErrPromiseNilCtxDone returned via [Result.Err] from [Group.Ctx] when the
-	// [context.Context] value passed has a nil Done channel ([context.Context.Done]),
-	// and the [GroupConfig.NoNilCtxDoneChan] [Group] option is set to `ture`.
-	// This is a sync error that will happen before the [Promise] value is returned.
+	// ErrPromiseNilCtxDone is returned via [Result.Err] from [Group.Ctx] when
+	// the [context.Context] value passed has a nil Done channel ([context.Context.Done]),
+	// and the [GroupConfig.NoNilCtxDoneChan] flag is set to `true`.
+	//
+	// This is a synchronous error that will happen before the [Promise] value is returned.
+	// All equality checks must be only done with the [errors.Is] function.
 	ErrPromiseNilCtxDone = errors.New("promise cannot be created from a Context with nil Done chan")
 
-	// ErrGroupBusy returned via [Result.Err] from [Group.Chan], [Group.Delay],
-	// and all [Group.Go] calls, when the [Group] is currently handling promises that
-	// equals the [Group]'s assigned size ([GroupConfig.Size]),
-	// and the [GroupConfig.NoWaitingBusyGroup] [Group] option is set to `ture`.
-	// This is a sync error that will happen before the [Promise] value is returned.
+	// ErrGroupBusy returned via [Result.Err] from a [Group]'s [Promise] constructor
+	// when the number of promises the [Group] is currently handling equals the [GroupConfig.Size]
+	// and the [GroupConfig.NoWaitingBusyGroup] flag is set to `true`.
+	//
+	// This is a synchronous error that will happen before the [Promise] value is returned.
+	// All equality checks must be only done with the [errors.Is] function.
+	//
+	// The Group's Promise constructors are the [Group.Go] methods, the [Group.Delay],
+	// [Group.Chan], and [Group.Ctx] methods
 	ErrGroupBusy = errors.New("group is busy with other work")
 
-	// ErrGroupDone returned when one of the [Group]'s Wait methods has
-	// been called, and a new call is made to one of the [Group]'s Go methods.
-	// This is a sync error that will happen before the [Promise] value is returned.
+	// ErrGroupDone is returned via [Result.Err] from a [Group]'s [Promise] constructor
+	// when one of the [Group]'s Wait methods has been called.
+	//
+	// This is a synchronous error that will happen before the [Promise] value is returned.
+	// All equality checks must be only done with the [errors.Is] function.
+	//
+	// The Group's Promise constructors are the [Group.Go] methods, the [Group.Delay],
+	// [Group.Chan], and [Group.Ctx] methods
+	//
+	// The Group's Wait methods are the [Group.Wait], [Group.AllWaitRes],
+	// [Group.AnyWaitRes], and [Group.JoinRes].
 	ErrGroupDone = errors.New("group is done handling new work")
 
 	// ErrGroupCanceled is returned via [Result.Err] from a [Group]'s [Promise] constructor
 	// if one of the [Group]'s previous promises produces an [Error] or a [Panic] [Result]
 	// that's not handled.
 	//
+	// This is a synchronous error that will happen before the [Promise] value is returned.
+	// All equality checks must be only done with the [errors.Is] function.
+	//
 	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.Res],
 	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
 	//
 	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.Res],
 	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
-	//
-	// This is a synchronous error that will happen before the [Promise] value is returned.
 	ErrGroupCanceled = errors.New("group is canceled")
 )
 
@@ -65,7 +95,8 @@ func (e PanicError) Unwrap() error {
 }
 
 // IdxError is the error container for an error returned from
-// the [All](and [AllWait]), [Any](and [AnyWait]) or [Join] extension calls.
+// the [Select], [All](and [AllWait]), [Any](and [AnyWait]),
+// or [Join] extension calls.
 // It's also one of the container types for the MultiError's elements.
 type IdxError struct {
 	Idx int
@@ -80,7 +111,8 @@ func (e IdxError) Unwrap() error {
 }
 
 // GroupError is the error container for an error returned from
-// the [Group.AllWaitRes] or [Group.AnyWaitRes] group calls.
+// the [Group.Select], [Group.AllRes](and [Group.AllWaitRes]),
+// [Group.AnyRes](and [Group.AnyWaitRes]), or [Group.Join] group calls.
 // It's also one of the container types for the MultiError's elements.
 type GroupError struct {
 	Err error

@@ -67,7 +67,7 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 	// attempt to reserve a goroutine for the callback,
 	// or return an error if there's no available ones.
 	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](g, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](g)
@@ -99,7 +99,7 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 		return newPromSync[T](g, errRes)
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](g, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](g)
@@ -129,7 +129,7 @@ func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
 		return newPromSync[T](g, errRes)
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](g, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](g)
@@ -160,7 +160,7 @@ func (g *Group[T]) Delay(
 		return newPromSync[T](g, errRes)
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](g, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](g)
@@ -190,7 +190,7 @@ func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 		return newPromSync[T](g, errRes)
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](g, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](g)
@@ -228,7 +228,7 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 		}
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](g, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromCtx[T](g, ctx)

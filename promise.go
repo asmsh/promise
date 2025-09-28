@@ -183,7 +183,7 @@ func (p *Promise[T]) Delay(
 	// attempt to reserve a goroutine for the rescheduling,
 	// or return an error if there's no available ones.
 	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](p.group, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -264,7 +264,7 @@ func (p *Promise[T]) Follow(
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](p.group, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -295,7 +295,7 @@ func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](p.group, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -328,7 +328,7 @@ func (p *Promise[T]) Then(
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](p.group, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -361,7 +361,7 @@ func (p *Promise[T]) Catch(
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](p.group, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -394,7 +394,7 @@ func (p *Promise[T]) Recover(
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](p.group, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -427,7 +427,7 @@ func (p *Promise[T]) Finally(
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errPromiseGroupBusyResult[T]{})
+		return newPromSync[T](p.group, errGroupBusyResult[T]{})
 	}
 
 	nextProm := newPromInter[T](p.group)
