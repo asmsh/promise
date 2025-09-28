@@ -170,8 +170,8 @@ func (p *Promise[T]) Delay(
 ) *Promise[T] {
 	// return an error if its group is in the waiting mode,
 	// disallowing the initiation of any new work.
-	if p.group.isWaiting() {
-		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	if errRes := p.group.validateActive(); errRes != nil {
+		return newPromSync[T](p.group, errRes)
 	}
 	if p.syncCtx == neverClosedSyncCtx {
 		// since the syncCtx is nil, this promise will never be resolved,
@@ -225,7 +225,8 @@ func (p *Promise[T]) Callback(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.group.isWaiting() {
+	if errRes := p.group.validateActive(); errRes != nil {
+		// TODO: how to handle the error?
 		return
 	}
 	if p.syncCtx == neverClosedSyncCtx {
@@ -256,8 +257,8 @@ func (p *Promise[T]) Follow(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.group.isWaiting() {
-		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	if errRes := p.group.validateActive(); errRes != nil {
+		return newPromSync[T](p.group, errRes)
 	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p
@@ -287,8 +288,8 @@ func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.group.isWaiting() {
-		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	if errRes := p.group.validateActive(); errRes != nil {
+		return newPromSync[T](p.group, errRes)
 	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p
@@ -320,8 +321,8 @@ func (p *Promise[T]) Then(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.group.isWaiting() {
-		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	if errRes := p.group.validateActive(); errRes != nil {
+		return newPromSync[T](p.group, errRes)
 	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p
@@ -353,8 +354,8 @@ func (p *Promise[T]) Catch(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.group.isWaiting() {
-		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	if errRes := p.group.validateActive(); errRes != nil {
+		return newPromSync[T](p.group, errRes)
 	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p
@@ -386,8 +387,8 @@ func (p *Promise[T]) Recover(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.group.isWaiting() {
-		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	if errRes := p.group.validateActive(); errRes != nil {
+		return newPromSync[T](p.group, errRes)
 	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p
@@ -419,8 +420,8 @@ func (p *Promise[T]) Finally(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if p.group.isWaiting() {
-		return newPromSync[T](p.group, errPromiseGroupDoneResult[T]{})
+	if errRes := p.group.validateActive(); errRes != nil {
+		return newPromSync[T](p.group, errRes)
 	}
 	if p.syncCtx == neverClosedSyncCtx {
 		return p

@@ -71,6 +71,8 @@ func callbackCtx[T any](
 	// default scenario, either no Group or a Group with default behavior.
 	// we return the syncCtx with no cancellation, if one is provided,
 	// otherwise we return Background with cancellation.
+	// note: g.core.ctx will be set when either of [GroupConfig.FailuresCancelCBCtx]
+	// or [GroupConfig.FailuresCancelGroup] is set.
 	if g == nil || (g.core.ctx == nil && !g.core.options.IsNeverCancelCBCtx()) {
 		// the syncCtx will be nil only when there's no next promise,
 		// which only happens from [Promise.Callback] calls for now.

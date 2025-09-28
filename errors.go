@@ -28,6 +28,19 @@ var (
 	// been called, and a new call is made to one of the [Group]'s Go methods.
 	// This is a sync error that will happen before the [Promise] value is returned.
 	ErrGroupDone = errors.New("group is done handling new work")
+
+	// ErrGroupCanceled is returned via [Result.Err] from a [Group]'s [Promise] constructor
+	// if one of the [Group]'s previous promises produces an [Error] or a [Panic] [Result]
+	// that's not handled.
+	//
+	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.Res],
+	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
+	//
+	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.Res],
+	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
+	//
+	// This is a synchronous error that will happen before the [Promise] value is returned.
+	ErrGroupCanceled = errors.New("group is canceled")
 )
 
 // PanicError wraps a panic that got caught in a promise callback.

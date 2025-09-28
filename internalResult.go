@@ -372,6 +372,17 @@ func (r errPromiseGroupBusyResult[T]) String() string {
 	return fmt.Sprintf("Error: %s", ErrGroupBusy.Error())
 }
 
+// errGroupCanceledResult is a static error result that returns [ErrGroupCanceled].
+// it's used instead of saving the [ErrGroupCanceled] error in a generic errResult value.
+type errGroupCanceledResult[T any] struct{}
+
+func (r errGroupCanceledResult[T]) Val() (v T)   { return v }
+func (r errGroupCanceledResult[T]) Err() error   { return ErrGroupCanceled }
+func (r errGroupCanceledResult[T]) State() State { return Error }
+func (r errGroupCanceledResult[T]) String() string {
+	return fmt.Sprintf("Error: %s", ErrGroupCanceled.Error())
+}
+
 func printSingleRes[T any, TElem Result[T]](
 	stateStr string,
 	val TElem,

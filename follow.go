@@ -54,7 +54,7 @@ func FollowCallback[
 	}
 
 	nextGroup := followGroup[NextT, PrevT](p.group)
-	if errRes := nextGroup.checkClosed(); errRes != nil {
+	if errRes := nextGroup.validateActive(); errRes != nil {
 		return newPromSync[NextT](nextGroup, errRes)
 	}
 	if p.syncCtx == neverClosedSyncCtx {

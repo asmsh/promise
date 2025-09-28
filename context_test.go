@@ -47,14 +47,14 @@ var testsCases_Group_callbackCtx = []struct {
 		expectedCtxName: "syncCtx",
 	},
 	{
-		// when a Group is available with neverCancelCBCtx=false.
+		// when a Group is available with NeverCancelCBCtx=false.
 		name:            "Callback:non-nil_group,nil_group_ctx,cancel-callback-ctx,nil_syncCtx",
 		g:               &Group[any]{core: &groupCore{}},
 		syncCtx:         nil,
 		expectedCtxName: "syncCtx",
 	},
 	{
-		// when a Group is available with neverCancelCBCtx=true.
+		// when a Group is available with NeverCancelCBCtx=true.
 		name: "Callback:non-nil_group,nil_group_ctx,never-cancel-callback-ctx,nil_syncCtx",
 		g: &Group[any]{core: &groupCore{
 			options: func() groupOptionsBitFlags {
@@ -68,6 +68,7 @@ var testsCases_Group_callbackCtx = []struct {
 	},
 	{
 		// when a Group is available with the group Context set.
+		// note: this covers the FailuresCancelCBCtx=true and FailuresCancelGroup=true.
 		name: "Callback:non-nil_group,non-nil_group_ctx,cancel-callback-ctx,nil_syncCtx",
 		g: &Group[any]{core: &groupCore{
 			ctx:    testCtx,
@@ -86,14 +87,14 @@ var testsCases_Group_callbackCtx = []struct {
 		expectedCtxName: "syncCtx",
 	},
 	{
-		// when a Group is available with neverCancelCBCtx=false.
+		// when a Group is available with NeverCancelCBCtx=false.
 		name:            "Follow:non-nil_group,nil_group_ctx,cancel-callback-ctx,non-nil_syncCtx",
 		g:               &Group[any]{core: &groupCore{}},
 		syncCtx:         syncCtx{syncChan: make(chan struct{})},
 		expectedCtxName: "syncCtx",
 	},
 	{
-		// when a Group is available with neverCancelCBCtx=true.
+		// when a Group is available with NeverCancelCBCtx=true.
 		name: "Follow:non-nil_group,nil_group_ctx,never-cancel-callback-ctx,non-nil_syncCtx",
 		g: &Group[any]{core: &groupCore{
 			options: func() groupOptionsBitFlags {
@@ -107,6 +108,7 @@ var testsCases_Group_callbackCtx = []struct {
 	},
 	{
 		// when a Group is available with the group Context set.
+		// note: this covers the FailuresCancelCBCtx=true and FailuresCancelGroup=true.
 		name: "Follow:non-nil_group,non-nil_group_ctx,cancel-callback-ctx,non-nil_syncCtx",
 		g: &Group[any]{core: &groupCore{
 			ctx:    testCtx,

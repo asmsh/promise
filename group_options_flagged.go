@@ -13,17 +13,29 @@ type _groupOptionsBitFlagsInterface interface {
 	TypedFlags() groupOptions
 	SetTypedFlags(flags groupOptions)
 
+	IsOnetimeHandling() (set bool)
+	SetOnetimeHandling() (old bool)
+	ResetOnetimeHandling() (old bool)
+	SetOnetimeHandlingTo(new bool) (old bool)
+	ToggleOnetimeHandling() (new bool)
+
 	IsNeverCancelCBCtx() (set bool)
 	SetNeverCancelCBCtx() (old bool)
 	ResetNeverCancelCBCtx() (old bool)
 	SetNeverCancelCBCtxTo(new bool) (old bool)
 	ToggleNeverCancelCBCtx() (new bool)
 
-	IsOnetimeHandling() (set bool)
-	SetOnetimeHandling() (old bool)
-	ResetOnetimeHandling() (old bool)
-	SetOnetimeHandlingTo(new bool) (old bool)
-	ToggleOnetimeHandling() (new bool)
+	IsFailuresCancelCBCtx() (set bool)
+	SetFailuresCancelCBCtx() (old bool)
+	ResetFailuresCancelCBCtx() (old bool)
+	SetFailuresCancelCBCtxTo(new bool) (old bool)
+	ToggleFailuresCancelCBCtx() (new bool)
+
+	IsFailuresCancelGroup() (set bool)
+	SetFailuresCancelGroup() (old bool)
+	ResetFailuresCancelGroup() (old bool)
+	SetFailuresCancelGroupTo(new bool) (old bool)
+	ToggleFailuresCancelGroup() (new bool)
 
 	IsNoNilCtxDoneChan() (set bool)
 	SetNoNilCtxDoneChan() (old bool)
@@ -47,8 +59,10 @@ type _groupOptionsBitFlagsInterface interface {
 // These are the indexes of the flags used by this generated code.
 // Listed in the same order their corresponding fields are listed in [groupOptions].
 const (
-	_groupOptionsNeverCancelCBCtxBitIndex    flagged.BitIndex = iota // for field [groupOptions.neverCancelCBCtx]
 	_groupOptionsOnetimeHandlingBitIndex     flagged.BitIndex = iota // for field [groupOptions.onetimeHandling]
+	_groupOptionsNeverCancelCBCtxBitIndex    flagged.BitIndex = iota // for field [groupOptions.neverCancelCBCtx]
+	_groupOptionsFailuresCancelCBCtxBitIndex flagged.BitIndex = iota // for field [groupOptions.failuresCancelCBCtx]
+	_groupOptionsFailuresCancelGroupBitIndex flagged.BitIndex = iota // for field [groupOptions.failuresCancelGroup]
 	_groupOptionsNoNilCtxDoneChanBitIndex    flagged.BitIndex = iota // for field [groupOptions.noNilCtxDoneChan]
 	_groupOptionsNoWaitingBusyGroupBitIndex  flagged.BitIndex = iota // for field [groupOptions.noWaitingBusyGroup]
 	_groupOptionsSaveAllGroupResultsBitIndex flagged.BitIndex = iota // for field [groupOptions.saveAllGroupResults]
@@ -68,8 +82,10 @@ func (f *groupOptionsBitFlags) Clone() groupOptionsBitFlags {
 // object, which is the same used to generate the flags in first place.
 func (f *groupOptionsBitFlags) TypedFlags() groupOptions {
 	return groupOptions{
-		neverCancelCBCtx:    f.IsNeverCancelCBCtx(),
 		onetimeHandling:     f.IsOnetimeHandling(),
+		neverCancelCBCtx:    f.IsNeverCancelCBCtx(),
+		failuresCancelCBCtx: f.IsFailuresCancelCBCtx(),
+		failuresCancelGroup: f.IsFailuresCancelGroup(),
 		noNilCtxDoneChan:    f.IsNoNilCtxDoneChan(),
 		noWaitingBusyGroup:  f.IsNoWaitingBusyGroup(),
 		saveAllGroupResults: f.IsSaveAllGroupResults(),
@@ -79,11 +95,29 @@ func (f *groupOptionsBitFlags) TypedFlags() groupOptions {
 // SetTypedFlags overrides the current flags value based on the typed
 // object provided.
 func (f *groupOptionsBitFlags) SetTypedFlags(flags groupOptions) {
-	f.SetNeverCancelCBCtxTo(flags.neverCancelCBCtx)
 	f.SetOnetimeHandlingTo(flags.onetimeHandling)
+	f.SetNeverCancelCBCtxTo(flags.neverCancelCBCtx)
+	f.SetFailuresCancelCBCtxTo(flags.failuresCancelCBCtx)
+	f.SetFailuresCancelGroupTo(flags.failuresCancelGroup)
 	f.SetNoNilCtxDoneChanTo(flags.noNilCtxDoneChan)
 	f.SetNoWaitingBusyGroupTo(flags.noWaitingBusyGroup)
 	f.SetSaveAllGroupResultsTo(flags.saveAllGroupResults)
+}
+
+func (f *groupOptionsBitFlags) IsOnetimeHandling() (set bool) {
+	return f.BitFlags().Is(_groupOptionsOnetimeHandlingBitIndex)
+}
+func (f *groupOptionsBitFlags) SetOnetimeHandling() (old bool) {
+	return f.SetOnetimeHandlingTo(true)
+}
+func (f *groupOptionsBitFlags) ResetOnetimeHandling() (old bool) {
+	return f.SetOnetimeHandlingTo(false)
+}
+func (f *groupOptionsBitFlags) SetOnetimeHandlingTo(new bool) (old bool) {
+	return f.BitFlags().SetTo(_groupOptionsOnetimeHandlingBitIndex, new)
+}
+func (f *groupOptionsBitFlags) ToggleOnetimeHandling() (new bool) {
+	return f.BitFlags().Toggle(_groupOptionsOnetimeHandlingBitIndex)
 }
 
 func (f *groupOptionsBitFlags) IsNeverCancelCBCtx() (set bool) {
@@ -102,20 +136,36 @@ func (f *groupOptionsBitFlags) ToggleNeverCancelCBCtx() (new bool) {
 	return f.BitFlags().Toggle(_groupOptionsNeverCancelCBCtxBitIndex)
 }
 
-func (f *groupOptionsBitFlags) IsOnetimeHandling() (set bool) {
-	return f.BitFlags().Is(_groupOptionsOnetimeHandlingBitIndex)
+func (f *groupOptionsBitFlags) IsFailuresCancelCBCtx() (set bool) {
+	return f.BitFlags().Is(_groupOptionsFailuresCancelCBCtxBitIndex)
 }
-func (f *groupOptionsBitFlags) SetOnetimeHandling() (old bool) {
-	return f.SetOnetimeHandlingTo(true)
+func (f *groupOptionsBitFlags) SetFailuresCancelCBCtx() (old bool) {
+	return f.SetFailuresCancelCBCtxTo(true)
 }
-func (f *groupOptionsBitFlags) ResetOnetimeHandling() (old bool) {
-	return f.SetOnetimeHandlingTo(false)
+func (f *groupOptionsBitFlags) ResetFailuresCancelCBCtx() (old bool) {
+	return f.SetFailuresCancelCBCtxTo(false)
 }
-func (f *groupOptionsBitFlags) SetOnetimeHandlingTo(new bool) (old bool) {
-	return f.BitFlags().SetTo(_groupOptionsOnetimeHandlingBitIndex, new)
+func (f *groupOptionsBitFlags) SetFailuresCancelCBCtxTo(new bool) (old bool) {
+	return f.BitFlags().SetTo(_groupOptionsFailuresCancelCBCtxBitIndex, new)
 }
-func (f *groupOptionsBitFlags) ToggleOnetimeHandling() (new bool) {
-	return f.BitFlags().Toggle(_groupOptionsOnetimeHandlingBitIndex)
+func (f *groupOptionsBitFlags) ToggleFailuresCancelCBCtx() (new bool) {
+	return f.BitFlags().Toggle(_groupOptionsFailuresCancelCBCtxBitIndex)
+}
+
+func (f *groupOptionsBitFlags) IsFailuresCancelGroup() (set bool) {
+	return f.BitFlags().Is(_groupOptionsFailuresCancelGroupBitIndex)
+}
+func (f *groupOptionsBitFlags) SetFailuresCancelGroup() (old bool) {
+	return f.SetFailuresCancelGroupTo(true)
+}
+func (f *groupOptionsBitFlags) ResetFailuresCancelGroup() (old bool) {
+	return f.SetFailuresCancelGroupTo(false)
+}
+func (f *groupOptionsBitFlags) SetFailuresCancelGroupTo(new bool) (old bool) {
+	return f.BitFlags().SetTo(_groupOptionsFailuresCancelGroupBitIndex, new)
+}
+func (f *groupOptionsBitFlags) ToggleFailuresCancelGroup() (new bool) {
+	return f.BitFlags().Toggle(_groupOptionsFailuresCancelGroupBitIndex)
 }
 
 func (f *groupOptionsBitFlags) IsNoNilCtxDoneChan() (set bool) {

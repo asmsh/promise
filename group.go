@@ -61,8 +61,8 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 	g.init()
 	// return an error if the group is in the waiting mode,
 	// disallowing the initiation of any new work.
-	if g.isWaiting() {
-		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	if errRes := g.validateActive(); errRes != nil {
+		return newPromSync[T](g, errRes)
 	}
 	// attempt to reserve a goroutine for the callback,
 	// or return an error if there's no available ones.
@@ -95,8 +95,8 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 		panic(nilCallbackPanicMsg)
 	}
 	g.init()
-	if g.isWaiting() {
-		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	if errRes := g.validateActive(); errRes != nil {
+		return newPromSync[T](g, errRes)
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
@@ -125,8 +125,8 @@ func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 	g.init()
-	if g.isWaiting() {
-		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	if errRes := g.validateActive(); errRes != nil {
+		return newPromSync[T](g, errRes)
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
@@ -156,8 +156,8 @@ func (g *Group[T]) Delay(
 	cond ...DelayCond,
 ) *Promise[T] {
 	g.init()
-	if g.isWaiting() {
-		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	if errRes := g.validateActive(); errRes != nil {
+		return newPromSync[T](g, errRes)
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
@@ -186,8 +186,8 @@ func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 		panic(nilResChanPanicMsg)
 	}
 	g.init()
-	if g.isWaiting() {
-		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	if errRes := g.validateActive(); errRes != nil {
+		return newPromSync[T](g, errRes)
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
 		return newPromSync[T](g, errPromiseGroupBusyResult[T]{})
@@ -211,8 +211,8 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 		panic(nilCtxPanicMsg)
 	}
 	g.init()
-	if g.isWaiting() {
-		return newPromSync[T](g, errPromiseGroupDoneResult[T]{})
+	if errRes := g.validateActive(); errRes != nil {
+		return newPromSync[T](g, errRes)
 	}
 	// handle contexts with nil done channel, as a nil channel is never closed,
 	// and if used with this package it will block follow calls on it forever.
@@ -429,6 +429,11 @@ type groupCore struct {
 	// it can enter the waiting mode via one of the Wait methods.
 	waiting atomic.Bool
 
+	// canceled represents whether this Group has been canceled or not,
+	// which happens if there's been an unhandled failure and
+	// the [GroupConfig.FailuresCancelGroup] flag was set.
+	canceled atomic.Bool
+
 	// sg is used for limiting concurrency and implementing
 	// the waiting functions.
 	sg sema.Group
@@ -445,11 +450,26 @@ type groupCore struct {
 
 //go:generate genflagged -type=groupOptions -outType=groupOptionsBitFlags -outFile=group_options_flagged.go
 type groupOptions struct {
-	neverCancelCBCtx    bool
 	onetimeHandling     bool
+	neverCancelCBCtx    bool
+	failuresCancelCBCtx bool
+	failuresCancelGroup bool
 	noNilCtxDoneChan    bool
 	noWaitingBusyGroup  bool
 	saveAllGroupResults bool
+}
+
+// validateActive will return an [Error] [Result] if the [Group] has been closed
+// because of either it is in Waiting mode, or it has been Canceled due to a failure.
+func (g *Group[T]) validateActive() Result[T] {
+	if g.isWaiting() {
+		return errGroupDoneResult[T]{}
+	}
+	if g.isCanceled() {
+		return errGroupCanceledResult[T]{}
+	}
+
+	return nil
 }
 
 func (g *Group[T]) isWaiting() bool {
@@ -457,6 +477,18 @@ func (g *Group[T]) isWaiting() bool {
 		return false
 	}
 	return g.core.waiting.Load()
+}
+
+func (g *Group[T]) isCanceled() bool {
+	if g == nil {
+		return false
+	}
+	if !g.core.options.IsFailuresCancelGroup() {
+		// since we only write to the canceled field if that option is set,
+		// then there's no point in attempting to read it if not set.
+		return false
+	}
+	return g.core.canceled.Load()
 }
 
 // note: once it returns true, an arrangement must be made for calling freeGoroutine.

@@ -118,13 +118,19 @@ func (p *Promise[T]) unhandledPanic() {
 
 	debug(p, startUnhandledPanicLogic)
 
-	// if it's request to cancel all the promises of the group on
-	// uncaught panics, call the cancel function before the handler.
+	// block new calls from being started, if it's requested to cancel
+	// the group on unhandled failures.
+	if p.group.core.options.IsFailuresCancelGroup() {
+		p.group.core.waiting.Store(true)
+	}
+
+	// cancel the group's context, if it's request to cancel all
+	// the promises of the group on unhandled failures.
 	if p.group.core.cancel != nil {
 		p.group.core.cancel()
 	}
 
-	// call the callback if one is provided
+	// call the callback if one is provided.
 	if p.group.core.unhandledPanicCB != nil {
 		debug(p, callUnhandledPanicCallback)
 		p.group.core.unhandledPanicCB(getPanicVFromRes(p.res))
@@ -138,13 +144,14 @@ func (p *Promise[T]) unhandledError() {
 
 	debug(p, startUnhandledErrorLogic)
 
-	// if it's request to cancel all the promises of the group on
-	// uncaught errors, call the cancel function before the handler.
+	if p.group.core.options.IsFailuresCancelGroup() {
+		p.group.core.waiting.Store(true)
+	}
+
 	if p.group.core.cancel != nil {
 		p.group.core.cancel()
 	}
 
-	// call the callback if one is provided
 	if p.group.core.unhandledErrorCB != nil {
 		debug(p, callUnhandledErrorCallback)
 		p.group.core.unhandledErrorCB(p.res.Err())

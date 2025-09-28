@@ -16,7 +16,9 @@ package promise
 
 import (
 	"context"
+	"errors"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -2056,4 +2058,24 @@ func TestGroup_JoinRes(t *testing.T) {
 			t.Errorf("JoinRes().State() is %s, want %s", res.State(), want)
 		}
 	})
+}
+
+// From: https://github.com/golang/go/issues/54045
+func TestGroupDoesNotRunNewFunctionsAfterPreviousError(t *testing.T) {
+	group := NewGroup[any](Size(1), SetFailuresCancelGroup())
+
+	group.GoCtxRes(func(ctx context.Context) Result[any] {
+		return ErrRes[any](errors.New(""))
+	})
+	time.Sleep(time.Second)
+
+	var ran atomic.Bool
+	group.GoCtxRes(func(ctx context.Context) Result[any] {
+		ran.Store(true)
+		return nil
+	})
+	group.Wait()
+	if ran.Load() {
+		t.Errorf("Expected second func not to run, but it did")
+	}
 }
