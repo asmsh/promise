@@ -123,62 +123,44 @@ func UnwrapMultiRes[T any, TRes Result[T], TMRes Result[[]TRes]](
 }
 
 type emptyResult[T any] struct{}
+
+func (r emptyResult[T]) Val() (v T)   { return v }
+func (r emptyResult[T]) Err() error   { return nil }
+func (r emptyResult[T]) State() State { return Success }
+func (r emptyResult[T]) String() string {
+	return "Success: <nil>"
+}
+
 type valResult[T any] struct{ val T }
+
+func (r valResult[T]) Val() (v T)   { return r.val }
+func (r valResult[T]) Err() error   { return nil }
+func (r valResult[T]) State() State { return Success }
+func (r valResult[T]) String() string {
+	return fmt.Sprintf("Success: %v", r.val)
+}
+
 type errResult[T any] struct{ err error }
+
+func (r errResult[T]) Val() (v T)   { return v }
+func (r errResult[T]) Err() error   { return r.err }
+func (r errResult[T]) State() State { return Error }
+func (r errResult[T]) String() string {
+	return fmt.Sprintf("Error: %s", r.err.Error())
+}
+
 type valErrResult[T any] struct {
 	val T
 	err error
 }
-type panicResult[T any] struct{ v any }
-type ctxResult[T any] struct{ ctx context.Context }
-type result[T any] struct {
-	val   T
-	err   error
-	state State
-}
 
-func (r emptyResult[T]) Val() (v T)  { return v }
-func (r valResult[T]) Val() (v T)    { return r.val }
-func (r errResult[T]) Val() (v T)    { return v }
 func (r valErrResult[T]) Val() (v T) { return r.val }
-func (r panicResult[T]) Val() (v T)  { return v }
-func (r ctxResult[T]) Val() (v T)    { return v }
-func (r result[T]) Val() (v T)       { return r.val }
-
-func (r emptyResult[T]) Err() error  { return nil }
-func (r valResult[T]) Err() error    { return nil }
-func (r errResult[T]) Err() error    { return r.err }
 func (r valErrResult[T]) Err() error { return r.err }
-func (r panicResult[T]) Err() error  { return r }
-func (r ctxResult[T]) Err() error    { return r.ctx.Err() }
-func (r result[T]) Err() error       { return r.err }
-
-func (r emptyResult[T]) State() State { return Success }
-func (r valResult[T]) State() State   { return Success }
-func (r errResult[T]) State() State   { return Error }
 func (r valErrResult[T]) State() State {
 	if r.err == nil {
 		return Success
 	}
 	return Error
-}
-func (r panicResult[T]) State() State { return Panic }
-func (r ctxResult[T]) State() State {
-	if r.ctx.Err() != nil {
-		return Error
-	}
-	return Success
-}
-func (r result[T]) State() State { return r.state }
-
-func (r emptyResult[T]) String() string {
-	return "Success: <nil>"
-}
-func (r valResult[T]) String() string {
-	return fmt.Sprintf("Success: %v", r.val)
-}
-func (r errResult[T]) String() string {
-	return fmt.Sprintf("Error: %s", r.err.Error())
 }
 func (r valErrResult[T]) String() string {
 	if r.err == nil {
@@ -186,16 +168,16 @@ func (r valErrResult[T]) String() string {
 	}
 	return fmt.Sprintf("Error: (%v, %s)", r.val, r.err.Error())
 }
-func (r panicResult[T]) String() string {
-	// same error message and format as the PanicError
-	return fmt.Sprintf("Panic: %v", r.v)
+
+type result[T any] struct {
+	val   T
+	err   error
+	state State
 }
-func (r ctxResult[T]) String() string {
-	if err := r.ctx.Err(); err != nil {
-		return fmt.Sprintf("Error: %s", err.Error())
-	}
-	return "Success: <nil>"
-}
+
+func (r result[T]) Val() (v T)   { return r.val }
+func (r result[T]) Err() error   { return r.err }
+func (r result[T]) State() State { return r.state }
 func (r result[T]) String() string {
 	if r.state == Success {
 		return fmt.Sprintf("Success: %v", r.val)
@@ -204,6 +186,16 @@ func (r result[T]) String() string {
 	} else {
 		return fmt.Sprintf("Panic: %s", r.err.Error())
 	}
+}
+
+type panicResult[T any] struct{ v any }
+
+func (r panicResult[T]) Val() (v T)   { return v }
+func (r panicResult[T]) Err() error   { return r }
+func (r panicResult[T]) State() State { return Panic }
+func (r panicResult[T]) String() string {
+	// same error message and format as the PanicError
+	return fmt.Sprintf("Panic: %v", r.v)
 }
 
 // additional methods for the panicResult type, to make it act like a PanicError.
@@ -228,3 +220,20 @@ func (r panicResult[T]) As(target any) bool {
 	return false
 }
 func (r panicResult[T]) PanicV() any { return r.v }
+
+type ctxResult[T any] struct{ ctx context.Context }
+
+func (r ctxResult[T]) Val() (v T) { return v }
+func (r ctxResult[T]) Err() error { return r.ctx.Err() }
+func (r ctxResult[T]) State() State {
+	if r.ctx.Err() != nil {
+		return Error
+	}
+	return Success
+}
+func (r ctxResult[T]) String() string {
+	if err := r.ctx.Err(); err != nil {
+		return fmt.Sprintf("Error: %s", err.Error())
+	}
+	return "Success: <nil>"
+}
