@@ -24,6 +24,8 @@ import (
 	"time"
 )
 
+var testEnableLogs = false
+
 func getTestAsyncPromFulfilled(g *Group[string], id int) *Promise[string] {
 	d := 5 * time.Millisecond
 	if g != nil {
@@ -419,22 +421,31 @@ func TestErrors(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if test.p != nil {
 				r := test.p.Res()
-				t.Logf("p res: %v {%T}\n", r, r)
-				t.Logf("p val: %v {%T}\n", r.Val(), r.Val())
-				t.Logf("p err: %v {%T}\n", r.Err(), r.Err())
-				t.Logf("p state: %v {%T}\n", r.State(), r.State())
+
+				if testEnableLogs {
+					t.Logf("p res: %v {%T}\n", r, r)
+					t.Logf("p val: %v {%T}\n", r.Val(), r.Val())
+					t.Logf("p err: %v {%T}\n", r.Err(), r.Err())
+					t.Logf("p state: %v {%T}\n", r.State(), r.State())
+				}
 			} else if test.ip != nil {
 				r := test.ip.Res()
-				t.Logf("ip res: %v {%T}\n", r, r)
-				t.Logf("ip val: %v {%T}\n", r.Val(), r.Val())
-				t.Logf("ip err: %v {%T}\n", r.Err(), r.Err())
-				t.Logf("ip state: %v {%T}\n", r.State(), r.State())
+
+				if testEnableLogs {
+					t.Logf("ip res: %v {%T}\n", r, r)
+					t.Logf("ip val: %v {%T}\n", r.Val(), r.Val())
+					t.Logf("ip err: %v {%T}\n", r.Err(), r.Err())
+					t.Logf("ip state: %v {%T}\n", r.State(), r.State())
+				}
 			} else {
 				r := test.ips.Res()
-				t.Logf("ips res: %v {%T}\n", r, r)
-				t.Logf("ips val: %v {%T}\n", r.Val(), r.Val())
-				t.Logf("ips err: %v {%T}\n", r.Err(), r.Err())
-				t.Logf("ips state: %v {%T}\n", r.State(), r.State())
+
+				if testEnableLogs {
+					t.Logf("ips res: %v {%T}\n", r, r)
+					t.Logf("ips val: %v {%T}\n", r.Val(), r.Val())
+					t.Logf("ips err: %v {%T}\n", r.Err(), r.Err())
+					t.Logf("ips state: %v {%T}\n", r.State(), r.State())
+				}
 			}
 		})
 	}
@@ -580,51 +591,70 @@ func TestPanics(t *testing.T) {
 			if test.p != nil {
 				p := test.p()
 				r := p.Res()
-				t.Logf("p res: %v {%T}\n", r, r)
-				t.Logf("p val: %v {%T}\n", r.Val(), r.Val())
-				t.Logf("p err: %v {%T}\n", r.Err(), r.Err())
-				t.Logf("p state: %v {%T}\n", r.State(), r.State())
+
+				if testEnableLogs {
+					t.Logf("p res: %v {%T}\n", r, r)
+					t.Logf("p val: %v {%T}\n", r.Val(), r.Val())
+					t.Logf("p err: %v {%T}\n", r.Err(), r.Err())
+					t.Logf("p state: %v {%T}\n", r.State(), r.State())
+				}
+
 				err = r.Err()
 
 				p.Recover(func(ctx context.Context, res Result[any]) Result[any] {
-					t.Logf("p recover res: %v {%T}\n", res, res)
-					t.Logf("p recover val: %v {%T}\n", res.Val(), res.Val())
-					t.Logf("p recover err: %v {%T}\n", res.Err(), res.Err())
-					t.Logf("p recover state: %v {%T}\n", res.State(), res.State())
+					if testEnableLogs {
+						t.Logf("p recover res: %v {%T}\n", res, res)
+						t.Logf("p recover val: %v {%T}\n", res.Val(), res.Val())
+						t.Logf("p recover err: %v {%T}\n", res.Err(), res.Err())
+						t.Logf("p recover state: %v {%T}\n", res.State(), res.State())
+					}
+
 					return nil
 				}).Wait()
 			} else if test.ip != nil {
 				ip := test.ip()
 				r := ip.Res()
-				t.Logf("ip res: %v {%T}\n", r, r)
-				t.Logf("ip val: %v {%T}\n", r.Val(), r.Val())
-				t.Logf("ip err: %v {%T}\n", r.Err(), r.Err())
-				t.Logf("ip state: %v {%T}\n", r.State(), r.State())
+				if testEnableLogs {
+					t.Logf("ip res: %v {%T}\n", r, r)
+					t.Logf("ip val: %v {%T}\n", r.Val(), r.Val())
+					t.Logf("ip err: %v {%T}\n", r.Err(), r.Err())
+					t.Logf("ip state: %v {%T}\n", r.State(), r.State())
+				}
+
 				err = r.Err()
 
 				ip.Recover(func(ctx context.Context, res Result[IdxRes[any]]) Result[IdxRes[any]] {
-					t.Logf("ip recover res: %v {%T}\n", res, res)
-					t.Logf("ip recover val: %v {%T}\n", res.Val(), res.Val())
-					t.Logf("ip recover err: %v {%T}\n", res.Err(), res.Err())
-					t.Logf("ip recover state: %v {%T}\n", res.State(), res.State())
+					if testEnableLogs {
+						t.Logf("ip recover res: %v {%T}\n", res, res)
+						t.Logf("ip recover val: %v {%T}\n", res.Val(), res.Val())
+						t.Logf("ip recover err: %v {%T}\n", res.Err(), res.Err())
+						t.Logf("ip recover state: %v {%T}\n", res.State(), res.State())
+					}
+
 					return nil
 				}).Wait()
 			} else {
 				ips := test.ips()
 				r := ips.Res()
-				t.Logf("ips res: %v {%T}\n", r, r)
-				t.Logf("ips val: %v {%T}\n", r.Val(), r.Val())
-				t.Logf("ips err: %v {%T}\n", r.Err(), r.Err())
-				t.Logf("ips state: %v {%T}\n", r.State(), r.State())
+
+				if testEnableLogs {
+					t.Logf("ips res: %v {%T}\n", r, r)
+					t.Logf("ips val: %v {%T}\n", r.Val(), r.Val())
+					t.Logf("ips err: %v {%T}\n", r.Err(), r.Err())
+					t.Logf("ips state: %v {%T}\n", r.State(), r.State())
+				}
+
 				err = r.Err()
 
 				newIps := ips.Recover(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
 					// FIXME: how to allow filtering the 'val' value, to eliminate the panic result?
 					//  in case the same value 'val' is returned, we should resolve to panic.
-					t.Logf("ips recover res: %v {%T}\n", res, res)
-					t.Logf("ips recover val: %v {%T}\n", res.Val(), res.Val())
-					t.Logf("ips recover err: %v {%T}\n", res.Err(), res.Err())
-					t.Logf("ips recover state: %v {%T}\n", res.State(), res.State())
+					if testEnableLogs {
+						t.Logf("ips recover res: %v {%T}\n", res, res)
+						t.Logf("ips recover val: %v {%T}\n", res.Val(), res.Val())
+						t.Logf("ips recover err: %v {%T}\n", res.Err(), res.Err())
+						t.Logf("ips recover state: %v {%T}\n", res.State(), res.State())
+					}
 
 					clonedRes := CloneRes(res)
 					slices.DeleteFunc(clonedRes.Val(), func(i IdxRes[any]) bool {
@@ -634,20 +664,24 @@ func TestPanics(t *testing.T) {
 						return i.State() == Panic
 					})
 
-					t.Logf("ips cloned res: %v {%T}\n", clonedRes, clonedRes)
-					t.Logf("ips cloned val: %v {%T}\n", clonedRes.Val(), clonedRes.Val())
-					t.Logf("ips cloned err: %v {%T}\n", clonedRes.Err(), clonedRes.Err())
-					t.Logf("ips cloned state: %v {%T}\n", clonedRes.State(), clonedRes.State())
+					if testEnableLogs {
+						t.Logf("ips cloned res: %v {%T}\n", clonedRes, clonedRes)
+						t.Logf("ips cloned val: %v {%T}\n", clonedRes.Val(), clonedRes.Val())
+						t.Logf("ips cloned err: %v {%T}\n", clonedRes.Err(), clonedRes.Err())
+						t.Logf("ips cloned state: %v {%T}\n", clonedRes.State(), clonedRes.State())
+					}
 
-					//return Wrap(newRes)
-					//return nil
 					return res
 				})
+
 				rNew := newIps.Res()
-				t.Logf("newIps res: %v {%T}\n", rNew, rNew)
-				t.Logf("newIps val: %v {%T}\n", rNew.Val(), rNew.Val())
-				t.Logf("newIps err: %v {%T}\n", rNew.Err(), rNew.Err())
-				t.Logf("newIps state: %v {%T}\n", rNew.State(), rNew.State())
+
+				if testEnableLogs {
+					t.Logf("newIps res: %v {%T}\n", rNew, rNew)
+					t.Logf("newIps val: %v {%T}\n", rNew.Val(), rNew.Val())
+					t.Logf("newIps err: %v {%T}\n", rNew.Err(), rNew.Err())
+					t.Logf("newIps state: %v {%T}\n", rNew.State(), rNew.State())
+				}
 			}
 
 			if test.noPanic {
@@ -792,7 +826,9 @@ func TestJoin2(t *testing.T) {
 		joinP1 := Join(p1, p2, p3, p4)
 		joinP2 := joinP1.Then(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
 			for _, v := range res.Val() {
-				log.Printf("[%T] %v", v.Result, v)
+				if testEnableLogs {
+					t.Logf("[%T] %v", v.Result, v)
+				}
 			}
 			return ErrRes[[]IdxRes[any]](errors.New("join error"))
 		})
@@ -828,7 +864,9 @@ func TestJoin2(t *testing.T) {
 		joinP1 := Join(p1, p2, p3, p4)
 		joinP2 := joinP1.Then(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
 			for _, v := range res.Val() {
-				log.Printf("[%T] %v", v.Result, v)
+				if testEnableLogs {
+					t.Logf("[%T] %v", v.Result, v)
+				}
 			}
 			return ErrRes[[]IdxRes[any]](errors.New("join error"))
 		})
@@ -849,7 +887,9 @@ func TestJoin2(t *testing.T) {
 		})
 		join := Join(p1).Then(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
 			for _, v := range res.Val() {
-				log.Printf("[%T] %v", v.Result, v)
+				if testEnableLogs {
+					t.Logf("[%T] %v", v.Result, v)
+				}
 			}
 			return nil
 		})
