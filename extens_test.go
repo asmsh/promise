@@ -108,40 +108,8 @@ func getTestAsyncPromPanickedDelay(g *Group[string], id int) *Promise[string] {
 }
 
 var (
-	//asyncPromFulfilled1 = GoCtxRes(func(ctx context.Context) Result[string] {
-	//	d := 100 * time.Millisecond
-	//	time.Sleep(d)
-	//	return ValRes("hello world async " + d.String())
-	//})
-	//asyncPromFulfilled2 = GoCtxRes(func(ctx context.Context) Result[string] {
-	//	d := 1000 * time.Millisecond
-	//	time.Sleep(d)
-	//	return ValRes("hello world async " + d.String())
-	//})
-	//asyncPromRejected1 = GoCtxRes(func(ctx context.Context) Result[string] {
-	//	d := 100 * time.Millisecond
-	//	time.Sleep(d)
-	//	return ErrRes[string](errors.New("hello world async error " + d.String()))
-	//})
-	//asyncPromRejected2 = GoCtxRes(func(ctx context.Context) Result[string] {
-	//	d := 1000 * time.Millisecond
-	//	time.Sleep(d)
-	//	return ErrRes[string](errors.New("hello world async error " + d.String()))
-	//})
-	//asyncPromPanicked1 = GoCtxRes(func(ctx context.Context) Result[string] {
-	//	d := 100 * time.Millisecond
-	//	time.Sleep(d)
-	//	panic(errors.New("panic error " + d.String()))
-	//})
-	//asyncPromPanicked2 = GoCtxRes(func(ctx context.Context) Result[string] {
-	//	d := 1000 * time.Millisecond
-	//	time.Sleep(d)
-	//	panic(errors.New("panic error " + d.String()))
-	//})
-
 	syncPromFulfilled1 = Wrap[string](ValRes("hello world sync 1"))
 	syncPromRejected1  = Wrap[string](ValErrRes("err world sync 1", errors.New("wrap error")))
-	syncPromRejected2  = Wrap[string](ErrRes[string](errors.New("wrap error")))
 	syncPromPanicked1  = Wrap[string](PanicRes[string](errors.New("panic error")))
 )
 
@@ -899,94 +867,48 @@ func TestJoin2(t *testing.T) {
 
 var (
 	benchmarkCases = []caseConfig{
-		//	name: "4-async-4-sync",
-		//	async: generateAsyncPromisesConfig{
-		//		totalNum: 4,
-		//	},
-		//	sync: generateSyncPromisesConfig{
-		//		totalNum: 4,
-		//	},
-		//},
-		//{
-		//	name: "8-async-8-sync",
-		//	async: generateAsyncPromisesConfig{
-		//		totalNum: 8,
-		//	},
-		//	sync: generateSyncPromisesConfig{
-		//		totalNum: 8,
-		//	},
-		//},
-		//{
-		//{
-		//	name: "100-async-100-sync",
-		//	async: generateAsyncPromisesConfig{
-		//		totalNum: 100,
-		//	},
-		//	sync: generateSyncPromisesConfig{
-		//		totalNum: 100,
-		//	},
-		//},
-		//{
-		//	name: "4-async",
-		//	async: generateAsyncPromisesConfig{
-		//		totalNum: 4,
-		//	},
-		//},
-		//{
-		//	name: "8-async",
-		//	async: generateAsyncPromisesConfig{
-		//		totalNum: 8,
-		//	},
-		//},
-		//{
-		//	name: "16-async",
-		//	async: generateAsyncPromisesConfig{
-		//		totalNum: 16,
-		//	},
-		//},
-		//{
-		//	name: "32-async",
-		//	async: generateAsyncPromisesConfig{
-		//		totalNum: 32,
-		//	},
-		//},
+		{
+			name: "16:8-async-8-sync",
+			async: generateAsyncPromisesConfig{
+				totalNum: 8,
+			},
+			sync: generateSyncPromisesConfig{
+				totalNum: 8,
+			},
+		},
+		{
+			name: "100:50-async-50-sync",
+			async: generateAsyncPromisesConfig{
+				totalNum: 50,
+			},
+			sync: generateSyncPromisesConfig{
+				totalNum: 50,
+			},
+		},
+		{
+			name: "16-async",
+			async: generateAsyncPromisesConfig{
+				totalNum: 16,
+			},
+		},
 		{
 			name: "100-async",
 			async: generateAsyncPromisesConfig{
-				//totalNum: 100,
-				fulfilledDelayNum: 100,
+				totalNum: 100,
 			},
 		},
-		//{
-		//	name: "100-sync",
-		//	sync: generateSyncPromisesConfig{
-		//		totalNum: 100,
-		//	},
-		//},
-		//{
-		//	name: "32-sync",
-		//	sync: generateSyncPromisesConfig{
-		//		totalNum: 32,
-		//	},
-		//},
-		//{
-		//	name: "16-sync",
-		//	sync: generateSyncPromisesConfig{
-		//		totalNum: 16,
-		//	},
-		//},
-		//{
-		//	name: "8-sync",
-		//	sync: generateSyncPromisesConfig{
-		//		totalNum: 8,
-		//	},
-		//},
-		//{
-		//	name: "4-sync",
-		//	sync: generateSyncPromisesConfig{
-		//		totalNum: 4,
-		//	},
-		//},
+		{
+			name: "16-sync",
+			sync: generateSyncPromisesConfig{
+				totalNum: 16,
+			},
+		},
+		{
+			name: "100-sync",
+			sync: generateSyncPromisesConfig{
+				totalNum: 100,
+			},
+		},
 	}
 )
 
@@ -1070,6 +992,48 @@ func BenchmarkAllWait(b *testing.B) {
 	}
 }
 
+func BenchmarkAnyWait(b *testing.B) {
+	benchmarks := compileTestCases(benchmarkCases, nil)
+
+	for _, tt := range benchmarks {
+		b.Run(tt.name, func(b *testing.B) {
+			b.ReportAllocs()
+
+			for b.Loop() {
+				AnyWait[string](tt.p...)
+			}
+		})
+
+		b.Run(tt.name+"-parallel", func(b *testing.B) {
+			b.ReportAllocs()
+
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					AnyWait[string](tt.p...)
+				}
+			})
+		})
+
+		b.Run(tt.name+"-Wait", func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				anyProm := AnyWait[string](tt.p...)
+				anyProm.Wait()
+			}
+		})
+
+		b.Run(tt.name+"-parallel-Wait", func(b *testing.B) {
+			b.ReportAllocs()
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					anyProm := AnyWait[string](tt.p...)
+					anyProm.Wait()
+				}
+			})
+		})
+	}
+}
+
 func BenchmarkAllWait_LeakDetector(b *testing.B) {
 	// skip based on the present build tags.
 	if !debugEnabled {
@@ -1130,29 +1094,5 @@ func BenchmarkAllWait_LeakDetector(b *testing.B) {
 		}
 
 		b.Log(debugMetricsStr)
-	}
-}
-
-func BenchmarkAnyWait(b *testing.B) {
-	benchmarks := compileTestCases(benchmarkCases, nil)
-
-	for _, tt := range benchmarks {
-		b.Run(tt.name, func(b *testing.B) {
-			b.ReportAllocs()
-
-			for b.Loop() {
-				AnyWait[string](tt.p...)
-			}
-		})
-
-		b.Run(tt.name+"-parallel", func(b *testing.B) {
-			b.ReportAllocs()
-
-			b.RunParallel(func(pb *testing.PB) {
-				for pb.Next() {
-					AnyWait[string](tt.p...)
-				}
-			})
-		})
 	}
 }
