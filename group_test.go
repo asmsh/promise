@@ -2062,7 +2062,7 @@ func TestGroup_JoinRes(t *testing.T) {
 
 // From: https://github.com/golang/go/issues/54045
 func TestGroupDoesNotRunNewFunctionsAfterPreviousError(t *testing.T) {
-	group := NewGroup[any](Size(1), SetFailuresCancelGroup())
+	group := NewGroup[any](Size(1), FailuresCancelGroup())
 
 	group.GoCtxRes(func(ctx context.Context) Result[any] {
 		return ErrRes[any](errors.New(""))

@@ -82,26 +82,19 @@ func Size(size int) GroupOption {
 	}
 }
 
-// SetOnetimeHandling sets the [GroupConfig.OnetimeHandling] value to true,
+// OnetimeHandling sets the [GroupConfig.OnetimeHandling] value to true,
 // or to the set value provided, if any.
-func SetOnetimeHandling(set ...bool) GroupOption {
+func OnetimeHandling(set ...bool) GroupOption {
 	return func(core *groupCore) {
-		s := true
-		if len(set) > 0 {
-			s = set[0]
-		}
-		core.options.SetOnetimeHandlingTo(s)
+		core.options.SetOnetimeHandlingTo(getEffSet(set...))
 	}
 }
 
-// SetNeverCancelCBCtx sets the [GroupConfig.NeverCancelCBCtx] value to true,
+// NeverCancelCBCtx sets the [GroupConfig.NeverCancelCBCtx] value to true,
 // or to the set value provided, if any.
-func SetNeverCancelCBCtx(set ...bool) GroupOption {
+func NeverCancelCBCtx(set ...bool) GroupOption {
 	return func(core *groupCore) {
-		s := true
-		if len(set) > 0 {
-			s = set[0]
-		}
+		s := getEffSet(set...)
 
 		// only allow set to be effective if the [GroupConfig.FailuresCancelCBCtx]
 		// or [GroupConfig.FailuresCancelGroup] flags aren't set.
@@ -113,16 +106,11 @@ func SetNeverCancelCBCtx(set ...bool) GroupOption {
 	}
 }
 
-// SetFailuresCancelCBCtx sets the [GroupConfig.FailuresCancelCBCtx] value to true,
+// FailuresCancelCBCtx sets the [GroupConfig.FailuresCancelCBCtx] value to true,
 // or to the set value provided, if any.
-func SetFailuresCancelCBCtx(set ...bool) GroupOption {
+func FailuresCancelCBCtx(set ...bool) GroupOption {
 	return func(core *groupCore) {
-		s := true
-		if len(set) > 0 {
-			s = set[0]
-		}
-
-		if s {
+		if getEffSet(set...) {
 			core.ctx, core.cancel = context.WithCancel(context.Background())
 			core.options.SetNeverCancelCBCtxTo(false)
 			core.options.SetFailuresCancelCBCtxTo(true)
@@ -133,16 +121,11 @@ func SetFailuresCancelCBCtx(set ...bool) GroupOption {
 	}
 }
 
-// SetFailuresCancelGroup sets the [GroupConfig.FailuresCancelGroup] value to true,
+// FailuresCancelGroup sets the [GroupConfig.FailuresCancelGroup] value to true,
 // or to the set value provided, if any.
-func SetFailuresCancelGroup(set ...bool) GroupOption {
+func FailuresCancelGroup(set ...bool) GroupOption {
 	return func(core *groupCore) {
-		s := true
-		if len(set) > 0 {
-			s = set[0]
-		}
-
-		if s {
+		if getEffSet(set...) {
 			core.ctx, core.cancel = context.WithCancel(context.Background())
 			core.options.SetNeverCancelCBCtxTo(false)
 			core.options.SetFailuresCancelGroupTo(true)
@@ -153,40 +136,38 @@ func SetFailuresCancelGroup(set ...bool) GroupOption {
 	}
 }
 
-// SetNoNilCtxDoneChan sets the [GroupConfig.NoNilCtxDoneChan] value to true,
+// NoNilCtxDoneChan sets the [GroupConfig.NoNilCtxDoneChan] value to true,
 // or to the set value provided, if any.
-func SetNoNilCtxDoneChan(set ...bool) GroupOption {
+func NoNilCtxDoneChan(set ...bool) GroupOption {
 	return func(core *groupCore) {
-		s := true
-		if len(set) > 0 {
-			s = set[0]
-		}
-		core.options.SetNoNilCtxDoneChanTo(s)
+		core.options.SetNoNilCtxDoneChanTo(getEffSet(set...))
 	}
 }
 
-// SetNoWaitingBusyGroup sets the [GroupConfig.NoWaitingBusyGroup] value to true,
+// NoWaitingBusyGroup sets the [GroupConfig.NoWaitingBusyGroup] value to true,
 // or to the set value provided, if any.
-func SetNoWaitingBusyGroup(set ...bool) GroupOption {
+func NoWaitingBusyGroup(set ...bool) GroupOption {
 	return func(core *groupCore) {
-		s := true
-		if len(set) > 0 {
-			s = set[0]
-		}
-		core.options.SetNoWaitingBusyGroupTo(s)
+		core.options.SetNoWaitingBusyGroupTo(getEffSet(set...))
 	}
 }
 
-// SetSaveAllGroupResult sets the [GroupConfig.SaveAllGroupResults] value to true,
+// SaveAllGroupResults sets the [GroupConfig.SaveAllGroupResults] value to true,
 // or to the set value provided, if any.
-func SetSaveAllGroupResult(set ...bool) GroupOption {
+func SaveAllGroupResults(set ...bool) GroupOption {
 	return func(core *groupCore) {
-		s := true
-		if len(set) > 0 {
-			s = set[0]
-		}
-		core.options.SetSaveAllGroupResultsTo(s)
+		core.options.SetSaveAllGroupResultsTo(getEffSet(set...))
 	}
+}
+
+// getEffSet returns the effective set value, which is the first provided
+// value, if any, or true otherwise.
+func getEffSet(set ...bool) bool {
+	s := true
+	if len(set) > 0 {
+		s = set[0]
+	}
+	return s
 }
 
 type GroupConfig struct {
