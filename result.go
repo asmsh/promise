@@ -35,6 +35,9 @@ func ValRes[T any](val T) Result[T] {
 }
 
 func ErrRes[T any](err error) Result[T] {
+	if err == nil {
+		return emptyResult[T]{}
+	}
 	return errResult[T]{err: err}
 }
 
