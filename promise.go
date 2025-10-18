@@ -21,10 +21,15 @@ import (
 	"time"
 )
 
-// Promise represents some asynchronous work (a goroutine).
+// Promise represents some asynchronous work (a goroutine),
+// tracking its progress and recording its result.
+//
+// A Promise is safe for concurrent use by multiple goroutines.
+//
+// It implements the [Result] interface, so it can be returned from
+// supported callbacks.
 //
 // The zero value will block forever on any calls.
-// It implements the [Result] interface
 type Promise[T any] struct {
 	// group is a pointer to the promise group which this promise is part of,
 	// or nil, if it's not part of any group.
