@@ -79,7 +79,7 @@ func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
 
 // TODO: maybe add 'GoCtxErr', as a quick constructor that accepts a Context but returns just an error.
 
-func GoAny[
+func GoFunc[
 	NextT any,
 	PrevT any,
 	CBFuncT CallbackFunc[NextT, PrevT],

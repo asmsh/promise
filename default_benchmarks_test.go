@@ -133,13 +133,13 @@ func BenchmarkGoCtxRes(b *testing.B) {
 	})
 }
 
-func BenchmarkGoAny(b *testing.B) {
+func BenchmarkGoFunc(b *testing.B) {
 	b.Run("nil error", func(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			p = GoAny[any, any](func() error {
+			p = GoFunc[any, any](func() error {
 				return nil
 			})
 		}
@@ -151,7 +151,7 @@ func BenchmarkGoAny(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			p = GoAny[any, int](func() error {
+			p = GoFunc[any, int](func() error {
 				return newStrError()
 			})
 		}
@@ -163,7 +163,7 @@ func BenchmarkGoAny(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for b.Loop() {
-			p = GoAny[any, any](func() error {
+			p = GoFunc[any, any](func() error {
 				return newPtrError()
 			})
 		}

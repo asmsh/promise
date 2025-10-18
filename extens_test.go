@@ -312,18 +312,18 @@ func TestErrors(t *testing.T) {
 		ips  *Promise[[]IdxRes[any]]
 	}{
 		{
-			name: "GoAny[any, any]",
-			p: GoAny[any, any](func() error {
+			name: "GoFunc[any, any]",
+			p: GoFunc[any, any](func() error {
 				return newStrError()
 			}),
 		},
 		{
 			name: "Select",
 			ip: Select(
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -331,10 +331,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "All",
 			ips: All(
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -342,10 +342,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "AllWait",
 			ips: AllWait(
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -353,10 +353,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "Any",
 			ips: Any(
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -364,10 +364,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "AnyWait",
 			ips: AnyWait(
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -375,10 +375,10 @@ func TestErrors(t *testing.T) {
 		{
 			name: "Join",
 			ips: Join(
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
-				GoAny[any, any](func() error {
+				GoFunc[any, any](func() error {
 					return newStrError()
 				}),
 			),
@@ -431,15 +431,15 @@ func TestPanics(t *testing.T) {
 			name:          "nil",
 			externalPanic: true,
 			p: func() *Promise[any] {
-				return GoAny[any, any](func() error {
+				return GoFunc[any, any](func() error {
 					panic(nil)
 				})
 			},
 		},
 		{
-			name: "GoAny[any, any]",
+			name: "GoFunc[any, any]",
 			p: func() *Promise[any] {
-				return GoAny[any, any](func() error {
+				return GoFunc[any, any](func() error {
 					panic(newStrError())
 				})
 			},
@@ -448,11 +448,11 @@ func TestPanics(t *testing.T) {
 			name: "Select",
 			ip: func() *Promise[IdxRes[any]] {
 				return Select(
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						panic(newStrError())
 					}),
 				)
@@ -462,17 +462,17 @@ func TestPanics(t *testing.T) {
 			name: "All",
 			ips: func() *Promise[[]IdxRes[any]] {
 				return All(
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						return nil
 					}),
 				)
@@ -482,17 +482,17 @@ func TestPanics(t *testing.T) {
 			name: "AllWait",
 			ips: func() *Promise[[]IdxRes[any]] {
 				return AllWait(
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						return nil
 					}),
 				)
@@ -502,14 +502,14 @@ func TestPanics(t *testing.T) {
 			name: "Any",
 			ips: func() *Promise[[]IdxRes[any]] {
 				return Any(
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
@@ -520,14 +520,14 @@ func TestPanics(t *testing.T) {
 			name: "AnyWait",
 			ips: func() *Promise[[]IdxRes[any]] {
 				return AnyWait(
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						return newStrError()
 					}),
 				)
@@ -538,14 +538,14 @@ func TestPanics(t *testing.T) {
 			noPanic: true,
 			ips: func() *Promise[[]IdxRes[any]] {
 				return Join(
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						panic(newStrError())
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
-					GoAny[any, any](func() error {
+					GoFunc[any, any](func() error {
 						return nil
 					}),
 				)
@@ -762,10 +762,10 @@ func TestJoin2(t *testing.T) {
 	log.SetFlags(log.Lmicroseconds)
 
 	t.Run("no-sleep", func(t *testing.T) {
-		p1 := GoAny[any, any](func() error {
+		p1 := GoFunc[any, any](func() error {
 			return errors.New("p1 error")
 		})
-		p2 := GoAny[any, any](func() error {
+		p2 := GoFunc[any, any](func() error {
 			return errors.New("p2 error")
 		})
 		p3 := GoCtxRes(func(ctx context.Context) Result[any] {
@@ -796,11 +796,11 @@ func TestJoin2(t *testing.T) {
 	})
 
 	t.Run("with-sleep", func(t *testing.T) {
-		p1 := GoAny[any, any](func() error {
+		p1 := GoFunc[any, any](func() error {
 			time.Sleep(time.Millisecond * 100)
 			return errors.New("p1 error")
 		})
-		p2 := GoAny[any, any](func() error {
+		p2 := GoFunc[any, any](func() error {
 			time.Sleep(time.Millisecond * 100)
 			return errors.New("p2 error")
 		})
@@ -834,7 +834,7 @@ func TestJoin2(t *testing.T) {
 	})
 
 	t.Run("other", func(t *testing.T) {
-		p1 := GoAny[any, any](func() error {
+		p1 := GoFunc[any, any](func() error {
 			panic("p1 panic")
 		})
 		join := Join(p1).Then(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
