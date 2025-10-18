@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"slices"
 	"testing"
 	"time"
 )
@@ -622,21 +621,6 @@ func TestPanics(t *testing.T) {
 						t.Logf("ips recover val: %v {%T}\n", res.Val(), res.Val())
 						t.Logf("ips recover err: %v {%T}\n", res.Err(), res.Err())
 						t.Logf("ips recover state: %v {%T}\n", res.State(), res.State())
-					}
-
-					clonedRes := CloneRes(res)
-					slices.DeleteFunc(clonedRes.Val(), func(i IdxRes[any]) bool {
-						if i.Result == nil {
-							return false
-						}
-						return i.State() == Panic
-					})
-
-					if testEnableLogs {
-						t.Logf("ips cloned res: %v {%T}\n", clonedRes, clonedRes)
-						t.Logf("ips cloned val: %v {%T}\n", clonedRes.Val(), clonedRes.Val())
-						t.Logf("ips cloned err: %v {%T}\n", clonedRes.Err(), clonedRes.Err())
-						t.Logf("ips cloned state: %v {%T}\n", clonedRes.State(), clonedRes.State())
 					}
 
 					return res
