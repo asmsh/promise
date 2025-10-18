@@ -41,7 +41,7 @@ func Go(cb func()) *Promise[any] {
 	}
 
 	nextProm := newPromInter[any](nil)
-	ctx, cancel := callbackCtx[any](nil, nextProm.syncCtx)
+	ctx, cancel := callbackCtx[any](nil, nextProm.syncChan)
 	go goHandler(nextProm, cb, ctx, cancel)
 	return nextProm
 }
@@ -72,7 +72,7 @@ func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
 	}
 
 	nextProm := newPromInter[T](nil)
-	ctx, cancel := callbackCtx[T](nil, nextProm.syncCtx)
+	ctx, cancel := callbackCtx[T](nil, nextProm.syncChan)
 	go goCtxResHandler(nextProm, cb, ctx, cancel)
 	return nextProm
 }
@@ -89,7 +89,7 @@ func GoAny[
 	}
 
 	nextProm := newPromInter[NextT](nil)
-	ctx, cancel := callbackCtx[NextT](nil, nextProm.syncCtx)
+	ctx, cancel := callbackCtx[NextT](nil, nextProm.syncChan)
 	go goCallbackHandler(nextProm, CallbackFrom[NextT, PrevT](cb), ctx, cancel)
 	return nextProm
 }
@@ -120,7 +120,7 @@ func GoCallback[NextT, PrevT any](cb Callback[NextT, PrevT]) *Promise[NextT] {
 	}
 
 	nextProm := newPromInter[NextT](nil)
-	ctx, cancel := callbackCtx[NextT](nil, nextProm.syncCtx)
+	ctx, cancel := callbackCtx[NextT](nil, nextProm.syncChan)
 	go goCallbackHandler(nextProm, cb, ctx, cancel)
 	return nextProm
 }

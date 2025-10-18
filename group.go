@@ -71,9 +71,10 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 	}
 
 	nextProm := newPromInter[T](g)
-	// derive the context used in the callback from the group's, and from
-	// the new promise's, making the callback context a child of both.
-	ctx, cancel := callbackCtx(g, nextProm.syncCtx)
+	// derive the Context used in the callback from the group's, or from
+	// the new promise, effectively making the created Context closed
+	// once the callback returns.
+	ctx, cancel := callbackCtx(g, nextProm.syncChan)
 	debug(nextProm, startHandler, startGroupHandler, startGroupGoHandler)
 	go goHandler(nextProm, cb, ctx, cancel)
 	return nextProm
@@ -103,7 +104,7 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 	}
 
 	nextProm := newPromInter[T](g)
-	ctx, cancel := callbackCtx(g, nextProm.syncCtx)
+	ctx, cancel := callbackCtx(g, nextProm.syncChan)
 	debug(nextProm, startHandler, startGroupHandler, startGroupGoResHandler)
 	go goCtxResHandler(nextProm, cb, ctx, cancel)
 	return nextProm
@@ -133,7 +134,7 @@ func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
 	}
 
 	nextProm := newPromInter[T](g)
-	ctx, cancel := callbackCtx(g, nextProm.syncCtx)
+	ctx, cancel := callbackCtx(g, nextProm.syncChan)
 	debug(nextProm, startHandler, startGroupHandler, startGroupGoResHandler)
 	go goCallbackHandler(nextProm, cb, ctx, cancel)
 	return nextProm

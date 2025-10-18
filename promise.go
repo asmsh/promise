@@ -36,14 +36,17 @@ type Promise[T any] struct {
 	extChanP atomic.Pointer[chan extQueue[T]]
 
 	// closed when this promise is resolved.
-	// its channel has one writer (one goroutine), which is the owner,
+	// it has one writer (one goroutine), which is the owner (this promise),
 	// which will close it, but can have multiple readers (chain promises).
-	syncCtx context.Context
+	//
+	// note: it should be accessed directly only if it's known to not be nil,
+	// otherwise it will be saved in res and should be accessed via WaitChan.
+	syncChan chan struct{}
 
 	// holds the result of the promise.
-	// written once, before the syncCtx channel is closed.
+	// written once, before the syncChan is closed.
 	//
-	// don't read it unless the syncCtx is known to be closed.
+	// don't read it unless the syncChan is known to be closed.
 	res Result[T]
 
 	// chainStatus holds the status of this promise's chain.
@@ -59,7 +62,7 @@ type extQueue[T any] struct {
 	// if the promise was resolved while creating this extQueue's chan,
 	// the two select cases for the blocking scenario might be available
 	// at the same time.
-	// because the syncCtx.chan will be closed, and the extQ value will
+	// because the syncChan will be closed, and the extQ value will
 	// be available only to this goroutine, at the same time.
 	// so we need a way to still detect if the promise was resolved and
 	// read its result sync, otherwise its result would be lost.
@@ -113,8 +116,38 @@ func (p *Promise[T]) Wait() {
 	p.waitCall()
 }
 
+// WaitChan returns a channel that will be closed once this [Promise]
+// is resolved and its [Result] is available.
+//
+// Once the returned channel is closed, all blocked calls on this [Promise]
+// will be unblocked, and all subsequent calls will return with no blocking.
+//
+// Subsequent calls return the same value.
 func (p *Promise[T]) WaitChan() <-chan struct{} {
-	return p.syncCtx.Done()
+	// note: internally, this method is used whenever we want to wait
+	// on Promise which its syncChan isn't guaranteed to be non-nil.
+	// this generally only needed because of the Ctx constructors, because
+	// the Done chan is a receive-only, and this implementation expects
+	// a bi-direction syncChan, in order to be able to close it.
+	// however, since the Ctx Done chan is closed by external actor,
+	// we can't close it, and we only need to care about waiting on it.
+	// so, for the purpose of saving the receive-only syncChan, it will
+	// be saved in a Result value that implements: WaitChan() <-chan struct{}.
+
+	// if the syncChan is already set, return it.
+	if p.syncChan != nil {
+		return p.syncChan
+	}
+
+	// if the syncChan is nil, then the current res is final and
+	// the syncChan is saved in it.
+	// note: this is needed for the Ctx constructors.
+	if sr, ok := p.res.(interface{ WaitChan() <-chan struct{} }); ok {
+		return sr.WaitChan()
+	}
+
+	// this will never happen.
+	panic("promise: internal: unexpected syncChan value")
 }
 
 func (p *Promise[T]) waitCall() {
@@ -173,9 +206,9 @@ func (p *Promise[T]) Delay(
 	if errRes := p.group.validateActive(); errRes != nil {
 		return newPromSync[T](p.group, errRes)
 	}
-	if p.syncCtx == neverClosedSyncCtx {
-		// since the syncCtx is nil, this promise will never be resolved,
-		// so no point in allocating a new value.
+	if p.syncChan == neverClosedSyncChan {
+		// since the syncChan is the never closed chan value, this promise
+		// will never be resolved, so no point in allocating a new value.
 		// note: this can only happen if the promise is created by passing a
 		// Context value that's never canceled(nil Done) to the Ctx constructor.
 		return p
@@ -229,7 +262,7 @@ func (p *Promise[T]) Callback(
 		// TODO: how to handle the error?
 		return
 	}
-	if p.syncCtx == neverClosedSyncCtx {
+	if p.syncChan == neverClosedSyncChan {
 		return
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
@@ -260,7 +293,7 @@ func (p *Promise[T]) Follow(
 	if errRes := p.group.validateActive(); errRes != nil {
 		return newPromSync[T](p.group, errRes)
 	}
-	if p.syncCtx == neverClosedSyncCtx {
+	if p.syncChan == neverClosedSyncChan {
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
@@ -268,7 +301,7 @@ func (p *Promise[T]) Follow(
 	}
 
 	nextProm := newPromInter[T](p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
+	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseFollowHandler)
 	go followHandler(
 		p,
@@ -291,7 +324,7 @@ func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
 	if errRes := p.group.validateActive(); errRes != nil {
 		return newPromSync[T](p.group, errRes)
 	}
-	if p.syncCtx == neverClosedSyncCtx {
+	if p.syncChan == neverClosedSyncChan {
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
@@ -299,7 +332,7 @@ func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
 	}
 
 	nextProm := newPromInter[T](p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
+	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseFollowCallbackHandler)
 	go followHandler(
 		p,
@@ -324,7 +357,7 @@ func (p *Promise[T]) Then(
 	if errRes := p.group.validateActive(); errRes != nil {
 		return newPromSync[T](p.group, errRes)
 	}
-	if p.syncCtx == neverClosedSyncCtx {
+	if p.syncChan == neverClosedSyncChan {
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
@@ -332,7 +365,7 @@ func (p *Promise[T]) Then(
 	}
 
 	nextProm := newPromInter[T](p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
+	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseThenHandler)
 	go followHandler(
 		p,
@@ -357,7 +390,7 @@ func (p *Promise[T]) Catch(
 	if errRes := p.group.validateActive(); errRes != nil {
 		return newPromSync[T](p.group, errRes)
 	}
-	if p.syncCtx == neverClosedSyncCtx {
+	if p.syncChan == neverClosedSyncChan {
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
@@ -365,7 +398,7 @@ func (p *Promise[T]) Catch(
 	}
 
 	nextProm := newPromInter[T](p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
+	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseCatchHandler)
 	go followHandler(
 		p,
@@ -390,7 +423,7 @@ func (p *Promise[T]) Recover(
 	if errRes := p.group.validateActive(); errRes != nil {
 		return newPromSync[T](p.group, errRes)
 	}
-	if p.syncCtx == neverClosedSyncCtx {
+	if p.syncChan == neverClosedSyncChan {
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
@@ -398,7 +431,7 @@ func (p *Promise[T]) Recover(
 	}
 
 	nextProm := newPromInter[T](p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
+	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseRecoverHandler)
 	go followHandler(
 		p,
@@ -423,7 +456,7 @@ func (p *Promise[T]) Finally(
 	if errRes := p.group.validateActive(); errRes != nil {
 		return newPromSync[T](p.group, errRes)
 	}
-	if p.syncCtx == neverClosedSyncCtx {
+	if p.syncChan == neverClosedSyncChan {
 		return p
 	}
 	if !p.group.reserveGoroutine(p.regChainRead) {
@@ -431,7 +464,7 @@ func (p *Promise[T]) Finally(
 	}
 
 	nextProm := newPromInter[T](p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncCtx)
+	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseFinallyHandler)
 	go followHandler(
 		p,

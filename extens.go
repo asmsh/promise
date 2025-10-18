@@ -64,9 +64,12 @@ loop:
 		// promises, without being stuck(blocked) on the first one we encounter.
 		blocking := loopCnt > len(ps)
 
+		// extract the current promise's waitChan since it's used in both flows.
+		waitChan := currProm.WaitChan()
+
 		if !blocking {
 			select {
-			case <-currProm.syncCtx.Done():
+			case <-waitChan:
 				// the promise is resolved...
 				// create a result value based on the current promise.
 				res = IdxRes[T]{
@@ -81,7 +84,7 @@ loop:
 		} else {
 			extsChan := currProm.extsChan()
 			select {
-			case <-currProm.syncCtx.Done():
+			case <-waitChan:
 				res = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
@@ -102,7 +105,7 @@ loop:
 					}
 
 					// update the queue with this extension call.
-					addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
+					addExtCallToQ(&extQ, resChan, nextProm.syncChan, idx)
 				}
 
 				// send the updated queue back for either another extension call,
@@ -258,10 +261,13 @@ func joinHandler[T any](
 		// promises, without being stuck(blocked) on the first one we encounter.
 		blocking := loopCnt > len(ps)
 
+		// extract the current promise's waitChan since it's used in both flows.
+		waitChan := currProm.WaitChan()
+
 		var res IdxRes[T]
 		if !blocking {
 			select {
-			case <-currProm.syncCtx.Done():
+			case <-waitChan:
 				// the promise is resolved...
 				// create a result value based on the current promise.
 				res = IdxRes[T]{
@@ -276,7 +282,7 @@ func joinHandler[T any](
 		} else {
 			extsChan := currProm.extsChan()
 			select {
-			case <-currProm.syncCtx.Done():
+			case <-waitChan:
 				res = IdxRes[T]{
 					Idx:    idx,
 					Result: getFinalRes(currProm.res),
@@ -297,7 +303,7 @@ func joinHandler[T any](
 					}
 
 					// update the queue with this extension call.
-					addExtCallToQ(&extQ, resChan, nextProm.syncCtx.Done(), idx)
+					addExtCallToQ(&extQ, resChan, nextProm.syncChan, idx)
 				}
 
 				// send the updated queue back for either another extension call,

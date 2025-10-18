@@ -237,3 +237,4 @@ func (r ctxResult[T]) String() string {
 	}
 	return "Success: <nil>"
 }
+func (r ctxResult[T]) WaitChan() <-chan struct{} { return r.ctx.Done() }

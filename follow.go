@@ -57,7 +57,7 @@ func FollowCallback[
 	if errRes := nextGroup.validateActive(); errRes != nil {
 		return newPromSync[NextT](nextGroup, errRes)
 	}
-	if p.syncCtx == neverClosedSyncCtx {
+	if p.syncChan == neverClosedSyncChan {
 		return newPromBlocked[NextT]()
 	}
 	if !nextGroup.reserveGoroutine(p.regChainRead) {
@@ -65,7 +65,7 @@ func FollowCallback[
 	}
 
 	nextProm := newPromInter[NextT](nextGroup)
-	ctx, cancel := callbackCtx(nextGroup, nextProm.syncCtx)
+	ctx, cancel := callbackCtx(nextGroup, nextProm.syncChan)
 	debug(p, startHandler, startPromiseFollowCallbackHandler)
 	go followHandler(
 		p,

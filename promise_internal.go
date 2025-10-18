@@ -66,7 +66,7 @@ func (p *Promise[T]) readState() State {
 	// non-blocking read of res, which is closed by the previous
 	// promise, once it's resolved.
 	select {
-	case <-p.syncCtx.Done():
+	case <-p.WaitChan():
 		if p.res == nil {
 			return Success
 		}
@@ -80,7 +80,7 @@ func (p *Promise[T]) readState() State {
 func (p *Promise[T]) waitState() State {
 	// the Context will be closed by the previous promise,
 	// after setting the res and status fields as expected.
-	<-p.syncCtx.Done()
+	<-p.WaitChan()
 	if p.res == nil {
 		return Success
 	}
@@ -216,9 +216,7 @@ func (p *Promise[T]) resolveToResWithDelay(
 	}
 }
 
-func (p *Promise[T]) resolveToPanicRes(
-	res Result[T],
-) {
+func (p *Promise[T]) resolveToPanicRes(res Result[T]) {
 	debug(p, resolve, resolvePanic)
 	// save the result before executing any callbacks.
 	p.res = res
@@ -226,7 +224,9 @@ func (p *Promise[T]) resolveToPanicRes(
 	// nor is already handled
 	p.chainSideEffects(p.chainStatus.Load(), false)
 	// unblock all calls waiting on p.
-	p.syncCtx.(syncCtx).cancel()
+	if p.syncChan != nil {
+		close(p.syncChan)
+	}
 	// handle all extension calls that involve p.
 	handleExtCalls(p)
 	// handle all group calls for p's group.
@@ -237,24 +237,24 @@ func (p *Promise[T]) resolveToPanicRes(
 	// or extension functions).
 }
 
-func (p *Promise[T]) resolveToErrorRes(
-	res Result[T],
-) {
+func (p *Promise[T]) resolveToErrorRes(res Result[T]) {
 	debug(p, resolve, resolveError)
 	p.res = res
 	p.chainSideEffects(p.chainStatus.Load(), false)
-	p.syncCtx.(syncCtx).cancel()
+	if p.syncChan != nil {
+		close(p.syncChan)
+	}
 	handleExtCalls(p)
 	handleGroupCalls(p)
 }
 
-func (p *Promise[T]) resolveToSuccessRes(
-	res Result[T],
-) {
+func (p *Promise[T]) resolveToSuccessRes(res Result[T]) {
 	debug(p, resolve, resolveSuccess)
 	p.res = res
 	// no side effects to be done for Success result.
-	p.syncCtx.(syncCtx).cancel()
+	if p.syncChan != nil {
+		close(p.syncChan)
+	}
 	handleExtCalls(p)
 	handleGroupCalls(p)
 }
@@ -568,8 +568,8 @@ func handleGroupCall[T any](callVal any, res Result[T]) bool {
 // via an internal allocated channel.
 func newPromInter[T any](g *Group[T]) *Promise[T] {
 	return &Promise[T]{
-		group:   g,
-		syncCtx: newSyncCtx(),
+		group:    g,
+		syncChan: make(chan struct{}),
 	}
 }
 
@@ -577,19 +577,9 @@ func newPromInter[T any](g *Group[T]) *Promise[T] {
 // via the channel from the passed context.
 func newPromCtx[T any](g *Group[T], ctx context.Context) *Promise[T] {
 	return &Promise[T]{
-		group:   g,
-		syncCtx: ctx,
-		res:     ctxResult[T]{ctx: ctx},
-	}
-}
-
-// newPromBlocked returns a promise that will never be resolved.
-// it's used for promises for Ctx calls with empty context.Context value,
-// or for follow calls on such promises.
-func newPromBlocked[T any]() *Promise[T] {
-	return &Promise[T]{
-		syncCtx: neverClosedSyncCtx,
-		// no other fields need to be initialized, since this promise will never be resolved.
+		group:    g,
+		syncChan: nil, // [Promise.WaitChan] will access it from [Promise.res].
+		res:      ctxResult[T]{ctx: ctx},
 	}
 }
 
@@ -597,12 +587,22 @@ func newPromBlocked[T any]() *Promise[T] {
 // immediately to the provided [Result] value.
 func newPromSync[T any](g *Group[T], res Result[T]) *Promise[T] {
 	p := &Promise[T]{
-		group:   g,
-		syncCtx: alreadyClosedSyncCtx,
-		res:     res,
+		group:    g,
+		syncChan: alreadyClosedSyncChan,
+		res:      res,
 		// no other fields are needed, since sync promises are resolved directly
-		// after created, so any extension call will depend on the syncCtx chan.
+		// after created, so any extension call will depend on the syncChan chan.
 	}
 	p.chainSideEffects(chainStatusRead, false) // anything other than empty or handled.
 	return p
+}
+
+// newPromBlocked returns a promise that will never be resolved.
+// it's used for promises for Ctx calls with nil context.Context.Done value,
+// or for follow calls on such promises.
+func newPromBlocked[T any]() *Promise[T] {
+	return &Promise[T]{
+		syncChan: neverClosedSyncChan,
+		// no other fields need to be initialized, since this promise will never be resolved.
+	}
 }

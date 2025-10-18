@@ -35,22 +35,22 @@ var testCtx, testCtxCancel = newTestContext()
 var testsCases_Group_callbackCtx = []struct {
 	name            string
 	g               *Group[any]
-	syncCtx         context.Context
+	syncChan        chan struct{}
 	expectedCtxName string
 }{
-	// Callback cases (nil syncCtx is passes)...
+	// Callback cases (nil syncChan is passes)...
 	{
 		// when no Group is available.
 		name:            "Callback:nil_group,nil_syncCtx",
 		g:               nil,
-		syncCtx:         nil,
+		syncChan:        nil,
 		expectedCtxName: "syncCtx",
 	},
 	{
 		// when a Group is available with NeverCancelCBCtx=false.
 		name:            "Callback:non-nil_group,nil_group_ctx,cancel-callback-ctx,nil_syncCtx",
 		g:               &Group[any]{core: &groupCore{}},
-		syncCtx:         nil,
+		syncChan:        nil,
 		expectedCtxName: "syncCtx",
 	},
 	{
@@ -63,7 +63,7 @@ var testsCases_Group_callbackCtx = []struct {
 				return options
 			}(),
 		}},
-		syncCtx:         nil,
+		syncChan:        nil,
 		expectedCtxName: "context.Background",
 	},
 	{
@@ -74,23 +74,23 @@ var testsCases_Group_callbackCtx = []struct {
 			ctx:    testCtx,
 			cancel: testCtxCancel,
 		}},
-		syncCtx:         nil,
+		syncChan:        nil,
 		expectedCtxName: "testContext.WithCancel",
 	},
 
-	// Follow cases (non-nil syncCtx is passes)...
+	// Follow cases (non-nil syncChan is passes)...
 	{
 		// when no Group is available.
 		name:            "Follow:nil_group,non-nil_syncCtx",
 		g:               nil,
-		syncCtx:         syncCtx{syncChan: make(chan struct{})},
+		syncChan:        make(chan struct{}),
 		expectedCtxName: "syncCtx",
 	},
 	{
 		// when a Group is available with NeverCancelCBCtx=false.
 		name:            "Follow:non-nil_group,nil_group_ctx,cancel-callback-ctx,non-nil_syncCtx",
 		g:               &Group[any]{core: &groupCore{}},
-		syncCtx:         syncCtx{syncChan: make(chan struct{})},
+		syncChan:        make(chan struct{}),
 		expectedCtxName: "syncCtx",
 	},
 	{
@@ -103,7 +103,7 @@ var testsCases_Group_callbackCtx = []struct {
 				return options
 			}(),
 		}},
-		syncCtx:         syncCtx{syncChan: make(chan struct{})},
+		syncChan:        make(chan struct{}),
 		expectedCtxName: "context.Background",
 	},
 	{
@@ -114,7 +114,7 @@ var testsCases_Group_callbackCtx = []struct {
 			ctx:    testCtx,
 			cancel: testCtxCancel,
 		}},
-		syncCtx:         syncCtx{syncChan: make(chan struct{})},
+		syncChan:        make(chan struct{}),
 		expectedCtxName: "testContext.WithCancel",
 	},
 }
@@ -122,7 +122,7 @@ var testsCases_Group_callbackCtx = []struct {
 func TestGroup_callbackCtx(t *testing.T) {
 	for _, test := range testsCases_Group_callbackCtx {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, cancel := callbackCtx(test.g, test.syncCtx)
+			ctx, cancel := callbackCtx(test.g, test.syncChan)
 			if ctx == nil {
 				t.Errorf("nil ctx")
 			}
@@ -142,7 +142,7 @@ func BenchmarkGroup_callbackCtx(b *testing.B) {
 		b.Run(bm.name, func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				ctx, cancel := callbackCtx(bm.g, bm.syncCtx)
+				ctx, cancel := callbackCtx(bm.g, bm.syncChan)
 				if ctx == nil {
 					b.Errorf("nil ctx")
 				}
@@ -151,29 +151,5 @@ func BenchmarkGroup_callbackCtx(b *testing.B) {
 				}
 			}
 		})
-	}
-}
-
-func Test_neverClosedSyncCtx(t *testing.T) {
-	done := neverClosedSyncCtx.Done()
-	// run it multiple times, just to make sure the behavior never changes.
-	for range 10 {
-		select {
-		case <-done:
-			t.Errorf("neverClosedSyncCtx is closed")
-		default:
-		}
-	}
-}
-
-func Test_alreadyClosedSyncCtx(t *testing.T) {
-	done := alreadyClosedSyncCtx.Done()
-	// run it multiple times, just to make sure the behavior never changes.
-	for range 10 {
-		select {
-		case <-done:
-		default:
-			t.Errorf("alreadyClosedSyncCtx is not closed")
-		}
 	}
 }
