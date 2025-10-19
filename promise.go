@@ -274,14 +274,10 @@ func (p *Promise[T]) Callback(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if errRes := p.group.validateActive(); errRes != nil {
-		// TODO: how to handle the error?
-		return
-	}
-	if p.syncChan == neverClosedSyncChan {
-		return
-	}
-	if !p.group.reserveGoroutine(p.regChainRead) {
+
+	// note: this will also handle the error, if any, synchronously.
+	if errProm := p.validateState(); errProm != nil {
+		// TODO: the returned errProm isn't needed, so maybe get rid of it.
 		return
 	}
 

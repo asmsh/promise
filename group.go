@@ -247,6 +247,12 @@ func ctxHandler[T any](nextProm *Promise[T]) {
 }
 
 func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
+	g.init()
+
+	if errRes := g.validateActive(); errRes != nil {
+		return newPromSync[T](g, errRes)
+	}
+
 	return newPromSync[T](g, res)
 }
 
