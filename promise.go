@@ -239,6 +239,7 @@ func delayFollowHandler[T any](
 	flags delayFlags,
 ) {
 	defer prevProm.group.freeGoroutine()
+
 	prevProm.waitState()
 
 	// mark prevProm as 'Handled', and check whether we should continue or not.
@@ -495,6 +496,7 @@ func followHandler[NextT, PrevT any](
 	endDebugEvents ...debugEvent,
 ) {
 	defer prevProm.group.freeGoroutine()
+
 	s := prevProm.waitState()
 
 	// return and carry the current Result to the next Promise if it's not the target.

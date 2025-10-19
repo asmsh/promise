@@ -20,11 +20,11 @@ import (
 )
 
 func followGroup[NextT, PrevT any](prevG *Group[PrevT]) (nextG *Group[NextT]) {
-	prevG.init()
-	if prevG != nil {
-		nextG = &Group[NextT]{core: prevG.core}
+	if prevG == nil {
+		return nil
 	}
-	return nextG
+	prevG.init()
+	return &Group[NextT]{core: prevG.core}
 }
 
 func Follow[

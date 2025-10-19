@@ -214,13 +214,13 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	if ctx.Done() == nil {
 		if g != nil && g.core.options.IsNoNilCtxDoneChan() {
 			return newPromSync[T](g, errCtxNilDoneResult[T]{})
-		} else {
-			// since this ctx value will never be closed, the equivalent
-			// outcome would be a Promise that's never resolved.
-			// so, return that equivalent value without creating any unneeded
-			// resources.
-			return newPromBlocked[T]()
 		}
+
+		// since this ctx value will never be closed, the equivalent
+		// outcome would be a Promise that's never resolved.
+		// so, return that equivalent value without creating any unneeded
+		// resources.
+		return newPromBlocked[T]()
 	}
 	if !g.reserveGoroutine(noopRegFunc) {
 		return newPromSync[T](g, errGroupBusyResult[T]{})
@@ -411,7 +411,6 @@ func (h *groupResHistory[T]) getResForState(state State) (res GroupRes[T]) {
 	return res
 }
 
-// TODO: reach the below criteria.
 // groupCore contains read-only, share-able, or type-agnostic fields only.
 type groupCore struct {
 	debugCB func([]debugEvent)
