@@ -49,6 +49,25 @@ func (g *Group[T]) init() {
 	})
 }
 
+func (g *Group[T]) initValidateState() *Promise[T] {
+	// make sure the group is initiated.
+	g.init()
+
+	// return an error if the group is in the waiting mode,
+	// disallowing the initiation of any new work.
+	if errRes := g.validateActive(); errRes != nil {
+		return newPromSync[T](g, errRes)
+	}
+
+	// attempt to reserve a goroutine for the callback,
+	// or return an error if there's no available ones.
+	if !g.reserveGoroutine(noopRegFunc) {
+		return newPromSync[T](g, errGroupBusyResult[T]{})
+	}
+
+	return nil
+}
+
 func noopRegFunc() {
 	// do nothing
 }
@@ -106,21 +125,13 @@ func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	// make sure the group is initiated.
-	g.init()
-
-	// return an error if the group is in the waiting mode,
-	// disallowing the initiation of any new work.
-	if errRes := g.validateActive(); errRes != nil {
-		return newPromSync[T](g, errRes)
+	// make sure the group and in a valid state, otherwise return
+	// the error promise created.
+	if errProm := g.initValidateState(); errProm != nil {
+		return errProm
 	}
 
-	// attempt to reserve a goroutine for the callback,
-	// or return an error if there's no available ones.
-	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errGroupBusyResult[T]{})
-	}
-
+	// create the new promise that will track the provided callback.
 	nextProm := newPromInter[T](g)
 
 	// derive the Context used in the callback from the group's, or from
@@ -150,12 +161,8 @@ func (g *Group[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) *Promise[T] {
-	g.init()
-	if errRes := g.validateActive(); errRes != nil {
-		return newPromSync[T](g, errRes)
-	}
-	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errGroupBusyResult[T]{})
+	if errProm := g.initValidateState(); errProm != nil {
+		return errProm
 	}
 
 	nextProm := newPromInter[T](g)
@@ -180,12 +187,9 @@ func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
 	}
-	g.init()
-	if errRes := g.validateActive(); errRes != nil {
-		return newPromSync[T](g, errRes)
-	}
-	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errGroupBusyResult[T]{})
+
+	if errProm := g.initValidateState(); errProm != nil {
+		return errProm
 	}
 
 	nextProm := newPromInter[T](g)
@@ -205,10 +209,12 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	if ctx == nil {
 		panic(nilCtxPanicMsg)
 	}
+
 	g.init()
 	if errRes := g.validateActive(); errRes != nil {
 		return newPromSync[T](g, errRes)
 	}
+
 	// handle contexts with nil done channel, as a nil channel is never closed,
 	// and if used with this package it will block follow calls on it forever.
 	if ctx.Done() == nil {
@@ -222,6 +228,7 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 		// resources.
 		return newPromBlocked[T]()
 	}
+
 	if !g.reserveGoroutine(noopRegFunc) {
 		return newPromSync[T](g, errGroupBusyResult[T]{})
 	}
@@ -456,6 +463,10 @@ type groupOptions struct {
 // validateActive will return an [Error] [Result] if the [Group] has been closed
 // because of either it is in Waiting mode, or it has been Canceled due to a failure.
 func (g *Group[T]) validateActive() Result[T] {
+	if g == nil {
+		return nil
+	}
+
 	if g.isWaiting() {
 		return errGroupWaitingResult[T]{}
 	}
@@ -466,17 +477,13 @@ func (g *Group[T]) validateActive() Result[T] {
 	return nil
 }
 
+// isWaiting should be only used through validateActive.
 func (g *Group[T]) isWaiting() bool {
-	if g == nil {
-		return false
-	}
 	return g.core.waiting.Load()
 }
 
+// isCanceled should be only used through validateActive.
 func (g *Group[T]) isCanceled() bool {
-	if g == nil {
-		return false
-	}
 	if !g.core.options.IsFailuresCancelGroup() {
 		// since we only write to the canceled field if that option is set,
 		// then there's no point in attempting to read it if not set.

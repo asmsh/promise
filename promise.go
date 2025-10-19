@@ -202,15 +202,13 @@ func getFinalRes[T any](res Result[T]) Result[T] {
 	return res
 }
 
-func (p *Promise[T]) Delay(
-	d time.Duration,
-	cond ...DelayCond,
-) *Promise[T] {
+func (p *Promise[T]) validateState() *Promise[T] {
 	// return an error if its group is in the waiting mode,
 	// disallowing the initiation of any new work.
 	if errRes := p.group.validateActive(); errRes != nil {
 		return newPromSync[T](p.group, errRes)
 	}
+
 	if p.syncChan == neverClosedSyncChan {
 		// since the syncChan is the never closed chan value, this promise
 		// will never be resolved, so no point in allocating a new value.
@@ -218,10 +216,22 @@ func (p *Promise[T]) Delay(
 		// Context value that's never canceled(nil Done) to the Ctx constructor.
 		return p
 	}
+
 	// attempt to reserve a goroutine for the rescheduling,
 	// or return an error if there's no available ones.
 	if !p.group.reserveGoroutine(p.regChainRead) {
 		return newPromSync[T](p.group, errGroupBusyResult[T]{})
+	}
+
+	return nil
+}
+
+func (p *Promise[T]) Delay(
+	d time.Duration,
+	cond ...DelayCond,
+) *Promise[T] {
+	if errProm := p.validateState(); errProm != nil {
+		return errProm
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -296,14 +306,9 @@ func (p *Promise[T]) Follow(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if errRes := p.group.validateActive(); errRes != nil {
-		return newPromSync[T](p.group, errRes)
-	}
-	if p.syncChan == neverClosedSyncChan {
-		return p
-	}
-	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errGroupBusyResult[T]{})
+
+	if errProm := p.validateState(); errProm != nil {
+		return errProm
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -327,14 +332,9 @@ func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if errRes := p.group.validateActive(); errRes != nil {
-		return newPromSync[T](p.group, errRes)
-	}
-	if p.syncChan == neverClosedSyncChan {
-		return p
-	}
-	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errGroupBusyResult[T]{})
+
+	if errProm := p.validateState(); errProm != nil {
+		return errProm
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -360,14 +360,9 @@ func (p *Promise[T]) Then(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if errRes := p.group.validateActive(); errRes != nil {
-		return newPromSync[T](p.group, errRes)
-	}
-	if p.syncChan == neverClosedSyncChan {
-		return p
-	}
-	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errGroupBusyResult[T]{})
+
+	if errProm := p.validateState(); errProm != nil {
+		return errProm
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -393,14 +388,9 @@ func (p *Promise[T]) Catch(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if errRes := p.group.validateActive(); errRes != nil {
-		return newPromSync[T](p.group, errRes)
-	}
-	if p.syncChan == neverClosedSyncChan {
-		return p
-	}
-	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errGroupBusyResult[T]{})
+
+	if errProm := p.validateState(); errProm != nil {
+		return errProm
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -426,14 +416,9 @@ func (p *Promise[T]) Recover(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if errRes := p.group.validateActive(); errRes != nil {
-		return newPromSync[T](p.group, errRes)
-	}
-	if p.syncChan == neverClosedSyncChan {
-		return p
-	}
-	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errGroupBusyResult[T]{})
+
+	if errProm := p.validateState(); errProm != nil {
+		return errProm
 	}
 
 	nextProm := newPromInter[T](p.group)
@@ -459,14 +444,9 @@ func (p *Promise[T]) Finally(
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
-	if errRes := p.group.validateActive(); errRes != nil {
-		return newPromSync[T](p.group, errRes)
-	}
-	if p.syncChan == neverClosedSyncChan {
-		return p
-	}
-	if !p.group.reserveGoroutine(p.regChainRead) {
-		return newPromSync[T](p.group, errGroupBusyResult[T]{})
+
+	if errProm := p.validateState(); errProm != nil {
+		return errProm
 	}
 
 	nextProm := newPromInter[T](p.group)
