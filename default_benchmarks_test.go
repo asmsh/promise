@@ -83,6 +83,42 @@ func BenchmarkGo(b *testing.B) {
 	})
 }
 
+func BenchmarkGoErr(b *testing.B) {
+	b.Run("Success", func(b *testing.B) {
+		var p *Promise[any]
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			p = GoErr(func() error { return nil })
+		}
+		_ = p
+	})
+
+	b.Run("Error", func(b *testing.B) {
+		var p *Promise[any]
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			p = GoErr(func() error {
+				return testStrError("test error")
+			})
+		}
+		_ = p
+	})
+
+	b.Run("Panic", func(b *testing.B) {
+		var p *Promise[any]
+		b.ReportAllocs()
+		b.ResetTimer()
+		for b.Loop() {
+			p = GoErr(func() error {
+				panic("panic")
+			})
+		}
+		_ = p
+	})
+}
+
 func BenchmarkGoCtxRes(b *testing.B) {
 	b.Run("empty result", func(b *testing.B) {
 		var p *Promise[any]

@@ -40,10 +40,39 @@ func Go(cb func()) *Promise[any] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	nextProm := newPromInter[any](nil)
-	ctx, cancel := callbackCtx[any](nil, nextProm.syncChan)
-	go goHandler(nextProm, cb, ctx, cancel)
-	return nextProm
+	return GoCallback(goFunc[any, any](cb))
+}
+
+func GoErr(cb func() error) *Promise[any] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	return GoCallback(goNextErrFunc[any, any](cb))
+}
+
+func GoValErr(cb func() (any, error)) *Promise[any] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	return GoCallback(goNextValErrFunc[any, any](cb))
+}
+
+func GoCtxErr(cb func(ctx context.Context) error) *Promise[any] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	return GoCallback(ctxNextErrFunc[any, any](cb))
+}
+
+func GoCtxValErr(cb func(ctx context.Context) (any, error)) *Promise[any] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	return GoCallback(ctxNextValErrFunc[any, any](cb))
 }
 
 // GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
@@ -71,27 +100,15 @@ func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	nextProm := newPromInter[T](nil)
-	ctx, cancel := callbackCtx[T](nil, nextProm.syncChan)
-	go goCtxResHandler(nextProm, cb, ctx, cancel)
-	return nextProm
+	return GoCallback(ctxNextResFunc[T, T](cb))
 }
-
-// TODO: maybe add 'GoCtxErr', as a quick constructor that accepts a Context but returns just an error.
 
 func GoFunc[
 	NextT any,
 	PrevT any,
 	CBFuncT CallbackFunc[NextT, PrevT],
 ](cb CBFuncT) *Promise[NextT] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	nextProm := newPromInter[NextT](nil)
-	ctx, cancel := callbackCtx[NextT](nil, nextProm.syncChan)
-	go goCallbackHandler(nextProm, CallbackFrom[NextT, PrevT](cb), ctx, cancel)
-	return nextProm
+	return GoCallback(CallbackFrom[NextT, PrevT](cb))
 }
 
 // GoCallback runs the [Callback], cb, in a separate goroutine, and returns

@@ -57,13 +57,64 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
+
+	return g.GoCallback(goFunc[T, T](cb))
+}
+
+func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	return g.GoCallback(goNextErrFunc[T, T](cb))
+}
+
+func (g *Group[T]) GoValErr(cb func() (T, error)) *Promise[T] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	return g.GoCallback(goNextValErrFunc[T, T](cb))
+}
+
+func (g *Group[T]) GoCtxErr(cb func(ctx context.Context) error) *Promise[T] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	return g.GoCallback(ctxNextErrFunc[T, T](cb))
+}
+
+func (g *Group[T]) GoCtxValErr(cb func(ctx context.Context) (T, error)) *Promise[T] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	return g.GoCallback(ctxNextValErrFunc[T, T](cb))
+}
+
+func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	return g.GoCallback(ctxNextResFunc[T, T](cb))
+}
+
+func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
+	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
 	// make sure the group is initiated.
 	g.init()
+
 	// return an error if the group is in the waiting mode,
 	// disallowing the initiation of any new work.
 	if errRes := g.validateActive(); errRes != nil {
 		return newPromSync[T](g, errRes)
 	}
+
 	// attempt to reserve a goroutine for the callback,
 	// or return an error if there's no available ones.
 	if !g.reserveGoroutine(noopRegFunc) {
@@ -71,72 +122,15 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 	}
 
 	nextProm := newPromInter[T](g)
+
 	// derive the Context used in the callback from the group's, or from
 	// the new promise, effectively making the created Context closed
 	// once the callback returns.
 	ctx, cancel := callbackCtx(g, nextProm.syncChan)
-	debug(nextProm, startHandler, startGroupHandler, startGroupGoHandler)
-	go goHandler(nextProm, cb, ctx, cancel)
-	return nextProm
-}
 
-func goHandler[T any](
-	nextProm *Promise[T],
-	cb func(),
-	ctx context.Context,
-	cancel context.CancelFunc,
-) {
-	defer nextProm.group.freeGoroutine()
-	runCallbackHandler[T, T](nextProm, goFunc[T, T](cb), nil, ctx, cancel)
-	debug(nextProm, endHandler, endGroupHandler, endGroupGoHandler)
-}
-
-func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-	g.init()
-	if errRes := g.validateActive(); errRes != nil {
-		return newPromSync[T](g, errRes)
-	}
-	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errGroupBusyResult[T]{})
-	}
-
-	nextProm := newPromInter[T](g)
-	ctx, cancel := callbackCtx(g, nextProm.syncChan)
-	debug(nextProm, startHandler, startGroupHandler, startGroupGoResHandler)
-	go goCtxResHandler(nextProm, cb, ctx, cancel)
-	return nextProm
-}
-
-func goCtxResHandler[T any](
-	nextProm *Promise[T],
-	cb func(context.Context) Result[T],
-	ctx context.Context,
-	cancel context.CancelFunc,
-) {
-	defer nextProm.group.freeGoroutine()
-	runCallbackHandler[T, T](nextProm, ctxNextResFunc[T, T](cb), nil, ctx, cancel)
-	debug(nextProm, endHandler, endGroupHandler, endGroupGoResHandler)
-}
-
-func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-	g.init()
-	if errRes := g.validateActive(); errRes != nil {
-		return newPromSync[T](g, errRes)
-	}
-	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errGroupBusyResult[T]{})
-	}
-
-	nextProm := newPromInter[T](g)
-	ctx, cancel := callbackCtx(g, nextProm.syncChan)
 	debug(nextProm, startHandler, startGroupHandler, startGroupGoResHandler)
 	go goCallbackHandler(nextProm, cb, ctx, cancel)
+
 	return nextProm
 }
 
