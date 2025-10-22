@@ -99,7 +99,7 @@ func actualWorkPG_customWorkerResult_customGroupResult(
 		})
 	}
 
-	return UnwrapMultiRes(pg.AllWaitRes()), nil
+	return UnwrapMultiResVal(pg.AllWaitRes()), nil
 }
 
 func actualWorkPG_customWorkerResult_standardGroupResult(

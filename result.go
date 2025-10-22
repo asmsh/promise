@@ -96,7 +96,10 @@ func (gr GroupRes[T]) String() string {
 	return fmt.Sprintf("%v", gr.Result)
 }
 
-// UnwrapMultiRes returns the values wrapped inside a multi result value.
+// UnwrapMultiResVal returns the values wrapped inside a multi result value,
+// that's a [Result] which its [Result.Val] returns a slice of [Result] values.
+// It returns the result of calling the [Result.Val] method on each [Result]
+// value wrapped in the provided multiRes.
 //
 // Examples:
 //
@@ -104,7 +107,7 @@ func (gr GroupRes[T]) String() string {
 //
 //	p := All[any]( /* list of promises */ )
 //	multiRes := p.Res()
-//	vals := UnwrapMultiRes(multiRes)
+//	vals := UnwrapMultiResVal(multiRes)
 //	// do something with vals...
 //
 // Working with a [Group] value.
@@ -112,10 +115,23 @@ func (gr GroupRes[T]) String() string {
 //	var pg Group[any]
 //	/* start some promises on pg */
 //	multiRes := pg.AllWaitRes()
-//	vals := UnwrapMultiRes(multiRes)
+//	vals := UnwrapMultiResVal(multiRes)
 //	// do something with vals...
-func UnwrapMultiRes[T any, TRes Result[T], TMRes Result[[]TRes]](
-	multiRes TMRes,
+//
+// It preserves empty values (like nil), which might be returned from
+// [Result.Val] because of a [Success], [Error], or [Panic] [Result]
+// with empty [Result.Val], so a subsequent filtering might be needed.
+//
+// For example:
+//
+//	/* multiRes contains Success, Error, or Panic with nil Result.Val */
+//	vals := UnwrapMultiResVal(multiRes)
+//	vals = slices.DeleteFunc(vals, func(v any) bool {
+//		// filtering logic based on v's value...
+//		return v == nil
+//	})
+func UnwrapMultiResVal[T any, TElem Result[T], TRes Result[[]TElem]](
+	multiRes TRes,
 ) []T {
 	multiResVal := multiRes.Val()
 	res := make([]T, 0, len(multiResVal))
