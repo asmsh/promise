@@ -65,35 +65,35 @@ func getPanicVFromRes[T any](res Result[T]) any {
 	return PanicError{V: res}
 }
 
-// IdxRes is a positional result view, that represents the result of the promise
-// at index Idx in the original list provided.
+// IdxRes wraps a [Result] value for the [Promise] at index Idx in the list
+// of values passed to any of the extensions functions ([Any], [All], etc.).
+//
+// The zero value is useless and will panic on any [Result] method call.
 type IdxRes[T any] struct {
 	Idx int
 	Result[T]
 }
 
-func (ir IdxRes[T]) String() string {
-	if ir.Result == nil {
+func (r IdxRes[T]) String() string {
+	if r.Result == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("[%d]%v", ir.Idx, ir.Result)
+	return fmt.Sprintf("[%d]%v", r.Idx, r.Result)
 }
 
-// GroupRes
-// TODO: choose another name (??)
-// the need of this type is to add fields later that can identify the promise
-// that generated that group's result.
+// GroupRes wraps a [Result] value that's returned from any of the [Group]'s
+// Res methods ([Group.AllRes], [Group.AnyWaitRes], etc.).
+//
+// The zero value is useless and will panic on any [Result] method call.
 type GroupRes[T any] struct {
-	// possible fields:
-	// - InitType(constructor type): enum(Go, Ctx, GoCtxRes, GoErr)
 	Result[T]
 }
 
-func (gr GroupRes[T]) String() string {
-	if gr.Result == nil {
+func (r GroupRes[T]) String() string {
+	if r.Result == nil {
 		return "<nil>"
 	}
-	return fmt.Sprintf("%v", gr.Result)
+	return fmt.Sprintf("%v", r.Result)
 }
 
 // UnwrapMultiResVal returns the values wrapped inside a multi result value,

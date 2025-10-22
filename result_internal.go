@@ -194,13 +194,19 @@ func (r errorResultMultiRes[T, TElem]) Error() string {
 func (r errorResultMultiRes[T, TElem]) Unwrap() []error {
 	errs := make([]error, 0, len(r.vals))
 	for _, ir := range r.vals {
-		if ir.State() != Error { // only Error is returned
-			continue
-		}
 		switch res := any(ir).(type) {
 		case IdxRes[T]:
+			// only [Error] is returned
+			if res.Result == nil || res.State() != Error {
+				continue
+			}
+
 			errs = append(errs, IdxError{Idx: res.Idx, Err: res.Err()})
 		case GroupRes[T]:
+			if res.Result == nil || res.State() != Error {
+				continue
+			}
+
 			errs = append(errs, GroupError{Err: res.Err()})
 		}
 	}
@@ -278,13 +284,19 @@ func (r panicResultMultiRes[T, TElem]) Is(target error) bool {
 func (r panicResultMultiRes[T, TElem]) Unwrap() []error {
 	errs := make([]error, 0, len(r.vals))
 	for _, ir := range r.vals {
-		if ir.State() == Success { // only Panic and Error are returned
-			continue
-		}
 		switch res := any(ir).(type) {
 		case IdxRes[T]:
+			// only [Panic] and [Error] are returned
+			if res.Result == nil || res.State() == Success {
+				continue
+			}
+
 			errs = append(errs, IdxError{Idx: res.Idx, Err: res.Err()})
 		case GroupRes[T]:
+			if res.Result == nil || res.State() == Success {
+				continue
+			}
+
 			errs = append(errs, GroupError{Err: res.Err()})
 		}
 	}
