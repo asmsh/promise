@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"slices"
 	"testing"
 	"time"
 )
@@ -437,7 +438,7 @@ func TestPanics(t *testing.T) {
 			},
 		},
 		{
-			name: "GoFunc[any, any]",
+			name: "GoFunc[any,any]",
 			p: func() *Promise[any] {
 				return GoFunc[any, any](func() error {
 					panic(newStrError())
@@ -555,6 +556,7 @@ func TestPanics(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var err error
+
 			if test.p != nil {
 				p := test.p()
 				r := p.Res()
@@ -566,9 +568,9 @@ func TestPanics(t *testing.T) {
 					t.Logf("p state: %v {%T}\n", r.State(), r.State())
 				}
 
-				err = r.Err()
+				err = r.Err() // needed for the whole test.
 
-				p.Recover(func(ctx context.Context, res Result[any]) Result[any] {
+				newP := p.Recover(func(ctx context.Context, res Result[any]) Result[any] {
 					if testEnableLogs {
 						t.Logf("p recover res: %v {%T}\n", res, res)
 						t.Logf("p recover val: %v {%T}\n", res.Val(), res.Val())
@@ -577,10 +579,25 @@ func TestPanics(t *testing.T) {
 					}
 
 					return nil
-				}).Wait()
+				})
+
+				rNew := newP.Res()
+
+				if testEnableLogs {
+					t.Logf("newP res: %v {%T}\n", rNew, rNew)
+					t.Logf("newP val: %v {%T}\n", rNew.Val(), rNew.Val())
+					t.Logf("newP err: %v {%T}\n", rNew.Err(), rNew.Err())
+					t.Logf("newP state: %v {%T}\n", rNew.State(), rNew.State())
+				}
+
+				// make sure the Panic is handled in the new promise.
+				if expected := Success; rNew.State() != expected {
+					t.Errorf("newP state: %v, expected: %v\n", rNew.State(), expected)
+				}
 			} else if test.ip != nil {
 				ip := test.ip()
 				r := ip.Res()
+
 				if testEnableLogs {
 					t.Logf("ip res: %v {%T}\n", r, r)
 					t.Logf("ip val: %v {%T}\n", r.Val(), r.Val())
@@ -588,9 +605,9 @@ func TestPanics(t *testing.T) {
 					t.Logf("ip state: %v {%T}\n", r.State(), r.State())
 				}
 
-				err = r.Err()
+				err = r.Err() // needed for the whole test.
 
-				ip.Recover(func(ctx context.Context, res Result[IdxRes[any]]) Result[IdxRes[any]] {
+				newIp := ip.Recover(func(ctx context.Context, res Result[IdxRes[any]]) Result[IdxRes[any]] {
 					if testEnableLogs {
 						t.Logf("ip recover res: %v {%T}\n", res, res)
 						t.Logf("ip recover val: %v {%T}\n", res.Val(), res.Val())
@@ -599,7 +616,21 @@ func TestPanics(t *testing.T) {
 					}
 
 					return nil
-				}).Wait()
+				})
+
+				rNew := newIp.Res()
+
+				if testEnableLogs {
+					t.Logf("newIp res: %v {%T}\n", rNew, rNew)
+					t.Logf("newIp val: %v {%T}\n", rNew.Val(), rNew.Val())
+					t.Logf("newIp err: %v {%T}\n", rNew.Err(), rNew.Err())
+					t.Logf("newIp state: %v {%T}\n", rNew.State(), rNew.State())
+				}
+
+				// make sure the Panic is handled in the new promise.
+				if expected := Success; rNew.State() != expected {
+					t.Errorf("newIp state: %v, expected: %v\n", rNew.State(), expected)
+				}
 			} else {
 				ips := test.ips()
 				r := ips.Res()
@@ -611,11 +642,9 @@ func TestPanics(t *testing.T) {
 					t.Logf("ips state: %v {%T}\n", r.State(), r.State())
 				}
 
-				err = r.Err()
+				err = r.Err() // needed for the whole test.
 
 				newIps := ips.Recover(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
-					// FIXME: how to allow filtering the 'val' value, to eliminate the panic result?
-					//  in case the same value 'val' is returned, we should resolve to panic.
 					if testEnableLogs {
 						t.Logf("ips recover res: %v {%T}\n", res, res)
 						t.Logf("ips recover val: %v {%T}\n", res.Val(), res.Val())
@@ -623,7 +652,33 @@ func TestPanics(t *testing.T) {
 						t.Logf("ips recover state: %v {%T}\n", res.State(), res.State())
 					}
 
-					return res
+					// clone the received [Result] value before filtering it.
+					// note: this is needed as the returned slice (from [Result.Val])
+					// is the same value returned from all [Result.Val] calls.
+					newResVal := make([]IdxRes[any], len(res.Val()))
+					copy(newResVal, res.Val())
+
+					// filter the new [Result] values, to remove the handled values.
+					newResVal = slices.DeleteFunc(newResVal, func(i IdxRes[any]) bool {
+						return i.State() == Panic
+					})
+
+					// create a new [Result] with the needed [State] and [Result] values.
+					newRes := MultiRes(Success, newResVal...)
+
+					if testEnableLogs {
+						t.Logf("ips new res: %v {%T}\n", newRes, newRes)
+						t.Logf("ips new val: %v {%T}\n", newRes.Val(), newRes.Val())
+						t.Logf("ips new err: %v {%T}\n", newRes.Err(), newRes.Err())
+						t.Logf("ips new state: %v {%T}\n", newRes.State(), newRes.State())
+
+						t.Logf("ips recover res: %v {%T}\n", res, res)
+						t.Logf("ips recover val: %v {%T}\n", res.Val(), res.Val())
+						t.Logf("ips recover err: %v {%T}\n", res.Err(), res.Err())
+						t.Logf("ips recover state: %v {%T}\n", res.State(), res.State())
+					}
+
+					return newRes
 				})
 
 				rNew := newIps.Res()
@@ -633,6 +688,11 @@ func TestPanics(t *testing.T) {
 					t.Logf("newIps val: %v {%T}\n", rNew.Val(), rNew.Val())
 					t.Logf("newIps err: %v {%T}\n", rNew.Err(), rNew.Err())
 					t.Logf("newIps state: %v {%T}\n", rNew.State(), rNew.State())
+				}
+
+				// make sure the Panic is handled in the new promise.
+				if expected := Success; rNew.State() != expected {
+					t.Errorf("newIps state: %v, expected: %v\n", rNew.State(), expected)
 				}
 			}
 
