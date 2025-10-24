@@ -17,6 +17,8 @@ package promise
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 )
 
 // Result is a Container for generic result values
@@ -96,6 +98,53 @@ func (r GroupRes[T]) String() string {
 	return fmt.Sprintf("%v", r.Result)
 }
 
+// MultiRes creates a [Result] value of the provided multiRes as its [Result.Val],
+// with its [Result.State] being the provided state.
+//
+// It's useful when returning a filtered multi result value, that's a [Result]
+// which its [Result.Val] returns a slice of [Result] values.
+//
+// For example:
+//
+//	p := All[any]( /* list of promises that possibly panicked */ )
+//
+//	p.Recover(func(ctx context.Context, multiRes Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
+//		// clone the received [Result] value before filtering it.
+//		// note: this is needed as the returned slice (from [Result.Val])
+//		// is the same value returned from all [Result.Val] calls.
+//		newMultiResVal := make([]IdxRes[any], len(multiRes.Val()))
+//		copy(newMultiResVal, multiRes.Val())
+//
+//		// filter the new [Result] values, to remove the handled values.
+//		newMultiResVal = slices.DeleteFunc(newMultiResVal, func(i IdxRes[any]) bool {
+//			return i.State() == Panic
+//		})
+//
+//		// create a new [Result] with the needed [State] and [Result] values.
+//		newMultiRes := MultiRes(Success, newMultiResVal...)
+//
+//		// return the filtered and handled [Result].
+//		return newMultiRes
+//	})
+//
+// Note: the returned value's [Result.Val] slice shouldn't be modified,
+// and any modification should be made on a cloned value.
+func MultiRes[TElem Result[T], T any](
+	state State,
+	multiRes ...TElem,
+) Result[[]TElem] {
+	switch state {
+	case Success:
+		return successResultMultiRes[T, TElem]{multiRes}
+	case Error:
+		return errorResultMultiRes[T, TElem]{multiRes}
+	case Panic:
+		return panicResultMultiRes[T, TElem]{multiRes}
+	default:
+		panic("promise: unexpected Result state: " + state.String())
+	}
+}
+
 // UnwrapMultiResVal returns the values wrapped inside a multi result value,
 // that's a [Result] which its [Result.Val] returns a slice of [Result] values.
 // It returns the result of calling the [Result.Val] method on each [Result]
@@ -141,6 +190,16 @@ func UnwrapMultiResVal[T any, TElem Result[T], TRes Result[[]TElem]](
 	return res
 }
 
+// implementations of the above [Result] values...
+
+// emptyResult is a [Result] implementation for cases where
+// the [State] is [Success] and there's no value nor error.
+// it's created as an efficient way to represent such results
+// without using a type that makes space for an always-empty
+// value and error.
+//
+// it's the type used whenever a callback returns `nil` as
+// the [Result] value.
 type emptyResult[T any] struct{}
 
 func (r emptyResult[T]) Val() (v T)   { return v }
@@ -150,6 +209,10 @@ func (r emptyResult[T]) String() string {
 	return "Success: <nil>"
 }
 
+// valResult is a [Result] implementation for cases where
+// the [State] is [Success] and there's only value (no error).
+// it's created as an efficient way to represent such results
+// without using a type that makes space for an always-nil error.
 type valResult[T any] struct{ val T }
 
 func (r valResult[T]) Val() (v T)   { return r.val }
@@ -159,6 +222,10 @@ func (r valResult[T]) String() string {
 	return fmt.Sprintf("Success: %v", r.val)
 }
 
+// errResult is a [Result] implementation for cases where
+// the [State] is [Error] and there's only error (no value).
+// it's created as an efficient way to represent such results
+// without using a type that makes space for an always-nil error.
 type errResult[T any] struct{ err error }
 
 func (r errResult[T]) Val() (v T)   { return v }
@@ -168,6 +235,11 @@ func (r errResult[T]) String() string {
 	return fmt.Sprintf("Error: %s", r.err.Error())
 }
 
+// valErrResult is a [Result] implementation for cases where
+// the [State] is either [Success] or [Error], based on whether
+// the included error is nil or not, respectively.
+// it's created as an efficient way to represent such results
+// without using a type that saves the [State] value.
 type valErrResult[T any] struct {
 	val T
 	err error
@@ -188,37 +260,27 @@ func (r valErrResult[T]) String() string {
 	return fmt.Sprintf("Error: (%v, %s)", r.val, r.err.Error())
 }
 
-type result[T any] struct {
-	val   T
-	err   error
-	state State
-}
-
-func (r result[T]) Val() (v T)   { return r.val }
-func (r result[T]) Err() error   { return r.err }
-func (r result[T]) State() State { return r.state }
-func (r result[T]) String() string {
-	if r.state == Success {
-		return fmt.Sprintf("Success: %v", r.val)
-	} else if r.state == Error {
-		return fmt.Sprintf("Error: (%v, %s)", r.val, r.err.Error())
-	} else {
-		return fmt.Sprintf("Panic: %s", r.err.Error())
-	}
-}
-
+// panicResult is a [Result] implementation for cases where
+// the [State] is [Panic].
+// it's created as an efficient way to represent such results
+// without using a type that makes space for unnecessarily fields.
+//
+// it's also an [error] implementation for the error returned from
+// the [Result.Err] method.
+// it implements the [errors.As] and [errors.Is] methods to make
+// its values work as a [PanicError] value.
+//
+// it also implements a PanicV() method, for returning the underlying
+// panic value, which is used when returning the panic value.
 type panicResult[T any] struct{ v any }
 
 func (r panicResult[T]) Val() (v T)   { return v }
 func (r panicResult[T]) Err() error   { return r }
 func (r panicResult[T]) State() State { return Panic }
-func (r panicResult[T]) String() string {
+func (r panicResult[T]) Error() string {
 	// same error message and format as the PanicError
 	return fmt.Sprintf("Panic: %v", r.v)
 }
-
-// additional methods for the panicResult type, to make it act like a PanicError.
-func (r panicResult[T]) Error() string { return r.String() }
 func (r panicResult[T]) Is(target error) bool {
 	// make this error result implement the identity panic error value.
 	return target == ErrPromisePanicked
@@ -240,6 +302,28 @@ func (r panicResult[T]) As(target any) bool {
 }
 func (r panicResult[T]) PanicV() any { return r.v }
 
+// result is a [Result] implementation that saves all the elements explicitly.
+type result[T any] struct {
+	val   T
+	err   error
+	state State
+}
+
+func (r result[T]) Val() (v T)   { return r.val }
+func (r result[T]) Err() error   { return r.err }
+func (r result[T]) State() State { return r.state }
+func (r result[T]) String() string {
+	if r.state == Success {
+		return fmt.Sprintf("Success: %v", r.val)
+	} else if r.state == Error {
+		return fmt.Sprintf("Error: (%v, %s)", r.val, r.err.Error())
+	} else {
+		return fmt.Sprintf("Panic: %s", r.err.Error())
+	}
+}
+
+// ctxResult is a [Result] implementation that's used with the [Ctx]
+// constructors to save the passed [context.Context] value.
 type ctxResult[T any] struct{ ctx context.Context }
 
 func (r ctxResult[T]) Val() (v T) { return v }
@@ -257,3 +341,219 @@ func (r ctxResult[T]) String() string {
 	return "Success: <nil>"
 }
 func (r ctxResult[T]) WaitChan() <-chan struct{} { return r.ctx.Done() }
+
+// successResultMultiRes is a [Result] implementation for [Success] values
+// returned from [MultiRes].
+//
+// it's also used for results returned from extension or group calls.
+type successResultMultiRes[T any, TElem Result[T]] struct {
+	vals []TElem
+}
+
+func (r successResultMultiRes[T, TElem]) Val() []TElem { return r.vals }
+func (r successResultMultiRes[T, TElem]) Err() error   { return nil }
+func (r successResultMultiRes[T, TElem]) State() State { return Success }
+func (r successResultMultiRes[T, TElem]) Format(f fmt.State, verb rune) {
+	printMultiRes(Success.String(), r.vals, f, verb)
+}
+
+// errorResultMultiRes is a [Result] implementation for [Error] values
+// returned from [MultiRes].
+//
+// it's also used for results returned from extension or group calls.
+type errorResultMultiRes[T any, TElem Result[T]] struct {
+	vals []TElem
+}
+
+func (r errorResultMultiRes[T, TElem]) Val() []TElem { return r.vals }
+func (r errorResultMultiRes[T, TElem]) Err() error   { return r }
+func (r errorResultMultiRes[T, TElem]) State() State { return Error }
+func (r errorResultMultiRes[T, TElem]) Format(f fmt.State, verb rune) {
+	printMultiRes(Error.String(), r.vals, f, verb)
+}
+func (r errorResultMultiRes[T, TElem]) Error() string {
+	return getMultiResErrorString(Error, r.vals)
+}
+func (r errorResultMultiRes[T, TElem]) Unwrap() []error {
+	errs := make([]error, 0, len(r.vals)) // assuming all values are errors.
+	errs = unwrapMultiResErrors(Error, r.vals, errs)
+	return errs
+}
+func (r errorResultMultiRes[T, TElem]) As(target any) bool {
+	return castMultiResAsError(Error, r.vals, target)
+}
+
+// panicResultMultiRes is a [Result] implementation for [Panic] values
+// returned from [MultiRes].
+//
+// it's also used for results returned from extension or group calls.
+type panicResultMultiRes[T any, TElem Result[T]] struct {
+	vals []TElem
+}
+
+func (r panicResultMultiRes[T, TElem]) Val() []TElem { return r.vals }
+func (r panicResultMultiRes[T, TElem]) Err() error   { return r }
+func (r panicResultMultiRes[T, TElem]) State() State { return Panic }
+func (r panicResultMultiRes[T, TElem]) Format(f fmt.State, verb rune) {
+	printMultiRes(Panic.String(), r.vals, f, verb)
+}
+func (r panicResultMultiRes[T, TElem]) Error() string {
+	return getMultiResErrorString(Panic, r.vals)
+}
+func (r panicResultMultiRes[T, TElem]) Is(target error) bool {
+	// make this error result implement the identity panic error value.
+	return target == ErrPromisePanicked
+}
+func (r panicResultMultiRes[T, TElem]) Unwrap() []error {
+	errs := make([]error, 0, len(r.vals)) // assuming all values are errors.
+	errs = unwrapMultiResErrors(Panic, r.vals, errs)
+	return errs
+}
+func (r panicResultMultiRes[T, TElem]) As(target any) bool {
+	return castMultiResAsError(Panic, r.vals, target)
+}
+func (r panicResultMultiRes[T, TElem]) PanicV() any {
+	_, fr := getFirstRes(Panic, r.vals)
+	return getPanicVFromRes(fr)
+}
+
+func printMultiRes[T any, TElem Result[T]](
+	stateStr string,
+	vals []TElem,
+	f fmt.State,
+	verb rune,
+) {
+	if len(vals) == 0 {
+		_, _ = fmt.Fprintf(f, "%s: nil", stateStr)
+		return
+	}
+	if len(vals) == 1 {
+		_, _ = fmt.Fprintf(f, "%s: %v", stateStr, vals[0])
+		return
+	}
+
+	_, _ = f.Write([]byte(stateStr))
+	_, _ = f.Write([]byte(": "))
+
+	for i, v := range vals {
+		if i == 0 {
+			_, _ = fmt.Fprintf(f, "%v", v)
+		} else {
+			_, _ = fmt.Fprintf(f, "\n%v", v)
+		}
+	}
+}
+
+func getMultiResErrorString[T any, TElem Result[T]](
+	state State,
+	vals []TElem,
+) string {
+	if len(vals) == 1 {
+		return fmt.Sprintf("%s: %v", state.String(), vals[0])
+	}
+
+	// find the first error matching state and print it before any other errors.
+	fi, fr := getFirstRes(state, vals)
+
+	errb := &strings.Builder{}
+	_, _ = fmt.Fprintf(errb, "%s: %v", state.String(), fr)
+
+	for i, ir := range vals {
+		// skip Success, higher than current state, or already printed results...
+		// for example:
+		// when 'state' is Error, if 's' is Error, then 's <= state' succeeds.
+		// when 'state' is Error, if 's' is Panic, then 's <= state' fails.
+		// when 'state' is Panic, if 's' is Error, then 's <= state' succeeds.
+		// when 'state' is Panic, if 's' is Panic, then 's <= state' succeeds.
+		//
+		// the end result is, when 'state' is Error, it includes only Error.
+		// and when 'state' is Panic, it includes both Error and Panic.
+		if s := ir.State(); s > Success && s <= state && i != fi {
+			_, _ = fmt.Fprintf(errb, "\n%v", ir)
+		}
+	}
+	return errb.String()
+}
+
+func unwrapMultiResErrors[T any, TElem Result[T]](
+	state State,
+	vals []TElem,
+	errs []error,
+) []error {
+	for _, v := range vals {
+		switch res := any(v).(type) {
+		case IdxRes[T]:
+			// skip nil, Success, or higher than current state results...
+			// for example:
+			// when 'state' is Error, if 's' is Error, then 's <= state' succeeds.
+			// when 'state' is Error, if 's' is Panic, then 's <= state' fails.
+			// when 'state' is Panic, if 's' is Error, then 's <= state' succeeds.
+			// when 'state' is Panic, if 's' is Panic, then 's <= state' succeeds.
+			//
+			// the end result is, when 'state' is Error, it includes only Error.
+			// and when 'state' is Panic, it includes both Error and Panic.
+			if res.Result == nil {
+				continue
+			}
+			if s := res.State(); s == Success || s > state {
+				continue
+			}
+
+			errs = append(errs, IdxError{Idx: res.Idx, Err: res.Err()})
+		case GroupRes[T]:
+			if res.Result == nil {
+				continue
+			}
+			if s := res.State(); s == Success || s > state {
+				continue
+			}
+
+			errs = append(errs, GroupError{Err: res.Err()})
+		}
+	}
+
+	return errs
+}
+
+func castMultiResAsError[T any, TElem Result[T]](
+	state State,
+	vals []TElem,
+	target any,
+) bool {
+	switch perr := target.(type) {
+	case *IdxError:
+		_, fr := getFirstRes(state, vals)
+		if res, ok := any(fr).(IdxRes[T]); ok {
+			perr.Idx = res.Idx
+			perr.Err = res.Err()
+			return true
+		}
+	case *GroupError:
+		_, fr := getFirstRes(state, vals)
+		if res, ok := any(fr).(GroupRes[T]); ok {
+			perr.Err = res.Err()
+			return true
+		}
+	case *MultiError:
+		// include all errors.
+		errs := make([]error, 0, len(vals)) // assuming all values are errors.
+		perr.errs = unwrapMultiResErrors(state, vals, errs)
+		return true
+	}
+
+	// return on non-supported target types.
+	return false
+}
+
+// getFirstRes returns the first [Result] with [State] state from vals.
+func getFirstRes[T any, TElem Result[T]](
+	state State,
+	vals []TElem,
+) (int, TElem) {
+	// find the first [Result] with the target [State] state.
+	// there must be at least one [Result] value, as this function is called
+	// on [Error] or [Panic] results, otherwise the whole result value wouldn't
+	// have been created.
+	i := slices.IndexFunc(vals, func(ir TElem) bool { return ir.State() == state })
+	return i, vals[i]
+}
