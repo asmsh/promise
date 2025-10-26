@@ -15,19 +15,30 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+
+	"github.com/asmsh/promise"
 )
 
 func main() {
-	p := AsyncGet("https://golang.org/")
-	p.ThenT(func(resp *http.Response) (resResp *http.Response, resErr error) {
-		// do something with resp..
-		fmt.Printf("resp: %v\n", resp)
-		return
-	}).CatchT(func(err error, resp *http.Response) (resResp *http.Response, resErr error) {
-		// handle the error..
-		fmt.Printf("err: %v\n", err)
-		return
-	}).Wait() // wait the whole pipeline to finish
+	AsyncGet("https://golang.org/").
+		Then(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
+			resp := res.Val()
+
+			// do something with resp..
+			fmt.Printf("resp: %v\n", resp)
+
+			return nil
+		}).
+		Catch(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
+			err := res.Err()
+
+			// handle the error..
+			fmt.Printf("err: %v\n", err)
+
+			return nil
+		}).
+		Wait() // wait the whole pipeline to finish
 }

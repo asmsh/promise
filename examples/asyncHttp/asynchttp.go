@@ -20,60 +20,12 @@ import (
 	"github.com/asmsh/promise"
 )
 
-func AsyncGet(url string) *HttpPromise {
-	resChan := make(chan promise.Res, 1)
-	p := NewHttpPromise(resChan)
-	go asyncGetCall(url, resChan)
-	return p
-}
-
-func asyncGetCall(url string, resChan chan promise.Res) {
-	resp, err := http.Get(url)
-	resChan <- promise.Res{resp, err}
-}
-
-// HttpPromise implements the promise.Promise interface.
+// AsyncGet executes a GET request for the provided url in a new goroutine,
+// and returns a [*promise.Promise] value tracking its progress.
 //
-// Its methods are defined next to the inherited methods from the embedded
-// promise.
-//
-// This is just a draft implementation, a proper implementation should
-// care about not passing nil callbacks, and maybe other things.
-type HttpPromise struct {
-	promise.Promise // always a GoPromise, in this implementation
-}
-
-func NewHttpPromise(resChan chan promise.Res) *HttpPromise {
-	return &HttpPromise{Promise: promise.New(resChan)}
-}
-
-func newHttpPromiseInter(base promise.Promise) *HttpPromise {
-	return &HttpPromise{Promise: base}
-}
-
-func (hp *HttpPromise) GetResT() (*http.Response, error) {
-	res, _ := hp.GetRes()
-	resp := res[0].(*http.Response)
-	err := res[1].(error)
-	return resp, err
-}
-
-func (hp *HttpPromise) ThenT(cb func(resp *http.Response) (resResp *http.Response, resErr error)) *HttpPromise {
-	p := hp.Then(func(res promise.Res, ok bool) promise.Res {
-		resp := res[0].(*http.Response)
-		resResp, resErr := cb(resp)
-		return promise.ReuseRes(res, resResp, resErr) // will not create new Res value
+// This is just a draft implementation showing the use of the [promise.GoCtxRes] function.
+func AsyncGet(url string) *promise.Promise[*http.Response] {
+	return promise.GoValErr(func() (*http.Response, error) {
+		return http.Get(url)
 	})
-	newHP := newHttpPromiseInter(p)
-	return newHP
-}
-
-func (hp *HttpPromise) CatchT(cb func(err error, resp *http.Response) (resResp *http.Response, resErr error)) *HttpPromise {
-	p := hp.Catch(func(err error, res promise.Res, ok bool) promise.Res {
-		resp := res[0].(*http.Response)
-		resResp, resErr := cb(err, resp)
-		return promise.ReuseRes(res, resResp, resErr) // will not create new Res value
-	})
-	newHP := newHttpPromiseInter(p)
-	return newHP
 }

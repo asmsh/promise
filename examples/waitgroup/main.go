@@ -16,20 +16,28 @@ package main
 
 import (
 	"sync"
+	"time"
 
 	"github.com/asmsh/promise"
 )
 
-// The following function shows how a Promise maybe used instead of
+// The following function shows how a [promise.Group] maybe used instead of
 // a WaitGroup with only one task waiting for.
 func main() {
-	p := promise.Go(func() {
+	pg := promise.NewGroup[any]()
+
+	pg.Go(func() {
 		/* do some work, asynchronously */
+		time.Sleep(1 * time.Millisecond)
+	})
+	pg.Go(func() {
+		/* do some work, asynchronously */
+		time.Sleep(1 * time.Millisecond)
 	})
 
 	/* do some other work */
 
-	p.Wait() // wait for the async work to finish
+	pg.Wait() // wait for the async work to finish
 
 	/* do some other work */
 }
@@ -39,29 +47,24 @@ func main() {
 
 func stdAlt1() {
 	wg := &sync.WaitGroup{}
+
 	wg.Add(1)
 	go func(wg *sync.WaitGroup) {
 		/* do some work, asynchronously */
+		time.Sleep(1 * time.Millisecond)
+		wg.Done()
+	}(wg)
+
+	wg.Add(1)
+	go func(wg *sync.WaitGroup) {
+		/* do some work, asynchronously */
+		time.Sleep(1 * time.Millisecond)
 		wg.Done()
 	}(wg)
 
 	/* do some other work */
 
 	wg.Wait() // wait for the async work to finish
-
-	/* do some other work */
-}
-
-func stdAlt2() {
-	wait := make(chan struct{})
-	go func(wait chan struct{}) {
-		defer close(wait)
-		/* do some work, asynchronously */
-	}(wait)
-
-	/* do some other work */
-
-	<-wait // wait for the async work to finish
 
 	/* do some other work */
 }
