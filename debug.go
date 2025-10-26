@@ -57,16 +57,12 @@ const (
 	startGroupChanHandler
 	startGroupCtxHandler
 	startGroupGoHandler
-	startGroupGoErrHandler
-	startGroupGoResHandler
 	startGroupDelayHandler
 	// end values...
 	endGroupHandler
 	endGroupChanHandler
 	endGroupCtxHandler
 	endGroupGoHandler
-	endGroupGoErrHandler
-	endGroupGoResHandler
 	endGroupDelayHandler
 
 	// follow (Promise methods) values

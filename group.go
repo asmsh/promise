@@ -139,7 +139,7 @@ func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
 	// once the callback returns.
 	ctx, cancel := callbackCtx(g, nextProm.syncChan)
 
-	debug(nextProm, startHandler, startGroupHandler, startGroupGoResHandler)
+	debug(nextProm, startHandler, startGroupHandler, startGroupGoHandler)
 	go goCallbackHandler(nextProm, cb, ctx, cancel)
 
 	return nextProm
@@ -153,7 +153,7 @@ func goCallbackHandler[NextT, PrevT any](
 ) {
 	defer nextProm.group.freeGoroutine()
 	runCallbackHandler[NextT, PrevT](nextProm, cb, nil, ctx, cancel)
-	debug(nextProm, endHandler, endGroupHandler, endGroupGoResHandler)
+	debug(nextProm, endHandler, endGroupHandler, endGroupGoHandler)
 }
 
 func (g *Group[T]) Delay(
