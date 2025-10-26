@@ -51,12 +51,12 @@ func GoErr(cb func() error) *Promise[any] {
 	return GoCallback(goNextErrFunc[any, any](cb))
 }
 
-func GoValErr(cb func() (any, error)) *Promise[any] {
+func GoValErr[T any](cb func() (T, error)) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 
-	return GoCallback(goNextValErrFunc[any, any](cb))
+	return GoCallback(goNextValErrFunc[T, T](cb))
 }
 
 func GoCtxErr(cb func(ctx context.Context) error) *Promise[any] {
@@ -67,12 +67,12 @@ func GoCtxErr(cb func(ctx context.Context) error) *Promise[any] {
 	return GoCallback(ctxNextErrFunc[any, any](cb))
 }
 
-func GoCtxValErr(cb func(ctx context.Context) (any, error)) *Promise[any] {
+func GoCtxValErr[T any](cb func(ctx context.Context) (T, error)) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 
-	return GoCallback(ctxNextValErrFunc[any, any](cb))
+	return GoCallback(ctxNextValErrFunc[T, T](cb))
 }
 
 // GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
