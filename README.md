@@ -1,4 +1,9 @@
-# Promise [![PkgGoDev](https://pkg.go.dev/badge/github.com/asmsh/promise)](https://pkg.go.dev/github.com/asmsh/promise) [![Go Report Card](https://goreportcard.com/badge/github.com/asmsh/promise)](https://goreportcard.com/report/github.com/asmsh/promise) [![GoCoverIO](https://gocover.io/_badge/github.com/asmsh/promise)](https://gocover.io/github.com/asmsh/promise) [![Tests](https://github.com/asmsh/promise/workflows/Tests/badge.svg)](https://github.com/asmsh/promise/actions)
+# Promise
+
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/asmsh/promise)](https://pkg.go.dev/github.com/asmsh/promise)
+[![Go Report Card](https://goreportcard.com/badge/github.com/asmsh/promise)](https://goreportcard.com/report/github.com/asmsh/promise)
+[![Tests](https://github.com/asmsh/promise/workflows/Tests/badge.svg)](https://github.com/asmsh/promise/actions)
+[![Go Coverage](https://github.com/asmsh/promise/wiki/coverage.svg)](https://raw.githack.com/wiki/asmsh/promise/coverage.html)
 
 *Fast, lightweight, and lock-free promises for Go... the Go way*
 
