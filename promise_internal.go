@@ -92,15 +92,27 @@ func (p *Promise[T]) extsChan() chan extQueue[T] {
 	if extChanP != nil {
 		return *extChanP
 	}
-	// initiate the callsQ value, even though the chan might not be used after all,
-	// because if we initiated it after the CAS below, it might be available to some
-	// call and make that call block until we initiate it.
+	return p.extsChanSlow()
+}
+
+func (p *Promise[T]) extsChanSlow() chan extQueue[T] {
+	// create the potential new extChan and attempt to set it.
+	// note: we only init the extQueue once we win the CAS, to make sure
+	// the readState returns the State of the promise at the time the in-use
+	// extChan is created.
+	// this is guaranteed as after the CAS, the select in the ext call will
+	// block on either a receive that will happen once the readState returns
+	// with the current State and the extQueue is initiated.
+	// or, once the waitChan is closed.
+	// and, if the send below was instead received by the promise's handleExtCalls,
+	// then it means that the waitChan is already closed, so the ext call will
+	// unblock nonetheless.
 	extChan := make(chan extQueue[T], 1)
-	extChan <- extQueue[T]{initState: p.readState()}
 	if p.extChanP.CompareAndSwap(nil, &extChan) {
+		extChan <- extQueue[T]{initState: p.readState()}
 		return extChan
 	}
-	extChanP = p.extChanP.Load()
+	extChanP := p.extChanP.Load()
 	return *extChanP
 }
 
