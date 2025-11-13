@@ -16,9 +16,17 @@
 
 package promise
 
+import "log"
+
 var debugEnabled = true
 
+var debugLogs bool
+
 func debug[T any](p *Promise[T], de ...debugEvent) {
+	if debugLogs {
+		log.Printf("debug: [%p] %v\n", p, de)
+	}
+
 	if p.group == nil {
 		return
 	}
