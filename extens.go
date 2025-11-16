@@ -47,8 +47,8 @@ func selectHandler[T any](
 	// resChan is populated lazily, only if it's needed.
 	var resChan chan IdxRes[T]
 
-	// res represent the resolve result.
-	res := IdxRes[T]{}
+	// res represent the resolve [Result].
+	var res IdxRes[T]
 
 	// loopCnt records how many iterations happened in the loop below.
 	var loopCnt int
@@ -58,7 +58,6 @@ func selectHandler[T any](
 	var randIdx uniquerand.Int
 	randIdx.Reset(len(ps))
 
-loop:
 	for idx, ok := randIdx.Get(); ok; idx, ok = randIdx.Get() {
 		currProm := ps[idx]
 		loopCnt++
@@ -123,7 +122,7 @@ loop:
 
 		// if the promise was resolved synchronously, break and use its result.
 		if res.Result != nil {
-			break loop
+			break
 		}
 	}
 
