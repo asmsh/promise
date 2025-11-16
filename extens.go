@@ -18,6 +18,13 @@ import (
 	"github.com/asmsh/uniquerand"
 )
 
+// Wait blocks until all the passed [Promise] values, p, resolves.
+func Wait[T any](p ...*Promise[T]) {
+	for _, pp := range p {
+		<-pp.WaitChan()
+	}
+}
+
 // Select returns a Promise value that resolves to the first Promise that's
 // resolved from the Promise values passed.
 // It doesn't wait for all passed Promise values to resolve.
