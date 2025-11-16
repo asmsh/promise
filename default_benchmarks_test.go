@@ -27,7 +27,7 @@ func BenchmarkChan(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Chan[any](resChan)
 		}
 		_ = p
@@ -40,7 +40,7 @@ func BenchmarkCtx(b *testing.B) {
 		ctx := context.Background()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Ctx(ctx)
 		}
 		_ = p
@@ -52,7 +52,7 @@ func BenchmarkCtx(b *testing.B) {
 		defer cancel()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Ctx(ctx)
 		}
 		_ = p
@@ -64,7 +64,7 @@ func BenchmarkGo(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Go(func() {})
 		}
 		_ = p
@@ -74,7 +74,7 @@ func BenchmarkGo(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Go(func() {
 				panic("panic")
 			})
@@ -88,7 +88,7 @@ func BenchmarkGoErr(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoErr(func() error { return nil })
 		}
 		_ = p
@@ -98,7 +98,7 @@ func BenchmarkGoErr(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoErr(func() error {
 				return testStrError("test error")
 			})
@@ -110,7 +110,7 @@ func BenchmarkGoErr(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoErr(func() error {
 				panic("panic")
 			})
@@ -124,7 +124,7 @@ func BenchmarkGoCtxRes(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoCtxRes(func(ctx context.Context) Result[any] {
 				return EmptyRes[any]()
 			})
@@ -136,7 +136,7 @@ func BenchmarkGoCtxRes(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoCtxRes(func(ctx context.Context) Result[any] {
 				return ValRes[any]("golang")
 			})
@@ -148,7 +148,7 @@ func BenchmarkGoCtxRes(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoCtxRes(func(ctx context.Context) Result[any] {
 				return ValErrRes[any]("golang", nil)
 			})
@@ -160,7 +160,7 @@ func BenchmarkGoCtxRes(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoCtxRes(func(ctx context.Context) Result[any] {
 				return ValErrRes[any]("golang", newStrError())
 			})
@@ -174,7 +174,7 @@ func BenchmarkGoFunc(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoFunc[any, any](func() error {
 				return nil
 			})
@@ -186,7 +186,7 @@ func BenchmarkGoFunc(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoFunc[any, int](func() error {
 				return newStrError()
 			})
@@ -198,7 +198,7 @@ func BenchmarkGoFunc(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = GoFunc[any, any](func() error {
 				return newPtrError()
 			})
@@ -212,7 +212,7 @@ func BenchmarkDelay(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Delay(EmptyRes[any](), time.Microsecond)
 		}
 		_ = p
@@ -222,7 +222,7 @@ func BenchmarkDelay(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Delay[any](nil, time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
 		}
 		_ = p
@@ -232,7 +232,7 @@ func BenchmarkDelay(b *testing.B) {
 		var p *Promise[string]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Delay(ValRes("golang"), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
 		}
 		_ = p
@@ -243,7 +243,7 @@ func BenchmarkDelay(b *testing.B) {
 		var err = newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Delay(ErrRes[string](err), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
 		}
 		_ = p
@@ -255,7 +255,7 @@ func BenchmarkWrap(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Wrap[any](nil)
 		}
 		_ = p
@@ -265,7 +265,7 @@ func BenchmarkWrap(b *testing.B) {
 		var p *Promise[string]
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Wrap(ValRes("golang"))
 		}
 		_ = p
@@ -276,7 +276,7 @@ func BenchmarkWrap(b *testing.B) {
 		var err = newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Wrap(ErrRes[string](err))
 		}
 		_ = p
@@ -287,7 +287,7 @@ func BenchmarkWrap(b *testing.B) {
 		var err = newStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
-		for b.Loop() {
+		for range b.N {
 			p = Wrap(PanicRes[string](err))
 		}
 		_ = p

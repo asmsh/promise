@@ -176,63 +176,67 @@ func TestFollowCallback(t *testing.T) {
 }
 
 func BenchmarkFollow(b *testing.B) {
-	b.ReportAllocs()
-
+	var pStr *Promise[int]
 	pBase := GoCtxRes(func(ctx context.Context) Result[string] {
 		return ValRes("10")
 	})
-	for b.Loop() {
-		pStr := Follow[int](
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		pStr = Follow[int](
 			pBase,
 			func(ctx context.Context, res Result[string]) int {
 				return 10
 			},
 		)
-		pStr = pStr
 	}
+	_ = pStr
 }
 
 func BenchmarkFollowCallback(b *testing.B) {
 	b.Run("Standard Callback", func(b *testing.B) {
-		b.ReportAllocs()
-
+		var pStr *Promise[int]
 		pBase := GoCtxRes(func(ctx context.Context) Result[string] {
 			return ValRes("10")
 		})
-		for b.Loop() {
-			pStr := FollowCallback(
+		b.ReportAllocs()
+		b.ResetTimer()
+		for range b.N {
+			pStr = FollowCallback(
 				pBase,
 				CallbackFrom[int, string](func() int {
 					return 10
 				}),
 			)
-			pStr = pStr
 		}
+		_ = pStr
 	})
 
 	b.Run("Custom Callback", func(b *testing.B) {
-		b.ReportAllocs()
-
+		var pStr *Promise[int]
 		pBase := GoCtxRes(func(ctx context.Context) Result[string] {
 			return ValRes("10")
 		})
-		for b.Loop() {
-			pStr := FollowCallback(pBase, stringToIntCB{})
-			pStr = pStr
+		b.ReportAllocs()
+		b.ResetTimer()
+		for range b.N {
+			pStr = FollowCallback(pBase, stringToIntCB{})
 		}
+		_ = pStr
 	})
 }
 
 func BenchmarkCallbackFrom(b *testing.B) {
 	b.Run("Standard Callback", func(b *testing.B) {
+		var cb Callback[int, string]
 		b.ReportAllocs()
-
-		for b.Loop() {
-			cb := CallbackFrom[int, string](func() int {
+		b.ResetTimer()
+		for range b.N {
+			cb = CallbackFrom[int, string](func() int {
 				return 10
 			})
-			cb = cb
 		}
+		_ = cb
 	})
 }
 
