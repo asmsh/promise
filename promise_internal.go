@@ -244,7 +244,7 @@ func (p *Promise[T]) resolveToPanicRes(res Result[T]) {
 	// handle all group calls for p's group.
 	handleGroupCalls(p)
 
-	// note: any code that gets added after closeSyncCtx isn't guaranteed
+	// note: any code that gets added after close(p.syncChan) isn't guaranteed
 	// to be executed without extra wait arrangements (via Group Wait methods,
 	// or extension functions).
 }

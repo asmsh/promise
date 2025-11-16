@@ -50,7 +50,7 @@ func selectHandler[T any](
 	// res represent the resolve result.
 	res := IdxRes[T]{}
 
-	// loopCnt records how many iterations happened in the loop below
+	// loopCnt records how many iterations happened in the loop below.
 	var loopCnt int
 
 	// randIdx responsible for returning a random, unique, index in the provided
@@ -127,7 +127,7 @@ loop:
 		}
 	}
 
-	// because this is a Select extension call, only one result is expected
+	// because this is a Select extension call, only one result is expected.
 	if res.Result == nil {
 		res = <-resChan
 	}
