@@ -25,11 +25,11 @@ func Wait[T any](p ...*Promise[T]) {
 	}
 }
 
-// Select returns a Promise value that resolves to the first Promise that's
-// resolved from the Promise values passed.
-// It doesn't wait for all passed Promise values to resolve.
-// The resulting IdxRes value holds the Result value of the resolved Promise.
-// The original order of the IdxRes's Promise can be retrieved from its Idx field.
+// Select returns a [Promise] that resolves to the first [Promise]
+// resolved from p.
+//
+// The resulting [IdxRes] value holds the [Result] value of the resolved
+// [Promise], and the original order is saved in the [IdxRes.Idx] field.
 func Select[T any](p ...*Promise[T]) *Promise[IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[IdxRes[T]](nil)
@@ -136,18 +136,20 @@ loop:
 	nextProm.resolveToRes(newSingleRes(res.State(), res))
 }
 
-// All returns a Promise value that resolves to Success if all Promise values
-// passed resolved to Success.
-// It resolves to Panic if at least one resolved to Panic.
-// It resolves to Error if at least one resolved to Error and none resolves
-// to Panic.
+// All returns a [Promise] that resolves to [Success] if all the passed
+// [Promise] values, p, resolved to [Success].
+// It resolves to [Panic] if at least one resolved to [Panic].
+// It resolves to [Error] if at least one resolved to [Error] and none resolved
+// to [Panic].
 //
-// It doesn't wait for all passed Promise values to resolve, unless the resolved
-// one(s) is Panic.
+// The returned [Promise] resolves on the first [Error], otherwise it waits
+// all the passed [Promise] values to resolve.
+// It doesn't resolve on [Panic], despite the fact that the returned [Promise]
+// will be resolved to [Panic], if there's any.
 //
-// The resulting IdxRes slice holds the Result values of the Promise values passed
-// up to when the returned Promise was resolved.
-// The original order of any IdxRes's Promise can be retrieved from its Idx field.
+// The resulting [IdxRes] slice holds the [Result] values of the [Promise]
+// values passed, up to when the returned [Promise] was resolved, and their
+// original order is saved in the [IdxRes.Idx] field.
 func All[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
@@ -158,15 +160,15 @@ func All[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// AllWait returns a [Promise] that resolves to [Success] iff all the passed
-// promises resolved to [Success].
+// AllWait returns a [Promise] that resolves to [Success] if all the passed
+// [Promise] values, p, resolved to [Success].
 // It resolves to [Panic] if at least one resolved to [Panic].
 // It resolves to [Error] if at least one resolved to [Error].
 //
-// It waits for all passed promises to resolve.
+// The returned [Promise] waits for all the passed [Promise] values to resolve.
 //
-// The resulting [IdxRes] slice holds the [Result] values of all [Promise] values
-// passed, and their original order can be retrieved from its [IdxRes.Idx] field.
+// The resulting [IdxRes] slice holds the [Result] values of all [Promise]
+// values passed, and their original order is saved in the [IdxRes.Idx] field.
 func AllWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
@@ -177,17 +179,20 @@ func AllWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// Any returns a Promise value that resolves to Success if at least one of
-// the Promise values passed resolves to Success and none resolves to Panic.
-// It resolves to Panic if at least one resolved to Panic.
-// It resolves to Error if all resolves to Error.
+// Any returns a [Promise] that resolves to [Success] if at least one of
+// the passed [Promise] values, p, resolved to [Success] and none resolved
+// to [Panic].
+// It resolves to [Panic] if at least one resolved to [Panic].
+// It resolves to [Error] if all resolved to [Error].
 //
-// It doesn't wait for all passed Promise values to resolve, unless the resolved
-// one(s) is Panic.
+// The returned [Promise] resolves on the first [Success], otherwise it waits
+// all the passed [Promise] values to resolve.
+// It doesn't resolve on [Panic], despite the fact that the returned [Promise]
+// will be resolved to [Panic], if there's any.
 //
-// The resulting IdxRes slice holds the Result values of the Promise values passed
-// up to when the returned Promise was resolved.
-// The original order of any IdxRes's Promise can be retrieved from its Idx field.
+// The resulting [IdxRes] slice holds the [Result] values of the [Promise]
+// values passed, up to when the returned [Promise] was resolved, and their
+// original order is saved in the [IdxRes.Idx] field.
 func Any[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
@@ -198,15 +203,16 @@ func Any[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// AnyWait returns a Promise value that resolves to Success if at least one of
-// the Promise values passed resolves to Success and none resolves to Panic.
-// It resolves to Panic if at least one resolved to Panic.
-// It resolves to Error if all resolves to Error.
+// AnyWait returns a [Promise] that resolves to [Success] if at least one of
+// the passed [Promise] values, p, resolved to [Success] and none resolved
+// to [Panic].
+// It resolves to [Panic] if at least one resolved to [Panic].
+// It resolves to [Error] if all resolved to [Error].
 //
-// It waits for all passed Promise values to resolve.
+// The returned [Promise] waits for all the passed [Promise] values to resolve.
 //
-// The resulting IdxRes slice holds the Result values of all Promise values passed.
-// The original order of any IdxRes's Promise can be retrieved from its Idx field.
+// The resulting [IdxRes] slice holds the [Result] values of all [Promise]
+// values passed, and their original order is saved in the [IdxRes.Idx] field.
 func AnyWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
@@ -217,13 +223,13 @@ func AnyWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// Join returns a Promise value that resolves to Success after all Promise
-// values passed resolves.
+// Join returns a [Promise] that resolves to [Success] after all the passed
+// [Promise] values, p, resolves.
 //
-// It waits for all passed Promise values to resolve.
+// The returned [Promise] waits for all the passed [Promise] values to resolve.
 //
-// The resulting IdxRes slice holds the Result values of all Promise values passed.
-// The original order of any IdxRes's Promise can be retrieved from its Idx field.
+// The resulting [IdxRes] slice holds the [Result] values of all [Promise]
+// values passed, and their original order is saved in the [IdxRes.Idx] field.
 func Join[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
