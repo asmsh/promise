@@ -552,6 +552,13 @@ func TestPanics(t *testing.T) {
 						t.Logf("p recover state: %v {%T}\n", res.State(), res.State())
 					}
 
+					if !errors.Is(res.Err(), ErrPromisePanicked) {
+						t.Errorf("p Err(): should be ErrPromisePanicked")
+					}
+					if perr := new(PanicError); !errors.As(res.Err(), perr) {
+						t.Fatalf("p Res() got unexpected error: %v", res.Err())
+					}
+
 					return nil
 				})
 
@@ -589,6 +596,13 @@ func TestPanics(t *testing.T) {
 						t.Logf("ip recover state: %v {%T}\n", res.State(), res.State())
 					}
 
+					if !errors.Is(res.Err(), ErrPromisePanicked) {
+						t.Errorf("ip Err(): should be ErrPromisePanicked")
+					}
+					if perr := new(PanicError); !errors.As(res.Err(), perr) {
+						t.Fatalf("ip Res() got unexpected error: %v", res.Err())
+					}
+
 					return nil
 				})
 
@@ -624,6 +638,13 @@ func TestPanics(t *testing.T) {
 						t.Logf("ips recover val: %v {%T}\n", res.Val(), res.Val())
 						t.Logf("ips recover err: %v {%T}\n", res.Err(), res.Err())
 						t.Logf("ips recover state: %v {%T}\n", res.State(), res.State())
+					}
+
+					if !errors.Is(res.Err(), ErrPromisePanicked) {
+						t.Errorf("ips Err(): should be ErrPromisePanicked")
+					}
+					if perr := new(PanicError); !errors.As(res.Err(), perr) {
+						t.Fatalf("ips Res() got unexpected error: %v", res.Err())
 					}
 
 					// clone the received [Result] value before filtering it.
