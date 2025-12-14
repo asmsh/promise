@@ -26,7 +26,7 @@ func getErrorBenchmarkPromise() *Promise[any] {
 	prom := GoCtxRes(func(ctx context.Context) Result[any] {
 		close(waitChan)
 		time.Sleep(100 * time.Microsecond)
-		return ErrRes[any](newStrError())
+		return ErrRes[any](newTestStrError())
 	})
 	<-waitChan // make sure the promise is started before we return it.
 	return prom
@@ -112,7 +112,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 
 	b.Run("sync-error-resolved", func(b *testing.B) {
 		var res Result[any]
-		prom := Wrap[any](ErrRes[any](newStrError()))
+		prom := Wrap[any](ErrRes[any](newTestStrError()))
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -521,7 +521,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 
 	b.Run("with-res_wait-call", func(b *testing.B) {
 		prom := getSuccessBenchmarkPromise()
-		valOrigPtr := newPtrError()
+		valOrigPtr := newTestPtrError()
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -536,7 +536,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 	b.Run("with-res_res-call", func(b *testing.B) {
 		var res Result[any]
 		prom := getSuccessBenchmarkPromise()
-		valOrigPtr := newPtrError()
+		valOrigPtr := newTestPtrError()
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -554,7 +554,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		var res Result[any]
 		var err error
 		prom := getSuccessBenchmarkPromise()
-		valOrigPtr := newPtrError()
+		valOrigPtr := newTestPtrError()
 
 		b.ReportAllocs()
 		b.ResetTimer()
@@ -577,7 +577,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		var res Result[any]
 		var val any
 		prom := getSuccessBenchmarkPromise()
-		valOrigPtr := newPtrError()
+		valOrigPtr := newTestPtrError()
 
 		b.ReportAllocs()
 		b.ResetTimer()

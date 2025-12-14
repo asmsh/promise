@@ -25,11 +25,9 @@ import (
 // it's a string to allow comparing its values.
 type testStrError string
 
-func (t testStrError) Error() string {
-	return string(t)
-}
+func (t testStrError) Error() string { return string(t) }
 
-func newStrError() error {
+func newTestStrError() error {
 	return testStrError("str_test_error")
 }
 
@@ -39,11 +37,9 @@ type testPtrError struct {
 	txt string
 }
 
-func (t *testPtrError) Error() string {
-	return t.txt
-}
+func (t *testPtrError) Error() string { return t.txt }
 
-func newPtrError() error {
+func newTestPtrError() error {
 	return &testPtrError{txt: "ptr_test_error"}
 }
 
@@ -77,7 +73,7 @@ func TestPanicking(t *testing.T) {
 }
 
 func TestRejection(t *testing.T) {
-	wantErr := newStrError()
+	wantErr := newTestStrError()
 
 	t.Run("Callback handling", func(t *testing.T) {
 		p := GoCtxRes(func(ctx context.Context) Result[any] {
@@ -156,7 +152,7 @@ func TestFinally(t *testing.T) {
 	t.Run("Success callback on Error", func(t *testing.T) {
 		called := atomic.Bool{}
 		res := GoCtxRes(func(ctx context.Context) Result[any] {
-			return ErrRes[any](newStrError())
+			return ErrRes[any](newTestStrError())
 		}).Finally(func(ctx context.Context) {
 			called.Store(true)
 			return

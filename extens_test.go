@@ -415,7 +415,7 @@ func TestPanics(t *testing.T) {
 			name: "GoFunc[any,any]",
 			p: func() *Promise[any] {
 				return GoFunc[any, any](func() error {
-					panic(newStrError())
+					panic(newTestStrError())
 				})
 			},
 		},
@@ -428,7 +428,7 @@ func TestPanics(t *testing.T) {
 						return nil
 					}),
 					GoFunc[any, any](func() error {
-						panic(newStrError())
+						panic(newTestStrError())
 					}),
 				)
 			},
@@ -442,10 +442,10 @@ func TestPanics(t *testing.T) {
 						return nil
 					}),
 					GoFunc[any, any](func() error {
-						panic(newStrError())
+						panic(newTestStrError())
 					}),
 					GoFunc[any, any](func() error {
-						panic(newStrError())
+						panic(newTestStrError())
 					}),
 					GoFunc[any, any](func() error {
 						return nil
@@ -462,10 +462,10 @@ func TestPanics(t *testing.T) {
 						return nil
 					}),
 					GoFunc[any, any](func() error {
-						panic(newStrError())
+						panic(newTestStrError())
 					}),
 					GoFunc[any, any](func() error {
-						panic(newStrError())
+						panic(newTestStrError())
 					}),
 					GoFunc[any, any](func() error {
 						return nil
@@ -478,7 +478,7 @@ func TestPanics(t *testing.T) {
 			ips: func() *Promise[[]IdxRes[any]] {
 				return Any(
 					GoFunc[any, any](func() error {
-						panic(newStrError())
+						panic(newTestStrError())
 					}),
 					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
@@ -496,14 +496,14 @@ func TestPanics(t *testing.T) {
 			ips: func() *Promise[[]IdxRes[any]] {
 				return AnyWait(
 					GoFunc[any, any](func() error {
-						panic(newStrError())
+						panic(newTestStrError())
 					}),
 					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
 						return nil
 					}),
 					GoFunc[any, any](func() error {
-						return newStrError()
+						return newTestStrError()
 					}),
 				)
 			},
@@ -514,7 +514,7 @@ func TestPanics(t *testing.T) {
 			ips: func() *Promise[[]IdxRes[any]] {
 				return Join(
 					GoFunc[any, any](func() error {
-						panic(newStrError())
+						panic(newTestStrError())
 					}),
 					GoFunc[any, any](func() error {
 						time.Sleep(time.Second)
@@ -679,8 +679,8 @@ func TestPanics(t *testing.T) {
 			}
 
 			if !test.externalPanic {
-				if !errors.Is(err, newStrError()) {
-					t.Errorf("err: %v doesn't implement newStrError\n", err)
+				if !errors.Is(err, newTestStrError()) {
+					t.Errorf("err: %v doesn't implement newTestStrError\n", err)
 				}
 			}
 		})

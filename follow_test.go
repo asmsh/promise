@@ -37,13 +37,23 @@ func (stringToIntCB) Call(_ context.Context, prevRes Result[string]) (nextRes Re
 }
 
 // testResult is used to test returning a custom implementation of [Result].
-type testResult struct {
-	val string
+type testResult[T any] struct {
+	val   T
+	err   error
+	state State
 }
 
-func (t testResult) Val() string { return t.val }
-func (testResult) Err() error    { return nil }
-func (testResult) State() State  { return Success }
+func (t testResult[T]) Val() T       { return t.val }
+func (t testResult[T]) Err() error   { return t.err }
+func (t testResult[T]) State() State { return t.state }
+
+func newTestResult[T any](val T, err error, state State) Result[T] {
+	return testResult[T]{
+		val:   val,
+		err:   err,
+		state: state,
+	}
+}
 
 func TestFollow(t *testing.T) {
 	t.Run("standard Result", func(t *testing.T) {
@@ -87,7 +97,7 @@ func TestFollow(t *testing.T) {
 		pStr := Follow[string](
 			pAny,
 			func(ctx context.Context, res Result[*int]) Result[string] {
-				return testResult{fmt.Sprintf("%d", *res.Val())}
+				return newTestResult(fmt.Sprintf("%d", *res.Val()), nil, Success)
 			},
 		)
 		pInt := Follow[int](

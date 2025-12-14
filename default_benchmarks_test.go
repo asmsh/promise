@@ -162,7 +162,7 @@ func BenchmarkGoCtxRes(b *testing.B) {
 		b.ResetTimer()
 		for range b.N {
 			p = GoCtxRes(func(ctx context.Context) Result[any] {
-				return ValErrRes[any]("golang", newStrError())
+				return ValErrRes[any]("golang", newTestStrError())
 			})
 		}
 		_ = p
@@ -188,7 +188,7 @@ func BenchmarkGoFunc(b *testing.B) {
 		b.ResetTimer()
 		for range b.N {
 			p = GoFunc[any, int](func() error {
-				return newStrError()
+				return newTestStrError()
 			})
 		}
 		_ = p
@@ -200,7 +200,7 @@ func BenchmarkGoFunc(b *testing.B) {
 		b.ResetTimer()
 		for range b.N {
 			p = GoFunc[any, any](func() error {
-				return newPtrError()
+				return newTestPtrError()
 			})
 		}
 		_ = p
@@ -240,7 +240,7 @@ func BenchmarkDelay(b *testing.B) {
 
 	b.Run("non-empty failed result with conditions", func(b *testing.B) {
 		var p *Promise[string]
-		var err = newStrError()
+		var err = newTestStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
@@ -273,7 +273,7 @@ func BenchmarkWrap(b *testing.B) {
 
 	b.Run("Error result", func(b *testing.B) {
 		var p *Promise[string]
-		var err = newStrError()
+		var err = newTestStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
@@ -284,7 +284,7 @@ func BenchmarkWrap(b *testing.B) {
 
 	b.Run("Panic result", func(b *testing.B) {
 		var p *Promise[string]
-		var err = newStrError()
+		var err = newTestStrError()
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
