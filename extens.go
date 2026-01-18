@@ -15,7 +15,7 @@
 package promise
 
 import (
-	"github.com/asmsh/uniquerand"
+	"github.com/asmsh/uniquerand/v2"
 )
 
 // Wait blocks until all the passed [Promise] values, p, resolves.
@@ -53,10 +53,9 @@ func selectHandler[T any](
 	// loopCnt records how many iterations happened in the loop below.
 	var loopCnt int
 
-	// randIdx responsible for returning a random, unique, index in the provided
-	// list of promises.
-	var randIdx uniquerand.Int
-	randIdx.Reset(len(ps))
+	// randIdx responsible for returning a random, unique, index in
+	// the provided list of promises.
+	randIdx := uniquerand.NewN(uniquerand.Config[int]{Max: len(ps)})
 
 	for idx, ok := randIdx.Get(); ok; idx, ok = randIdx.Get() {
 		currProm := ps[idx]
@@ -254,10 +253,9 @@ func joinHandler[T any](
 	// loopCnt records how many iterations happened in the loop below
 	var loopCnt int
 
-	// randIdx responsible for returning a random, unique, index in the provided
-	// list of promises.
-	var randIdx uniquerand.Int
-	randIdx.Reset(len(ps))
+	// randIdx responsible for returning a random, unique, index in
+	// the provided list of promises.
+	randIdx := uniquerand.NewN(uniquerand.Config[int]{Max: len(ps)})
 
 	// try to find a suitable resolved promise, based on the provided flags,
 	// or arrange for a notification once a promise is resolved.

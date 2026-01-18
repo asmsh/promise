@@ -27,8 +27,11 @@ type testStrError string
 
 func (t testStrError) Error() string { return string(t) }
 
-func newTestStrError() error {
-	return testStrError("str_test_error")
+func newTestStrError(msg ...string) error {
+	if len(msg) == 0 {
+		return testStrError("str_test_error")
+	}
+	return testStrError(msg[0])
 }
 
 // testPtrError is an error implementation that's used only for testing.

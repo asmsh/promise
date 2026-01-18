@@ -25,6 +25,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/asmsh/uniquerand/v2"
 )
 
 var testEnableLogs = false
@@ -37,9 +39,8 @@ func init() {
 	close(closedChan)
 }
 
-func getTestAsyncSuccessPromise(
+func getBenchmarkAsyncPromise(
 	g *Group[string],
-	id int,
 	d time.Duration,
 	cnt *atomic.Int64,
 	wg *sync.WaitGroup,
@@ -48,6 +49,65 @@ func getTestAsyncSuccessPromise(
 		wg.Done()
 		defer cnt.Add(1)
 		time.Sleep(d)
+	})
+}
+
+func getBenchmarkSyncPromise(g *Group[string]) *Promise[string] {
+	return g.Wrap(nil)
+}
+
+func createTestAsyncResString(id int, state State, d time.Duration) string {
+	return fmt.Sprintf("id#%d test async %s: %s", id, state, d)
+}
+
+func createTestSyncResString(id int, state State) string {
+	return fmt.Sprintf("id#%d test sync %s", id, state)
+}
+
+type generatedResult struct {
+	idx   int // local index to the respective list.
+	id    int
+	state State
+	delay time.Duration // will be 0 for sync Result.
+}
+
+func (gr generatedResult) String() string {
+	if gr.delay == 0 {
+		return createTestSyncResString(gr.id, gr.state)
+	}
+	return createTestAsyncResString(gr.id, gr.state, gr.delay)
+}
+
+func isEqualResult[TRes extRes](got, want Result[TRes]) bool {
+	eqState := got.State() == want.State()
+
+	// compare the err and val using their string representation...
+	eqErr := true
+	if gotErr, wantErr := got.Err(), want.Err(); gotErr != nil || wantErr != nil {
+		gotErrStr := fmt.Sprintf("%s", got.Err())
+		wantErrStr := fmt.Sprintf("%s", want.Err())
+		eqErr = gotErrStr == wantErrStr
+	}
+
+	gotValStr := fmt.Sprintf("%s", got.Val())
+	wantValStr := fmt.Sprintf("%s", want.Val())
+	eqVal := gotValStr == wantValStr
+
+	return eqState && eqErr && eqVal
+}
+
+func getTestAsyncSuccessPromise(
+	g *Group[string],
+	id int,
+	d time.Duration,
+	cnt *atomic.Int64,
+	wg *sync.WaitGroup,
+) *Promise[string] {
+	return g.GoValErr(func() (string, error) {
+		wg.Done()
+		defer cnt.Add(1)
+		time.Sleep(d)
+		return createTestAsyncResString(id, Success, d), nil
 	})
 }
 
@@ -62,7 +122,7 @@ func getTestAsyncErrorPromise(
 		wg.Done()
 		defer cnt.Add(1)
 		time.Sleep(d)
-		return "", errors.New(fmt.Sprintf("%d hello world async %s", id, d))
+		return "", errors.New(createTestAsyncResString(id, Error, d))
 	})
 }
 
@@ -77,26 +137,53 @@ func getTestAsyncPanicPromise(
 		wg.Done()
 		defer cnt.Add(1)
 		time.Sleep(d)
-		panic(errors.New(fmt.Sprintf("%d hello world async %s", id, d)))
+		panic(errors.New(createTestAsyncResString(id, Panic, d)))
 	})
 }
 
-var (
-	syncSuccessPromise1 = Wrap[string](ValRes("hello world sync 1"))
-	syncErrorPromise1   = Wrap[string](ValErrRes("err world sync 1", errors.New("wrap error")))
-	syncPanicPromise1   = Wrap[string](PanicRes[string](errors.New("panic error")))
-)
+func getTestSyncSuccessPromise(g *Group[string], id int) *Promise[string] {
+	return g.Wrap(ValRes(createTestSyncResString(id, Success)))
+}
 
-type testCase struct {
+func getTestSyncErrorPromise(g *Group[string], id int) *Promise[string] {
+	return g.Wrap(ErrRes[string](errors.New(createTestSyncResString(id, Error))))
+}
+
+func getTestSyncPanicPromise(g *Group[string], id int) *Promise[string] {
+	return g.Wrap(PanicRes[string](errors.New(createTestSyncResString(id, Panic))))
+}
+
+// helper types for tests and benchmarks...
+type singleIdxRes = IdxRes[string]
+type multiIdxRes = []IdxRes[string]
+
+type extRes interface {
+	singleIdxRes | multiIdxRes
+}
+
+type waitFunc func(...*Promise[string])
+type idxFunc[TRes extRes] func(...*Promise[string]) *Promise[TRes]
+
+type singleIdxFunc = idxFunc[singleIdxRes]
+type multiIdxFunc = idxFunc[multiIdxRes]
+
+type extFuncs[TRes extRes] interface {
+	waitFunc | idxFunc[TRes]
+}
+
+// caseConfig is the definition of a test or benchmark case.
+// it needs to be compiled to a [testCase] using [compileTestCase].
+type caseConfig struct {
 	name string
-	p    []*Promise[string]
 
-	minWait time.Duration
-	maxWait time.Duration
-
-	counter *atomic.Int64
+	async generateAsyncPromisesConfig
+	sync  generateSyncPromisesConfig
 
 	extRes extensionsResult
+}
+
+func (c caseConfig) totalResultSize() int {
+	return c.async.totalResultSize() + c.sync.totalResultSize()
 }
 
 type generateAsyncPromisesConfig struct {
@@ -118,24 +205,37 @@ type generateAsyncPromisesConfig struct {
 	maxWait        time.Duration
 	minDelayedWait time.Duration
 	maxDelayedWait time.Duration
+
+	// useUniqueDur will be set if we want to track which time.Duration
+	// random values have been used, so that the values are unique, which
+	// allows ordering by resolution delay.
+	useUniqueDur     bool
+	uniqueDur        *uniquerand.N[time.Duration]
+	delayedUniqueDur *uniquerand.N[time.Duration]
 }
 
-func (g generateAsyncPromisesConfig) resultSize() int {
-	if g.successNum != 0 || g.successDelayNum != 0 ||
-		g.errorNum != 0 || g.errorDelayNum != 0 ||
-		g.panicNum != 0 || g.panicDelayNum != 0 {
-		return g.successNum + g.successDelayNum +
-			g.errorNum + g.errorDelayNum +
-			g.panicNum + g.panicDelayNum
+func (g generateAsyncPromisesConfig) totalResultSize() int {
+	resultSize := g.resultSize()
+	delayedResultSize := g.delayedResultSize()
+
+	if totalResult := resultSize + delayedResultSize; totalResult != 0 {
+		return totalResult
 	}
+
 	return g.totalNum
 }
 
-func (g generateAsyncPromisesConfig) validate() {
+func (g generateAsyncPromisesConfig) resultSize() int {
+	return g.successNum + g.errorNum + g.panicNum
+}
+
+func (g generateAsyncPromisesConfig) delayedResultSize() int {
+	return g.successDelayNum + g.errorDelayNum + g.panicDelayNum
+}
+
+func (g *generateAsyncPromisesConfig) validate() {
 	// if any of the specific values is provided, the totalNum must be 0
-	if g.successNum != 0 || g.successDelayNum != 0 ||
-		g.errorNum != 0 || g.errorDelayNum != 0 ||
-		g.panicNum != 0 || g.panicDelayNum != 0 {
+	if g.resultSize() != 0 || g.delayedResultSize() != 0 {
 		if g.totalNum != 0 {
 			panic(fmt.Sprintf("bad generateAsyncPromisesConfig: unexpectedly totalNum=%d", g.totalNum))
 		}
@@ -154,6 +254,38 @@ func (g generateAsyncPromisesConfig) validate() {
 			panic(fmt.Sprintf("bad delayed wait params: minDelayedWait=%s, maxDelayedWait=%s", g.minDelayedWait, g.maxDelayedWait))
 		}
 	}
+
+	if g.useUniqueDur {
+		g.uniqueDur = uniquerand.NewN(uniquerand.Config[time.Duration]{
+			// default range of 200ms, with 5ms step.
+			Min:  cmp.Or(g.minWait, 1*time.Millisecond),
+			Max:  cmp.Or(g.maxWait, 201*time.Millisecond),
+			Step: 5 * time.Millisecond,
+		})
+
+		g.delayedUniqueDur = uniquerand.NewN(uniquerand.Config[time.Duration]{
+			// default range of 200ms, with 5ms step.
+			Min:  cmp.Or(g.minDelayedWait, 1000*time.Millisecond),
+			Max:  cmp.Or(g.maxDelayedWait, 1200*time.Millisecond),
+			Step: 5 * time.Millisecond,
+		})
+
+		if g.totalNum != 0 {
+			if g.uniqueDur.Cap() < g.totalNum {
+				panic(fmt.Sprintf("bad unique wait params: minWait=%s, maxWait=%s", g.minWait, g.maxWait))
+			}
+			if g.delayedUniqueDur.Cap() < g.totalNum {
+				panic(fmt.Sprintf("bad unique delayed wait params: minDelayedWait=%s, maxDelayedWait=%s", g.minDelayedWait, g.maxDelayedWait))
+			}
+		} else {
+			if g.uniqueDur.Cap() < g.resultSize() {
+				panic(fmt.Sprintf("bad unique wait params: minWait=%s, maxWait=%s", g.minWait, g.maxWait))
+			}
+			if g.delayedUniqueDur.Cap() < g.delayedResultSize() {
+				panic(fmt.Sprintf("bad unique delayed wait params: minDelayedWait=%s, maxDelayedWait=%s", g.minDelayedWait, g.maxDelayedWait))
+			}
+		}
+	}
 }
 
 type generateSyncPromisesConfig struct {
@@ -166,7 +298,7 @@ type generateSyncPromisesConfig struct {
 	panicNum   int
 }
 
-func (g generateSyncPromisesConfig) resultSize() int {
+func (g generateSyncPromisesConfig) totalResultSize() int {
 	if g.successNum != 0 || g.errorNum != 0 || g.panicNum != 0 {
 		return g.successNum + g.errorNum + g.panicNum
 	}
@@ -182,40 +314,56 @@ func (g generateSyncPromisesConfig) validate() {
 	}
 }
 
+type extensionsCall struct {
+	// resState is the [State] of the returned [Result] by this call.
+	resState State
+
+	// targetState is the [State] value which this call returns early on.
+	// if not set (unknown), it means the call doesn't return early.
+	targetState State
+}
+
 type extensionsResult struct {
-	selectState  State
-	allState     State
-	allWaitState State
-	anyState     State
-	anyWaitState State
-	joinState    State
+	selectCall  extensionsCall
+	allCall     extensionsCall
+	allWaitCall extensionsCall
+	anyCall     extensionsCall
+	anyWaitCall extensionsCall
+	joinCall    extensionsCall
 }
 
 func (r extensionsResult) isStateUnknown() bool {
 	set := cmp.Or(
-		r.selectState,
-		r.allState,
-		r.allWaitState,
-		r.anyState,
-		r.anyWaitState,
-		r.joinState,
+		r.selectCall.resState,
+		r.allCall.resState,
+		r.allWaitCall.resState,
+		r.anyCall.resState,
+		r.anyWaitCall.resState,
+		r.joinCall.resState,
 	)
 
 	// will be false if at least one of the above values is set.
 	return set == unknown
 }
 
-type caseConfig struct {
+// testCase is compiled from a [caseConfig] value, which corresponds
+// to a test or benchmark case.
+type testCase struct {
 	name string
+	ps   []*Promise[string]
 
-	async generateAsyncPromisesConfig
-	sync  generateSyncPromisesConfig
+	minWait time.Duration
+	maxWait time.Duration
+
+	counter *atomic.Int64
 
 	extRes extensionsResult
-}
 
-func (c caseConfig) totalResultSize() int {
-	return c.async.resultSize() + c.sync.resultSize()
+	// generatedResults are the list of IDs used in the Promise.Result
+	// values generated for sync and async Promises.
+	// the order of the values is the order of their Promise's generation.
+	// Note: will not be populated for generated benchmark cases.
+	generatedResults []generatedResult
 }
 
 // getDelayVal returns a random [time.Duration] value in the range [min,max).
@@ -237,9 +385,10 @@ func getDelayVal(min, max, defMin, defMax time.Duration) time.Duration {
 
 func compileTestCase(
 	t testing.TB,
-	config caseConfig,
+	config *caseConfig,
 	g *Group[string],
-) testCase {
+	forBenchmark bool,
+) *testCase {
 	t.Helper()
 
 	// validate the configs.
@@ -250,78 +399,157 @@ func compileTestCase(
 	mind := time.Duration(0)
 	maxd := time.Duration(0)
 
-	// tracks how many promises executed fully.
-	cnt := &atomic.Int64{}
-
 	// create helper functions to generate the delay values.
 	d := func() time.Duration {
-		gd := getDelayVal(
-			config.async.minWait,
-			config.async.maxWait,
-			5*time.Millisecond,
-			10*time.Millisecond, // default range of 5ms.
-		)
-
-		if mind == 0 {
-			mind = gd
+		var dv time.Duration
+		if config.async.useUniqueDur {
+			v, ok := config.async.uniqueDur.Get()
+			if !ok {
+				// this will happen if the range is too narrow.
+				panic("bad unique wait params")
+			}
+			dv = v
+		} else {
+			dv = getDelayVal(
+				config.async.minWait,
+				config.async.maxWait,
+				// default range of 200ms.
+				1*time.Millisecond,
+				201*time.Millisecond,
+			)
 		}
 
-		mind = min(gd, mind)
-		maxd = max(gd, maxd)
+		if mind == 0 {
+			mind = dv
+		}
 
-		return gd
+		mind = min(dv, mind)
+		maxd = max(dv, maxd)
+
+		return dv
 	}
 	dd := func() time.Duration {
-		gd := getDelayVal(
-			config.async.minDelayedWait,
-			config.async.maxDelayedWait,
-			1000*time.Millisecond,
-			1100*time.Millisecond, // default range of 100ms.
-		)
-
-		if mind == 0 {
-			mind = gd
+		var dv time.Duration
+		if config.async.useUniqueDur {
+			v, ok := config.async.delayedUniqueDur.Get()
+			if !ok {
+				// this will happen if the range is too narrow.
+				panic("bad unique wait params")
+			}
+			dv = v
+		} else {
+			dv = getDelayVal(
+				config.async.minDelayedWait,
+				config.async.maxDelayedWait,
+				// default range of 200ms.
+				1000*time.Millisecond,
+				1200*time.Millisecond,
+			)
 		}
 
-		mind = min(gd, mind)
-		maxd = max(gd, maxd)
+		if mind == 0 {
+			mind = dv
+		}
 
-		return gd
+		mind = min(dv, mind)
+		maxd = max(dv, maxd)
+
+		return dv
 	}
 
 	// create the result promise slice.
-	p := make([]*Promise[string], 0, config.totalResultSize())
+	genPs := make([]*Promise[string], 0, config.totalResultSize())
+
+	// only generate the result IDs lists for normal tests.s
+	var genRess []generatedResult
+	if !forBenchmark {
+		genRess = make([]generatedResult, 0, config.totalResultSize())
+	}
+
+	// tracks how many promises executed fully.
+	cnt := &atomic.Int64{}
 
 	// generate the required promises...
+	genID := 0
+
 	// generate sync promises.
 	genSync := 0
 	if config.sync.totalNum != 0 {
 		for i := 0; i < config.sync.totalNum; i++ {
-			select {
-			case <-closedChan:
-				p = append(p, syncSuccessPromise1)
-			case <-closedChan:
-				p = append(p, syncErrorPromise1)
-			case <-closedChan:
-				p = append(p, syncPanicPromise1)
+			var gp *Promise[string]
+
+			if forBenchmark {
+				gp = getBenchmarkSyncPromise(g)
+			} else {
+				var state State
+				select {
+				case <-closedChan:
+					gp = getTestSyncSuccessPromise(g, genID)
+					state = Success
+				case <-closedChan:
+					gp = getTestSyncErrorPromise(g, genID)
+					state = Error
+				case <-closedChan:
+					gp = getTestSyncPanicPromise(g, genID)
+					state = Panic
+				}
+
+				genRess = append(genRess, generatedResult{
+					idx:   genSync,
+					id:    genID,
+					state: state,
+				})
 			}
+
+			genPs = append(genPs, gp)
+			genID++
 			genSync++
 		}
 	} else {
 		for i := 0; i < config.sync.successNum; i++ {
-			p = append(p, syncSuccessPromise1)
+			genPs = append(genPs, getTestSyncSuccessPromise(g, genID))
+
+			if !forBenchmark {
+				genRess = append(genRess, generatedResult{
+					idx:   genSync,
+					id:    genID,
+					state: Success,
+				})
+			}
+
+			genID++
 			genSync++
 		}
 		for i := 0; i < config.sync.errorNum; i++ {
-			p = append(p, syncErrorPromise1)
+			genPs = append(genPs, getTestSyncErrorPromise(g, genID))
+
+			if !forBenchmark {
+				genRess = append(genRess, generatedResult{
+					idx:   genSync,
+					id:    genID,
+					state: Error,
+				})
+			}
+
+			genID++
 			genSync++
 		}
 		for i := 0; i < config.sync.panicNum; i++ {
-			p = append(p, syncPanicPromise1)
+			genPs = append(genPs, getTestSyncPanicPromise(g, genID))
+
+			if !forBenchmark {
+				genRess = append(genRess, generatedResult{
+					idx:   genSync,
+					id:    genID,
+					state: Panic,
+				})
+			}
+
+			genID++
 			genSync++
 		}
 	}
-	if want := config.sync.resultSize(); want != genSync {
+	if want := config.sync.totalResultSize(); want != genSync {
 		panic(fmt.Sprintf("invalid generated number of sync promises: want=%d, got=%d", want, genSync))
 	}
 
@@ -330,67 +558,175 @@ func compileTestCase(
 
 	// generate async promises.
 	asyncWg := &sync.WaitGroup{}
-	asyncWg.Add(config.async.resultSize())
+	asyncWg.Add(config.async.totalResultSize())
 	genAsync := 0
 	if config.async.totalNum != 0 {
 		for i := 0; i < config.async.totalNum; i++ {
-			select {
-			case <-closedChan:
-				p = append(p, getTestAsyncSuccessPromise(g, genAsync, d(), cnt, asyncWg))
-			case <-closedChan:
-				p = append(p, getTestAsyncSuccessPromise(g, genAsync, dd(), cnt, asyncWg))
-			case <-closedChan:
-				p = append(p, getTestAsyncErrorPromise(g, genAsync, d(), cnt, asyncWg))
-			case <-closedChan:
-				p = append(p, getTestAsyncErrorPromise(g, genAsync, dd(), cnt, asyncWg))
-			case <-closedChan:
-				p = append(p, getTestAsyncPanicPromise(g, genAsync, d(), cnt, asyncWg))
-			case <-closedChan:
-				p = append(p, getTestAsyncPanicPromise(g, genAsync, dd(), cnt, asyncWg))
+			var gp *Promise[string]
+
+			if forBenchmark {
+				gd := d()
+				gp = getBenchmarkAsyncPromise(g, gd, cnt, asyncWg)
+			} else {
+				var gd time.Duration
+				var state State
+
+				select {
+				case <-closedChan:
+					gd = d()
+					gp = getTestAsyncSuccessPromise(g, genID, gd, cnt, asyncWg)
+					state = Success
+				case <-closedChan:
+					gd = dd()
+					gp = getTestAsyncSuccessPromise(g, genID, gd, cnt, asyncWg)
+					state = Success
+				case <-closedChan:
+					gd = d()
+					gp = getTestAsyncErrorPromise(g, genID, gd, cnt, asyncWg)
+					state = Error
+				case <-closedChan:
+					gd = dd()
+					gp = getTestAsyncErrorPromise(g, genID, gd, cnt, asyncWg)
+					state = Error
+				case <-closedChan:
+					gd = d()
+					gp = getTestAsyncPanicPromise(g, genID, gd, cnt, asyncWg)
+					state = Panic
+				case <-closedChan:
+					gd = dd()
+					gp = getTestAsyncPanicPromise(g, genID, gd, cnt, asyncWg)
+					state = Panic
+				}
+
+				genRess = append(genRess, generatedResult{
+					idx:   genAsync,
+					id:    genID,
+					state: state,
+					delay: gd,
+				})
 			}
+
+			genPs = append(genPs, gp)
+			genID++
 			genAsync++
 		}
 	} else {
 		for i := 0; i < config.async.successNum; i++ {
-			p = append(p, getTestAsyncSuccessPromise(g, genAsync, d(), cnt, asyncWg))
+			gd := d()
+			genPs = append(genPs, getTestAsyncSuccessPromise(g, genID, gd, cnt, asyncWg))
+
+			if !forBenchmark {
+				genRess = append(genRess, generatedResult{
+					idx:   genAsync,
+					id:    genID,
+					state: Success,
+					delay: gd,
+				})
+			}
+
+			genID++
 			genAsync++
 		}
 		for i := 0; i < config.async.successDelayNum; i++ {
-			p = append(p, getTestAsyncSuccessPromise(g, genAsync, dd(), cnt, asyncWg))
+			gd := dd()
+			genPs = append(genPs, getTestAsyncSuccessPromise(g, genID, gd, cnt, asyncWg))
+
+			if !forBenchmark {
+				genRess = append(genRess, generatedResult{
+					idx:   genAsync,
+					id:    genID,
+					state: Success,
+					delay: gd,
+				})
+			}
+
+			genID++
 			genAsync++
 		}
 		for i := 0; i < config.async.errorNum; i++ {
-			p = append(p, getTestAsyncErrorPromise(g, genAsync, d(), cnt, asyncWg))
+			gd := d()
+			genPs = append(genPs, getTestAsyncErrorPromise(g, genID, gd, cnt, asyncWg))
+
+			if !forBenchmark {
+				genRess = append(genRess, generatedResult{
+					idx:   genAsync,
+					id:    genID,
+					state: Error,
+					delay: gd,
+				})
+			}
+
+			genID++
 			genAsync++
 		}
 		for i := 0; i < config.async.errorDelayNum; i++ {
-			p = append(p, getTestAsyncErrorPromise(g, genAsync, dd(), cnt, asyncWg))
+			gd := dd()
+			genPs = append(genPs, getTestAsyncErrorPromise(g, genID, gd, cnt, asyncWg))
+
+			if !forBenchmark {
+				genRess = append(genRess, generatedResult{
+					idx:   genAsync,
+					id:    genID,
+					state: Error,
+					delay: gd,
+				})
+			}
+
+			genID++
 			genAsync++
 		}
 		for i := 0; i < config.async.panicNum; i++ {
-			p = append(p, getTestAsyncPanicPromise(g, genAsync, d(), cnt, asyncWg))
+			gd := d()
+			genPs = append(genPs, getTestAsyncPanicPromise(g, genID, gd, cnt, asyncWg))
+
+			if !forBenchmark {
+				genRess = append(genRess, generatedResult{
+					idx:   genAsync,
+					id:    genID,
+					state: Panic,
+					delay: gd,
+				})
+			}
+
+			genID++
 			genAsync++
 		}
 		for i := 0; i < config.async.panicDelayNum; i++ {
-			p = append(p, getTestAsyncPanicPromise(g, genAsync, dd(), cnt, asyncWg))
+			gd := dd()
+			genPs = append(genPs, getTestAsyncPanicPromise(g, genID, gd, cnt, asyncWg))
+
+			if !forBenchmark {
+				genRess = append(genRess, generatedResult{
+					idx:   genAsync,
+					id:    genID,
+					state: Panic,
+					delay: gd,
+				})
+			}
+
+			genID++
 			genAsync++
 		}
 	}
-	if want := config.async.resultSize(); want != genAsync {
+	if want := config.async.totalResultSize(); want != genAsync {
 		panic(fmt.Sprintf("invalid generated number of async promises: want=%d, got=%d", want, genAsync))
+	}
+
+	// Create the compiled test case.
+	tc := &testCase{
+		name:             config.name,
+		ps:               genPs,
+		minWait:          mind,
+		maxWait:          maxd,
+		counter:          cnt,
+		extRes:           config.extRes,
+		generatedResults: genRess,
 	}
 
 	// Wait for all async promises to start.
 	asyncWg.Wait()
 
-	return testCase{
-		name:    config.name,
-		p:       p,
-		minWait: mind,
-		maxWait: maxd,
-		counter: cnt,
-		extRes:  config.extRes,
-	}
+	return tc
 }
 
 func TestPanics(t *testing.T) {
@@ -711,103 +1047,169 @@ func TestPanics(t *testing.T) {
 var (
 	testsCases = []caseConfig{
 		{
+			name: "case1",
 			async: generateAsyncPromisesConfig{
 				successNum:    1,
-				errorDelayNum: 32,
+				errorDelayNum: 31,
 				panicDelayNum: 0,
+				useUniqueDur:  true,
 			},
 			extRes: extensionsResult{
-				selectState:  Success,
-				allState:     Error,
-				allWaitState: Error,
-				anyState:     Success,
-				anyWaitState: Success,
-				joinState:    Success,
+				selectCall: extensionsCall{
+					resState:    Success,
+					targetState: Success,
+				},
+				allCall: extensionsCall{
+					resState:    Error,
+					targetState: Error,
+				},
+				allWaitCall: extensionsCall{
+					resState: Error,
+				},
+				anyCall: extensionsCall{
+					resState:    Success,
+					targetState: Success,
+				},
+				anyWaitCall: extensionsCall{
+					resState: Success,
+				},
+				joinCall: extensionsCall{
+					resState: Success,
+				},
 			},
 		},
 		{
+			name: "case2",
 			async: generateAsyncPromisesConfig{
-				successDelayNum: 32,
+				successDelayNum: 31,
 				errorNum:        1,
 				panicDelayNum:   0,
+				useUniqueDur:    true,
 			},
 			extRes: extensionsResult{
-				selectState:  Error,
-				allState:     Error,
-				allWaitState: Error,
-				anyState:     Success,
-				anyWaitState: Success,
-				joinState:    Success,
+				selectCall: extensionsCall{
+					resState:    Error,
+					targetState: Error,
+				},
+				allCall: extensionsCall{
+					resState:    Error,
+					targetState: Error,
+				},
+				allWaitCall: extensionsCall{
+					resState: Error,
+				},
+				anyCall: extensionsCall{
+					resState:    Success,
+					targetState: Success,
+				},
+				anyWaitCall: extensionsCall{
+					resState: Success,
+				},
+				joinCall: extensionsCall{
+					resState: Success,
+				},
 			},
 		},
 		{
+			name: "case3",
 			async: generateAsyncPromisesConfig{
-				successDelayNum: 32,
+				successDelayNum: 30,
 				errorDelayNum:   1,
 				panicNum:        1,
+				useUniqueDur:    true,
 			},
 			extRes: extensionsResult{
-				selectState:  Panic,
-				allState:     Panic,
-				allWaitState: Panic,
-				anyState:     Panic,
-				anyWaitState: Panic,
-				joinState:    Success,
+				selectCall: extensionsCall{
+					resState:    Panic,
+					targetState: Panic,
+				},
+				allCall: extensionsCall{
+					resState:    Panic,
+					targetState: Error,
+				},
+				allWaitCall: extensionsCall{
+					resState: Panic,
+				},
+				anyCall: extensionsCall{
+					resState:    Panic,
+					targetState: Success,
+				},
+				anyWaitCall: extensionsCall{
+					resState: Panic,
+				},
+				joinCall: extensionsCall{
+					resState: Success,
+				},
 			},
 		},
 		{
+			name: "case4",
 			async: generateAsyncPromisesConfig{
-				successNum: 0,
-				errorNum:   32,
-				panicNum:   0,
+				successNum:   0,
+				errorNum:     32,
+				panicNum:     0,
+				useUniqueDur: true,
 			},
 			extRes: extensionsResult{
-				selectState:  Error,
-				allState:     Error,
-				allWaitState: Error,
-				anyState:     Error,
-				anyWaitState: Error,
-				joinState:    Success,
+				selectCall: extensionsCall{
+					resState:    Error,
+					targetState: Error,
+				},
+				allCall: extensionsCall{
+					resState:    Error,
+					targetState: Error,
+				},
+				allWaitCall: extensionsCall{
+					resState: Error,
+				},
+				anyCall: extensionsCall{
+					resState:    Error,
+					targetState: Success,
+				},
+				anyWaitCall: extensionsCall{
+					resState: Error,
+				},
+				joinCall: extensionsCall{
+					resState: Success,
+				},
 			},
 		},
 	}
 )
 
-// helper types for tests and benchmarks...
-
-type waitFunc func(...*Promise[string])
-type singleIdxFunc func(...*Promise[string]) *Promise[IdxRes[string]]
-type multiIdxFunc func(...*Promise[string]) *Promise[[]IdxRes[string]]
-
-type extFunc interface {
-	waitFunc | singleIdxFunc | multiIdxFunc
-}
-
 // helper functions for testing [Wait], [Select], [All], [AllWait],
 // [Any], [AnyWait], and [Join]...
 
-func helperTest[TFun extFunc](
+func helperTest[TFun extFuncs[TRes], TRes extRes](
 	t *testing.T,
-	tc caseConfig,
+	tc *caseConfig,
 	fun TFun,
 	funName string,
-	wantState State,
+	wantCall *extensionsCall,
 ) {
 	t.Helper()
 	t.Run(funName, func(t *testing.T) {
-		tt := compileTestCase(t, tc, nil)
+		tt := compileTestCase(t, tc, nil, false)
+
+		// sort the got result by the expected resolution order.
+		// note: we rely on each subsequent delays are far from each other,
+		// so that we (somewhat) can rely on an expected resolution order.
+		slices.SortStableFunc(
+			tt.generatedResults,
+			func(a, b generatedResult) int { return int(a.delay - b.delay) },
+		)
 
 		switch f := any(fun).(type) {
 		case waitFunc:
 			st := time.Now()
-			f(tt.p...)
+			f(tt.ps...)
 			counted := tt.counter.Load()
 			el := time.Since(st)
 
 			if testEnableLogs {
 				t.Logf("%s (delay): want_min: %v got: %v\n", funName, tt.minWait, el)
 				t.Logf("%s (delay): want_max: %v got: %v\n", funName, tt.maxWait, el)
-				t.Logf("%s (counted): want: %v got %v\n", funName, len(tt.p), counted)
+				t.Logf("%s (counted): want: %v got %v\n", funName, len(tt.ps), counted)
 			}
 
 			lo := tt.maxWait - (2 * time.Millisecond)
@@ -816,21 +1218,118 @@ func helperTest[TFun extFunc](
 				t.Errorf("%s (delay): want (%v : %v) got %v", funName, lo, hi, el)
 			}
 
-			if want := int64(len(tt.p)); want != counted {
+			if want := int64(len(tt.ps)); want != counted {
 				t.Errorf("%s (counted): want %v got %v", funName, want, counted)
 			}
 		case singleIdxFunc:
-			p := f(tt.p...)
-			if got := p.State(); got != wantState {
-				t.Errorf("%s: want %v got %v", funName, wantState, got)
+			p := f(tt.ps...)
+			gotRes := p.Res()
+
+			// get the expected generated result.
+			// it's the first element as it's gonna be the Promise
+			// that was resolved the earliest.
+			wantGenRes := tt.generatedResults[0]
+
+			// make sure the got result matches the expected state.
+			if wantCall.resState != wantGenRes.state {
+				t.Errorf(
+					"%s: want State %v, got %v",
+					funName,
+					wantCall.resState,
+					wantGenRes.state,
+				)
 			}
-			p.Wait()
+
+			// construct the expected result string.
+			wantResStr := wantGenRes.String()
+
+			// construct the expected result value.
+			var res singleIdxRes
+			if wantGenRes.state == Success {
+				res = singleIdxRes{
+					Idx: wantGenRes.idx,
+					Result: result[string]{
+						val:   wantResStr,
+						state: wantGenRes.state,
+					},
+				}
+			} else {
+				res = singleIdxRes{
+					Idx: wantGenRes.idx,
+					Result: result[string]{
+						err:   errors.New(wantResStr),
+						state: wantGenRes.state,
+					},
+				}
+			}
+			wantRes := newSingleRes(wantGenRes.state, res)
+
+			if !isEqualResult(gotRes, wantRes) {
+				t.Errorf(
+					"%s: want %v(%T), got %v(%T)",
+					funName,
+					wantRes,
+					wantRes,
+					gotRes,
+					gotRes,
+				)
+			}
 		case multiIdxFunc:
-			p := f(tt.p...)
-			if got := p.State(); got != wantState {
-				t.Errorf("%s: want %v got %v", funName, wantState, got)
+			p := f(tt.ps...)
+			gotRes := p.Res()
+
+			addToMultiRes := func(multiRes multiIdxRes, genRes generatedResult) multiIdxRes {
+				if genRes.state == Success {
+					multiRes = append(multiRes, singleIdxRes{
+						Idx: genRes.idx,
+						Result: result[string]{
+							val:   genRes.String(),
+							state: genRes.state,
+						},
+					})
+				} else {
+					multiRes = append(multiRes, singleIdxRes{
+						Idx: genRes.idx,
+						Result: result[string]{
+							err:   errors.New(genRes.String()),
+							state: genRes.state,
+						},
+					})
+				}
+				return multiRes
 			}
-			p.Wait()
+
+			// construct the expected result value...
+			// if there's no targetState, then we are expected to wait for
+			// all promises, so construct the result from all the generated
+			// results.
+			// otherwise, include only upto the targetState.
+			var res multiIdxRes
+			if wantCall.targetState == unknown {
+				for _, genRes := range tt.generatedResults {
+					res = addToMultiRes(res, genRes)
+				}
+
+			} else {
+				for _, genRes := range tt.generatedResults {
+					res = addToMultiRes(res, genRes)
+					if genRes.state == wantCall.targetState {
+						break
+					}
+				}
+			}
+			wantRes := newMultiRes(wantCall.resState, res)
+
+			if !isEqualResult(gotRes, wantRes) {
+				t.Errorf(
+					"%s: want %v(%T), got %v(%T)",
+					funName,
+					wantRes,
+					wantRes,
+					gotRes,
+					gotRes,
+				)
+			}
 		}
 	})
 }
@@ -838,19 +1337,61 @@ func helperTest[TFun extFunc](
 func TestExtFuncs(t *testing.T) {
 	for _, tc := range testsCases {
 		t.Run(tc.name, func(t *testing.T) {
-			helperTest[waitFunc](t, tc, Wait, "Wait", unknown)
+			helperTest[waitFunc, singleIdxRes](
+				t,
+				&tc,
+				Wait,
+				"Wait",
+				nil,
+			)
 
 			// skip this test, as it's not meant for the rest of the functions...
 			if tc.extRes.isStateUnknown() {
 				return
 			}
 
-			helperTest[singleIdxFunc](t, tc, Select, "Select", tc.extRes.selectState)
-			helperTest[multiIdxFunc](t, tc, All, "All", tc.extRes.allState)
-			helperTest[multiIdxFunc](t, tc, AllWait, "AllWait", tc.extRes.allWaitState)
-			helperTest[multiIdxFunc](t, tc, Any, "Any", tc.extRes.anyState)
-			helperTest[multiIdxFunc](t, tc, AnyWait, "AnyWait", tc.extRes.anyWaitState)
-			helperTest[multiIdxFunc](t, tc, Join, "Join", tc.extRes.joinState)
+			helperTest[singleIdxFunc, singleIdxRes](
+				t,
+				&tc,
+				Select,
+				"Select",
+				&tc.extRes.selectCall,
+			)
+			helperTest[multiIdxFunc, multiIdxRes](
+				t,
+				&tc,
+				All,
+				"All",
+				&tc.extRes.allCall,
+			)
+			helperTest[multiIdxFunc, multiIdxRes](
+				t,
+				&tc,
+				AllWait,
+				"AllWait",
+				&tc.extRes.allWaitCall,
+			)
+			helperTest[multiIdxFunc, multiIdxRes](
+				t,
+				&tc,
+				Any,
+				"Any",
+				&tc.extRes.anyCall,
+			)
+			helperTest[multiIdxFunc, multiIdxRes](
+				t,
+				&tc,
+				AnyWait,
+				"AnyWait",
+				&tc.extRes.anyWaitCall,
+			)
+			helperTest[multiIdxFunc, multiIdxRes](
+				t,
+				&tc,
+				Join,
+				"Join",
+				&tc.extRes.joinCall,
+			)
 		})
 	}
 }
@@ -956,65 +1497,65 @@ func TestJoin(t *testing.T) {
 
 // to truly benchmark the target functions, all benchmark cases generate only
 // [Success] promises in the async cases, to avoid allocating any [Result]
-// values that might mislead the result.
+// values that might mislead the result, hence we only use the totalNum.
 var (
 	benchmarkCases = []caseConfig{
 		{
 			name: "16-fast-async",
 			async: generateAsyncPromisesConfig{
-				successNum: 16,
-				minWait:    10 * time.Nanosecond,
-				maxWait:    10 * time.Nanosecond,
+				totalNum: 16,
+				minWait:  10 * time.Nanosecond,
+				maxWait:  10 * time.Nanosecond,
 			},
 		},
 		{
 			name: "16:8-async-8-sync",
 			async: generateAsyncPromisesConfig{
-				successNum: 8,
-				minWait:    10 * time.Microsecond,
-				maxWait:    10 * time.Microsecond,
+				totalNum: 8,
+				minWait:  10 * time.Microsecond,
+				maxWait:  10 * time.Microsecond,
 			},
 			sync: generateSyncPromisesConfig{
-				successNum: 8,
+				totalNum: 8,
 			},
 		},
 		{
 			name: "100:50-async-50-sync",
 			async: generateAsyncPromisesConfig{
-				successNum: 50,
-				minWait:    10 * time.Microsecond,
-				maxWait:    10 * time.Microsecond,
+				totalNum: 50,
+				minWait:  10 * time.Microsecond,
+				maxWait:  10 * time.Microsecond,
 			},
 			sync: generateSyncPromisesConfig{
-				successNum: 50,
+				totalNum: 50,
 			},
 		},
 		{
 			name: "100-async",
 			async: generateAsyncPromisesConfig{
-				successNum: 100,
-				minWait:    10 * time.Microsecond,
-				maxWait:    10 * time.Microsecond,
+				totalNum: 100,
+				minWait:  10 * time.Microsecond,
+				maxWait:  10 * time.Microsecond,
 			},
 		},
 		{
 			name: "100-sync",
 			sync: generateSyncPromisesConfig{
-				successNum: 100,
+				totalNum: 100,
 			},
 		},
 		{
 			name: "1000-async",
 			async: generateAsyncPromisesConfig{
-				successNum: 1000,
-				minWait:    10 * time.Microsecond,
-				maxWait:    10 * time.Microsecond,
+				totalNum: 1000,
+				minWait:  10 * time.Microsecond,
+				maxWait:  10 * time.Microsecond,
 			},
 		},
 		{
 			name: "1000-sync",
 			sync: generateSyncPromisesConfig{
-				successNum: 1000,
+				totalNum: 1000,
 			},
 		},
 	}
@@ -1023,7 +1564,7 @@ var (
 // helper functions and types for benchmarking [Wait], [Select], [All], [AllWait],
 // [Any], [AnyWait], and [Join]...
 
-func helperBenchmark[TFun extFunc](
+func helperBenchmark[TFun extFuncs[TRes], TRes extRes](
 	b *testing.B,
 	bc caseConfig,
 	fun TFun,
@@ -1038,58 +1579,33 @@ func helperBenchmark[TFun extFunc](
 			b.ResetTimer()
 			for range b.N {
 				b.StopTimer()
-				tt := compileTestCase(b, bc, nil)
+				tt := compileTestCase(b, &bc, nil, true)
 				b.StartTimer()
 
-				f(tt.p...)
+				f(tt.ps...)
 			}
 		})
-	case singleIdxFunc:
+	case idxFunc[TRes]:
 		b.Run(funName, func(b *testing.B) {
 			if !addWait {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for range b.N {
 					b.StopTimer()
-					tt := compileTestCase(b, bc, nil)
+					tt := compileTestCase(b, &bc, nil, true)
 					b.StartTimer()
 
-					f(tt.p...)
+					f(tt.ps...)
 				}
 			} else {
 				b.ReportAllocs()
 				b.ResetTimer()
 				for range b.N {
 					b.StopTimer()
-					tt := compileTestCase(b, bc, nil)
+					tt := compileTestCase(b, &bc, nil, true)
 					b.StartTimer()
 
-					p := f(tt.p...)
-					p.Wait()
-				}
-			}
-		})
-	case multiIdxFunc:
-		b.Run(funName, func(b *testing.B) {
-			if !addWait {
-				b.ReportAllocs()
-				b.ResetTimer()
-				for range b.N {
-					b.StopTimer()
-					tt := compileTestCase(b, bc, nil)
-					b.StartTimer()
-
-					f(tt.p...)
-				}
-			} else {
-				b.ReportAllocs()
-				b.ResetTimer()
-				for range b.N {
-					b.StopTimer()
-					tt := compileTestCase(b, bc, nil)
-					b.StartTimer()
-
-					p := f(tt.p...)
+					p := f(tt.ps...)
 					p.Wait()
 				}
 			}
@@ -1097,7 +1613,7 @@ func helperBenchmark[TFun extFunc](
 	}
 }
 
-func helperBenchmarkParallel[TFun extFunc](
+func helperBenchmarkParallel[TFun extFuncs[TRes], TRes IdxRes[string] | []IdxRes[string]](
 	b *testing.B,
 	bc caseConfig,
 	fun TFun,
@@ -1108,26 +1624,26 @@ func helperBenchmarkParallel[TFun extFunc](
 	switch f := any(fun).(type) {
 	case waitFunc:
 		b.Run(funName+"-Parallel", func(b *testing.B) {
-			tt := compileTestCase(b, bc, nil)
+			tt := compileTestCase(b, &bc, nil, true)
 
 			b.ReportAllocs()
 			b.ResetTimer()
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					f(tt.p...)
+					f(tt.ps...)
 				}
 			})
 		})
-	case singleIdxFunc:
+	case idxFunc[TRes]:
 		b.Run(funName+"-Parallel", func(b *testing.B) {
-			tt := compileTestCase(b, bc, nil)
+			tt := compileTestCase(b, &bc, nil, true)
 
 			if !addWait {
 				b.ReportAllocs()
 				b.ResetTimer()
 				b.RunParallel(func(pb *testing.PB) {
 					for pb.Next() {
-						f(tt.p...)
+						f(tt.ps...)
 					}
 				})
 			} else {
@@ -1135,30 +1651,7 @@ func helperBenchmarkParallel[TFun extFunc](
 				b.ResetTimer()
 				b.RunParallel(func(pb *testing.PB) {
 					for pb.Next() {
-						p := f(tt.p...)
-						p.Wait()
-					}
-				})
-			}
-		})
-	case multiIdxFunc:
-		b.Run(funName+"-Parallel", func(b *testing.B) {
-			tt := compileTestCase(b, bc, nil)
-
-			if !addWait {
-				b.ReportAllocs()
-				b.ResetTimer()
-				b.RunParallel(func(pb *testing.PB) {
-					for pb.Next() {
-						f(tt.p...)
-					}
-				})
-			} else {
-				b.ReportAllocs()
-				b.ResetTimer()
-				b.RunParallel(func(pb *testing.PB) {
-					for pb.Next() {
-						p := f(tt.p...)
+						p := f(tt.ps...)
 						p.Wait()
 					}
 				})
@@ -1171,35 +1664,119 @@ func BenchmarkExtFuncs(b *testing.B) {
 	for _, bc := range benchmarkCases {
 		b.Run(bc.name, func(b *testing.B) {
 			b.Run("Wait", func(b *testing.B) {
-				helperBenchmark[waitFunc](b, bc, Wait, "Wait", false)
-				helperBenchmarkParallel[waitFunc](b, bc, Wait, "Wait", false)
+				helperBenchmark[waitFunc, IdxRes[string]](
+					b,
+					bc,
+					Wait,
+					"Wait",
+					false,
+				)
+				helperBenchmarkParallel[waitFunc, IdxRes[string]](
+					b,
+					bc,
+					Wait,
+					"Wait",
+					false,
+				)
 			})
 
 			b.Run("Select", func(b *testing.B) {
-				helperBenchmark[singleIdxFunc](b, bc, Select, "Select", false)
-				helperBenchmarkParallel[singleIdxFunc](b, bc, Select, "Select", false)
-				helperBenchmark[singleIdxFunc](b, bc, Select, "Select-Wait", true)
-				helperBenchmarkParallel[singleIdxFunc](b, bc, Select, "Select-Wait", true)
+				helperBenchmark[singleIdxFunc, IdxRes[string]](
+					b,
+					bc,
+					Select,
+					"Select",
+					false,
+				)
+				helperBenchmarkParallel[singleIdxFunc, IdxRes[string]](
+					b,
+					bc,
+					Select,
+					"Select",
+					false,
+				)
+				helperBenchmark[singleIdxFunc, IdxRes[string]](
+					b,
+					bc,
+					Select,
+					"Select-Wait",
+					true,
+				)
+				helperBenchmarkParallel[singleIdxFunc, IdxRes[string]](
+					b,
+					bc,
+					Select,
+					"Select-Wait",
+					true,
+				)
 			})
 
 			b.Run("AllWait", func(b *testing.B) {
-				helperBenchmark[multiIdxFunc](b, bc, AllWait, "AllWait", false)
-				helperBenchmarkParallel[multiIdxFunc](b, bc, AllWait, "AllWait", false)
-				helperBenchmark[multiIdxFunc](b, bc, AllWait, "AllWait-Wait", true)
-				helperBenchmarkParallel[multiIdxFunc](b, bc, AllWait, "AllWait-Wait", true)
+				helperBenchmark[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					AllWait,
+					"AllWait",
+					false,
+				)
+				helperBenchmarkParallel[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					AllWait,
+					"AllWait",
+					false,
+				)
+				helperBenchmark[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					AllWait,
+					"AllWait-Wait",
+					true,
+				)
+				helperBenchmarkParallel[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					AllWait,
+					"AllWait-Wait",
+					true,
+				)
 			})
 
 			b.Run("AnyWait", func(b *testing.B) {
-				helperBenchmark[multiIdxFunc](b, bc, AnyWait, "AnyWait", false)
-				helperBenchmarkParallel[multiIdxFunc](b, bc, AnyWait, "AnyWait", false)
-				helperBenchmark[multiIdxFunc](b, bc, AnyWait, "AnyWait-Wait", true)
-				helperBenchmarkParallel[multiIdxFunc](b, bc, AnyWait, "AnyWait-Wait", true)
+				helperBenchmark[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					AnyWait,
+					"AnyWait",
+					false,
+				)
+				helperBenchmarkParallel[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					AnyWait,
+					"AnyWait",
+					false,
+				)
+				helperBenchmark[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					AnyWait,
+					"AnyWait-Wait",
+					true,
+				)
+				helperBenchmarkParallel[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					AnyWait,
+					"AnyWait-Wait",
+					true,
+				)
 			})
 		})
 	}
 }
 
-func helperBenchmarkLeakDetector[TFun extFunc](
+func helperBenchmarkLeakDetector[TFun extFuncs[TRes], TRes extRes](
 	b *testing.B,
 	bc caseConfig,
 	fun TFun,
@@ -1210,7 +1787,7 @@ func helperBenchmarkLeakDetector[TFun extFunc](
 		g := NewGroup[string](UnhandledErrorCB(func(err error) {}))
 		g.core.debugCB = debugCB
 
-		tt := compileTestCase(b, bc, g)
+		tt := compileTestCase(b, &bc, g, true)
 
 		b.ReportAllocs()
 
@@ -1218,20 +1795,13 @@ func helperBenchmarkLeakDetector[TFun extFunc](
 		case waitFunc:
 			b.ResetTimer()
 			for range b.N {
-				f(tt.p...)
+				f(tt.ps...)
 			}
 			b.StopTimer()
-		case singleIdxFunc:
+		case idxFunc[TRes]:
 			b.ResetTimer()
 			for range b.N {
-				p := f(tt.p...)
-				p.Wait()
-			}
-			b.StopTimer()
-		case multiIdxFunc:
-			b.ResetTimer()
-			for range b.N {
-				p := f(tt.p...)
+				p := f(tt.ps...)
 				p.Wait()
 			}
 			b.StopTimer()
@@ -1243,7 +1813,7 @@ func helperBenchmarkLeakDetector[TFun extFunc](
 
 		// at this point, all counters up to the ext-calls related should
 		// report correct values, so validate that...
-		expected := int64(bc.async.resultSize())
+		expected := int64(bc.async.totalResultSize())
 		startedCount := debugMetrics.get(startHandler)
 		resolvedCount := debugMetrics.get(resolve)
 		foundExtChanCount := debugMetrics.get(foundExtChan)
@@ -1299,9 +1869,24 @@ func BenchmarkExtFuncs_LeakDetector(b *testing.B) {
 
 	for _, bc := range benchmarkCases {
 		b.Run(bc.name, func(b *testing.B) {
-			helperBenchmarkLeakDetector[waitFunc](b, bc, Wait, "Wait")
-			helperBenchmarkLeakDetector[multiIdxFunc](b, bc, AllWait, "AllWait")
-			helperBenchmarkLeakDetector[multiIdxFunc](b, bc, AnyWait, "AnyWait")
+			helperBenchmarkLeakDetector[waitFunc, singleIdxRes](
+				b,
+				bc,
+				Wait,
+				"Wait",
+			)
+			helperBenchmarkLeakDetector[multiIdxFunc, multiIdxRes](
+				b,
+				bc,
+				AllWait,
+				"AllWait",
+			)
+			helperBenchmarkLeakDetector[multiIdxFunc, multiIdxRes](
+				b,
+				bc,
+				AnyWait,
+				"AnyWait",
+			)
 		})
 	}
 }
