@@ -214,5 +214,10 @@ func Ctx(ctx context.Context) *Promise[any] {
 // synchronously, without creating any new goroutines.
 // The [Promise.Res] will return the provided res.
 func Wrap[T any](res Result[T]) *Promise[T] {
+	if res != nil && res.State() == Panic {
+		if _, ok := res.Err().(resultPanicV); !ok {
+			res = PanicRes[T](res)
+		}
+	}
 	return newPromSync[T](nil, res)
 }

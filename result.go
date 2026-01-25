@@ -61,7 +61,7 @@ type resultPanicV interface {
 }
 
 func getPanicVFromRes[T any](res Result[T]) any {
-	if pr, ok := res.(resultPanicV); ok {
+	if pr, ok := res.Err().(resultPanicV); ok {
 		return pr.PanicV()
 	}
 	return PanicError{V: res}
@@ -271,7 +271,8 @@ func (r valErrResult[T]) String() string {
 // its values work as a [PanicError] value.
 //
 // it also implements a PanicV() method, for returning the underlying
-// panic value, which is used when returning the panic value.
+// panic value, which is used when returning the panic value, similar
+// to a [PanicError] value.
 type panicResult[T any] struct{ v any }
 
 func (r panicResult[T]) Val() (v T)   { return v }
@@ -307,6 +308,10 @@ type result[T any] struct {
 	val   T
 	err   error
 	state State
+}
+
+func newResult[T any](val T, err error, state State) Result[T] {
+	return result[T]{val: val, err: err, state: state}
 }
 
 func (r result[T]) Val() (v T)   { return r.val }

@@ -75,9 +75,9 @@ var (
 	ErrGroupCanceled = errors.New("group is canceled")
 )
 
-// PanicError wraps a panic that got caught in a promise callback.
+// PanicError wraps a recovered panic from a promise callback in an error value.
 type PanicError struct {
-	// V holds the value passed to the panic call.
+	// V holds the value returned from recover.
 	V any
 }
 
@@ -95,6 +95,7 @@ func (e PanicError) Unwrap() error {
 	}
 	return nil
 }
+func (e PanicError) PanicV() any { return e.V }
 
 // IdxError is the error container for an error returned from
 // the [Select], [All](and [AllWait]), [Any](and [AnyWait]),

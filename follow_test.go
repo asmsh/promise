@@ -36,25 +36,6 @@ func (stringToIntCB) Call(_ context.Context, prevRes Result[string]) (nextRes Re
 	return ValErrRes(strconv.Atoi(prevRes.Val()))
 }
 
-// testResult is used to test returning a custom implementation of [Result].
-type testResult[T any] struct {
-	val   T
-	err   error
-	state State
-}
-
-func (t testResult[T]) Val() T       { return t.val }
-func (t testResult[T]) Err() error   { return t.err }
-func (t testResult[T]) State() State { return t.state }
-
-func newTestResult[T any](val T, err error, state State) Result[T] {
-	return testResult[T]{
-		val:   val,
-		err:   err,
-		state: state,
-	}
-}
-
 func TestFollow(t *testing.T) {
 	t.Run("standard Result", func(t *testing.T) {
 		pAny := GoCtxRes(func(ctx context.Context) Result[*int] {
@@ -97,7 +78,7 @@ func TestFollow(t *testing.T) {
 		pStr := Follow[string](
 			pAny,
 			func(ctx context.Context, res Result[*int]) Result[string] {
-				return newTestResult(fmt.Sprintf("%d", *res.Val()), nil, Success)
+				return newResult(fmt.Sprintf("%d", *res.Val()), nil, Success)
 			},
 		)
 		pInt := Follow[int](

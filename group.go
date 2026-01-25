@@ -10,6 +10,16 @@ import (
 	"github.com/asmsh/sema"
 )
 
+// Group represents a group of [Promise] values that operate on the same
+// input and result types, offering methods to start new promises, wait
+// for all ongoing ones, and have a centralized handling for their failures.
+//
+// Promises from the same [Group] share the same goroutines pool, if one
+// is set.
+//
+// A Group is safe for concurrent use by multiple goroutines.
+//
+// The zero value is a ready to use Group with the [DefaultGroupConfig].
 type Group[T any] struct {
 	core *groupCore
 	once sync.Once
@@ -251,6 +261,12 @@ func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 
 	if errRes := g.validateActive(); errRes != nil {
 		return newPromSync[T](g, errRes)
+	}
+
+	if res != nil && res.State() == Panic {
+		if _, ok := res.Err().(resultPanicV); !ok {
+			res = PanicRes[T](res)
+		}
 	}
 
 	return newPromSync[T](g, res)
