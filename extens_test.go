@@ -817,12 +817,10 @@ func TestPanics(t *testing.T) {
 						panic(newTestStrError())
 					}),
 					GoFunc[any, any](func() error {
-						time.Sleep(time.Second)
-						return nil
+						return newTestStrError()
 					}),
 					GoFunc[any, any](func() error {
-						time.Sleep(time.Second)
-						return nil
+						return newTestStrError()
 					}),
 				)
 			},
@@ -835,8 +833,7 @@ func TestPanics(t *testing.T) {
 						panic(newTestStrError())
 					}),
 					GoFunc[any, any](func() error {
-						time.Sleep(time.Second)
-						return nil
+						return newTestStrError()
 					}),
 					GoFunc[any, any](func() error {
 						return newTestStrError()
@@ -1125,17 +1122,17 @@ var (
 				},
 				allCall: extensionsCall{
 					resState:    Panic,
-					targetState: Error,
+					targetState: Panic,
 				},
 				allWaitCall: extensionsCall{
 					resState: Panic,
 				},
 				anyCall: extensionsCall{
-					resState:    Panic,
+					resState:    Success,
 					targetState: Success,
 				},
 				anyWaitCall: extensionsCall{
-					resState: Panic,
+					resState: Success,
 				},
 				joinCall: extensionsCall{
 					resState: Success,
@@ -1177,14 +1174,14 @@ var (
 	}
 )
 
-// helper functions for testing [Wait], [Select], [All], [AllWait],
-// [Any], [AnyWait], and [Join]...
+// helper functions for testing [Wait], [Select], [All], [Any], and [Join]...
 
 func helperTest[TFun extFuncs[TRes], TRes extRes](
 	t *testing.T,
 	tc *caseConfig,
 	fun TFun,
 	funName string,
+	op joinOperationLogic,
 	wantCall *extensionsCall,
 ) {
 	t.Helper()
@@ -1278,23 +1275,25 @@ func helperTest[TFun extFuncs[TRes], TRes extRes](
 			p := f(tt.ps...)
 			gotRes := p.Res()
 
+			// addToMultiRes adds the genRes to the multiRes value at the
+			// expected index, which is the index of the original promise.
 			addToMultiRes := func(multiRes multiIdxRes, genRes generatedResult) multiIdxRes {
 				if genRes.state == Success {
-					multiRes = append(multiRes, singleIdxRes{
+					multiRes[genRes.idx] = singleIdxRes{
 						Idx: genRes.idx,
 						Result: result[string]{
 							val:   genRes.String(),
 							state: genRes.state,
 						},
-					})
+					}
 				} else {
-					multiRes = append(multiRes, singleIdxRes{
+					multiRes[genRes.idx] = singleIdxRes{
 						Idx: genRes.idx,
 						Result: result[string]{
 							err:   errors.New(genRes.String()),
 							state: genRes.state,
 						},
-					})
+					}
 				}
 				return multiRes
 			}
@@ -1304,12 +1303,11 @@ func helperTest[TFun extFuncs[TRes], TRes extRes](
 			// all promises, so construct the result from all the generated
 			// results.
 			// otherwise, include only upto the targetState.
-			var res multiIdxRes
+			res := make(multiIdxRes, len(tt.generatedResults))
 			if wantCall.targetState == unknown {
 				for _, genRes := range tt.generatedResults {
 					res = addToMultiRes(res, genRes)
 				}
-
 			} else {
 				for _, genRes := range tt.generatedResults {
 					res = addToMultiRes(res, genRes)
@@ -1318,7 +1316,14 @@ func helperTest[TFun extFuncs[TRes], TRes extRes](
 					}
 				}
 			}
-			wantRes := newMultiRes(wantCall.resState, res)
+			res = slices.DeleteFunc(
+				res,
+				func(r IdxRes[string]) bool {
+					return r.Result == nil
+				},
+			)
+			res = slices.Clip(res)
+			wantRes := newMultiRes(op, wantCall.resState, res)
 
 			if !isEqualResult(gotRes, wantRes) {
 				t.Errorf(
@@ -1343,6 +1348,7 @@ func TestExtFuncs(t *testing.T) {
 				Wait,
 				"Wait",
 				nil,
+				nil,
 			)
 
 			// skip this test, as it's not meant for the rest of the functions...
@@ -1355,6 +1361,7 @@ func TestExtFuncs(t *testing.T) {
 				&tc,
 				Select,
 				"Select",
+				nil,
 				&tc.extRes.selectCall,
 			)
 			helperTest[multiIdxFunc, multiIdxRes](
@@ -1362,6 +1369,7 @@ func TestExtFuncs(t *testing.T) {
 				&tc,
 				All,
 				"All",
+				allOp,
 				&tc.extRes.allCall,
 			)
 			helperTest[multiIdxFunc, multiIdxRes](
@@ -1369,6 +1377,7 @@ func TestExtFuncs(t *testing.T) {
 				&tc,
 				AllWait,
 				"AllWait",
+				allWaitOp,
 				&tc.extRes.allWaitCall,
 			)
 			helperTest[multiIdxFunc, multiIdxRes](
@@ -1376,6 +1385,7 @@ func TestExtFuncs(t *testing.T) {
 				&tc,
 				Any,
 				"Any",
+				anyOp,
 				&tc.extRes.anyCall,
 			)
 			helperTest[multiIdxFunc, multiIdxRes](
@@ -1383,6 +1393,7 @@ func TestExtFuncs(t *testing.T) {
 				&tc,
 				AnyWait,
 				"AnyWait",
+				anyWaitOp,
 				&tc.extRes.anyWaitCall,
 			)
 			helperTest[multiIdxFunc, multiIdxRes](
@@ -1390,6 +1401,7 @@ func TestExtFuncs(t *testing.T) {
 				&tc,
 				Join,
 				"Join",
+				joinOp,
 				&tc.extRes.joinCall,
 			)
 		})
@@ -1772,6 +1784,37 @@ func BenchmarkExtFuncs(b *testing.B) {
 					true,
 				)
 			})
+
+			b.Run("Join", func(b *testing.B) {
+				helperBenchmark[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					Join,
+					"Join",
+					false,
+				)
+				helperBenchmarkParallel[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					Join,
+					"Join",
+					false,
+				)
+				helperBenchmark[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					Join,
+					"Join-Wait",
+					true,
+				)
+				helperBenchmarkParallel[multiIdxFunc, []IdxRes[string]](
+					b,
+					bc,
+					Join,
+					"Join-Wait",
+					true,
+				)
+			})
 		})
 	}
 }
@@ -1858,9 +1901,9 @@ func helperBenchmarkLeakDetector[TFun extFuncs[TRes], TRes extRes](
 	})
 }
 
-// BenchmarkExtFuncs_LeakDetector is only concerned with [Wait], [AllWait]
-// and [AnyWait], as it requires an extension function that blocks until
-// all ongoing promises have finished.
+// BenchmarkExtFuncs_LeakDetector is only concerned with [Wait], [AllWait],
+// [AnyWait] and [Join], as it requires an extension function that blocks
+// until all ongoing promises have finished.
 func BenchmarkExtFuncs_LeakDetector(b *testing.B) {
 	// skip based on the present build tags.
 	if !debugEnabled {
@@ -1886,6 +1929,12 @@ func BenchmarkExtFuncs_LeakDetector(b *testing.B) {
 				bc,
 				AnyWait,
 				"AnyWait",
+			)
+			helperBenchmarkLeakDetector[multiIdxFunc, multiIdxRes](
+				b,
+				bc,
+				Join,
+				"Join",
 			)
 		})
 	}

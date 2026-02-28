@@ -1,3 +1,17 @@
+// Copyright 2026 Ahmad Sameh(asmsh)
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package promise
 
 import (
@@ -107,7 +121,7 @@ type IdxError struct {
 }
 
 func (e IdxError) Error() string {
-	return fmt.Sprintf("[%d]%s", e.Idx, e.Err.Error())
+	return fmt.Sprintf("%s", e.Err.Error())
 }
 func (e IdxError) Unwrap() error {
 	return e.Err
@@ -132,16 +146,16 @@ func (e GroupError) Unwrap() error {
 // [All](and [AllWait]), [Any](and [AnyWait]) or [Join] extension calls,
 // and the [Group.AllWaitRes] or [Group.AnyWaitRes] group calls.
 type MultiError struct {
-	errs []error // either a [][IdxError] or [][GroupError]
+	Errs []error // either a [][IdxError] or [][GroupError]
 }
 
 func (e MultiError) Error() string {
-	if len(e.errs) == 1 {
-		return e.errs[0].Error()
+	if len(e.Errs) == 1 {
+		return e.Errs[0].Error()
 	}
 
 	errb := strings.Builder{}
-	for _, ee := range e.errs {
+	for _, ee := range e.Errs {
 		if errb.Len() != 0 {
 			errb.WriteByte('\n')
 		}
@@ -151,5 +165,5 @@ func (e MultiError) Error() string {
 }
 
 func (e MultiError) Unwrap() []error {
-	return e.errs
+	return e.Errs
 }

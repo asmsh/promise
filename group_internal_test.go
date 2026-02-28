@@ -85,7 +85,7 @@ func Test_allOperation_InitState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			al := allOperation{}
-			if got := al.InitState(tt.args.stateHist); got != tt.want {
+			if got := al.initState(tt.args.stateHist); got != tt.want {
 				t.Errorf("InitState() = %v, want %v", got, tt.want)
 			}
 		})
@@ -186,7 +186,7 @@ func Test_allOperation_NextState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			al := allOperation{}
-			if got := al.NextState(tt.args.currState, tt.args.prevState); got != tt.want {
+			if got := al.nextState(tt.args.currState, tt.args.prevState); got != tt.want {
 				t.Errorf("NextState() = %v, want %v", got, tt.want)
 			}
 		})
@@ -212,7 +212,7 @@ func Test_allOperation_IsTargetState(t *testing.T) {
 			args: args{
 				currState: Panic,
 			},
-			want: false,
+			want: true,
 		},
 		{
 			args: args{
@@ -230,7 +230,7 @@ func Test_allOperation_IsTargetState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			al := allOperation{}
-			if got := al.IsTargetState(tt.args.currState); got != tt.want {
+			if got := al.isTargetState(tt.args.currState); got != tt.want {
 				t.Errorf("IsTargetState() = %v, want %v", got, tt.want)
 			}
 		})
@@ -262,13 +262,13 @@ func Test_anyOperation_InitState(t *testing.T) {
 			args: args{
 				stateHist: Success | Error | Panic,
 			},
-			want: Panic,
+			want: Success,
 		},
 		{
 			args: args{
 				stateHist: Success | Panic,
 			},
-			want: Panic,
+			want: Success,
 		},
 		{
 			args: args{
@@ -280,13 +280,13 @@ func Test_anyOperation_InitState(t *testing.T) {
 			args: args{
 				stateHist: Error | Panic,
 			},
-			want: Panic,
+			want: unknown,
 		},
 		{
 			args: args{
 				stateHist: Panic | Panic,
 			},
-			want: Panic,
+			want: unknown,
 		},
 		{
 			args: args{
@@ -304,7 +304,7 @@ func Test_anyOperation_InitState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			an := anyOperation{}
-			if got := an.InitState(tt.args.stateHist); got != tt.want {
+			if got := an.initState(tt.args.stateHist); got != tt.want {
 				t.Errorf("InitState() = %v, want %v", got, tt.want)
 			}
 		})
@@ -355,7 +355,7 @@ func Test_anyOperation_NextState(t *testing.T) {
 				currState: Success,
 				prevState: Panic,
 			},
-			want: Panic,
+			want: Success,
 		},
 
 		{
@@ -385,7 +385,7 @@ func Test_anyOperation_NextState(t *testing.T) {
 				currState: Panic,
 				prevState: Success,
 			},
-			want: Panic,
+			want: Success,
 		},
 		{
 			args: args{
@@ -405,7 +405,7 @@ func Test_anyOperation_NextState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			an := anyOperation{}
-			if got := an.NextState(tt.args.currState, tt.args.prevState); got != tt.want {
+			if got := an.nextState(tt.args.currState, tt.args.prevState); got != tt.want {
 				t.Errorf("NextState() = %v, want %v", got, tt.want)
 			}
 		})
@@ -449,7 +449,7 @@ func Test_anyOperation_IsTargetState(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			an := anyOperation{}
-			if got := an.IsTargetState(tt.args.currState); got != tt.want {
+			if got := an.isTargetState(tt.args.currState); got != tt.want {
 				t.Errorf("IsTargetState() = %v, want %v", got, tt.want)
 			}
 		})
@@ -493,7 +493,7 @@ func Test_calcGroupResState(t *testing.T) {
 			args: args{
 				stateHist: Success | Error,
 			},
-			want: Success,
+			want: Error,
 		},
 		{
 			args: args{
@@ -526,5 +526,17 @@ func Test_calcGroupResState(t *testing.T) {
 				t.Errorf("calcGroupResState() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestJoinOperationLogic_Distinct(t *testing.T) {
+	if allOp == anyOp {
+		t.Errorf("allOp should not be equal to anyOp")
+	}
+	if allOp == joinOp {
+		t.Errorf("allOp should not be equal to joinOp")
+	}
+	if anyOp == joinOp {
+		t.Errorf("anyOp should not be equal to joinOp")
 	}
 }

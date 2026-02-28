@@ -15,6 +15,8 @@
 package promise
 
 import (
+	"slices"
+
 	"github.com/asmsh/uniquerand/v2"
 )
 
@@ -26,10 +28,10 @@ func Wait[T any](p ...*Promise[T]) {
 }
 
 // Select returns a [Promise] that resolves to the first [Promise]
-// resolved from p.
+// resolved from all the passed [Promise] values, p.
 //
 // The resulting [IdxRes] value holds the [Result] value of the resolved
-// [Promise], and the original order is saved in the [IdxRes.Idx] field.
+// [Promise], and the original index is saved in the [IdxRes.Idx] field.
 func Select[T any](p ...*Promise[T]) *Promise[IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[IdxRes[T]](nil)
@@ -134,20 +136,20 @@ func selectHandler[T any](
 	nextProm.resolveToRes(newSingleRes(res.State(), res))
 }
 
-// All returns a [Promise] that resolves to [Success] if all the passed
-// [Promise] values, p, resolved to [Success].
-// It resolves to [Panic] if at least one resolved to [Panic].
-// It resolves to [Error] if at least one resolved to [Error] and none resolved
-// to [Panic].
+// All returns a [Promise] that resolves to [Success] if all the
+// passed [Promise] values, p, are resolved to [Success].
+// Otherwise, it resolves early to [Panic] or [Error], once one
+// is resolved to [Panic] or [Error], respectively.
 //
-// The returned [Promise] resolves on the first [Error], otherwise it waits
-// all the passed [Promise] values to resolve.
-// It doesn't resolve on [Panic], despite the fact that the returned [Promise]
-// will be resolved to [Panic], if there's any.
+// The [Success] values can return via [Result.Val], where they
+// are return at the original index their respective [Promise]
+// values were passed in.
+// Also, each value's index can be fetched from [IdxRes.Idx].
 //
-// The resulting [IdxRes] slice holds the [Result] values of the [Promise]
-// values passed, up to when the returned [Promise] was resolved, and their
-// original order is saved in the [IdxRes.Idx] field.
+// The [Panic] and [Error] values can be return via [Result.Err],
+// which is a [MultiError] wrapping an [IdxError] errors.
+// And each [IdxError] is wrapping a [PanicError] or other error
+// values, for [Panic] or [Error], respectively.
 func All[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
@@ -158,15 +160,21 @@ func All[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// AllWait returns a [Promise] that resolves to [Success] if all the passed
-// [Promise] values, p, resolved to [Success].
-// It resolves to [Panic] if at least one resolved to [Panic].
-// It resolves to [Error] if at least one resolved to [Error].
+// AllWait waits for all the passed [Promise] values, p, to resolve,
+// and returns a [Promise] that resolves to [Success] if all of them
+// resolved to [Success].
+// Otherwise, it resolves to [Panic] or [Error], if at least one is
+// resolved to [Panic] or [Error], respectively.
 //
-// The returned [Promise] waits for all the passed [Promise] values to resolve.
+// The [Success] values can be returned via [Result.Val], where they
+// are return at the original index their respective [Promise] values
+// were passed in.
+// Also, each value's index can be fetched from [IdxRes.Idx].
 //
-// The resulting [IdxRes] slice holds the [Result] values of all [Promise]
-// values passed, and their original order is saved in the [IdxRes.Idx] field.
+// The [Panic] and [Error] values can be return via [Result.Err],
+// which is a [MultiError] wrapping an [IdxError] errors.
+// And each [IdxError] is wrapping a [PanicError] or other error
+// values, for [Panic] or [Error], respectively.
 func AllWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
@@ -177,20 +185,19 @@ func AllWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// Any returns a [Promise] that resolves to [Success] if at least one of
-// the passed [Promise] values, p, resolved to [Success] and none resolved
-// to [Panic].
-// It resolves to [Panic] if at least one resolved to [Panic].
-// It resolves to [Error] if all resolved to [Error].
+// Any returns a [Promise] that resolves to [Success] once one of
+// the passed [Promise] values, p, is resolved to [Success].
+// Otherwise, it waits all and resolves to [Panic] or [Error], if
+// at least one is resolved to [Panic] or [Error], respectively.
 //
-// The returned [Promise] resolves on the first [Success], otherwise it waits
-// all the passed [Promise] values to resolve.
-// It doesn't resolve on [Panic], despite the fact that the returned [Promise]
-// will be resolved to [Panic], if there's any.
+// The [Success] value can return via [Result.Val], where the
+// original index of the respective [Promise] value can be fetched
+// from [IdxRes.Idx].
 //
-// The resulting [IdxRes] slice holds the [Result] values of the [Promise]
-// values passed, up to when the returned [Promise] was resolved, and their
-// original order is saved in the [IdxRes.Idx] field.
+// The [Panic] and [Error] values can be return via [Result.Err],
+// which is a [MultiError] wrapping an [IdxError] errors.
+// And each [IdxError] is wrapping a [PanicError] or other error
+// values, for [Panic] or [Error], respectively.
 func Any[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
@@ -201,16 +208,21 @@ func Any[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// AnyWait returns a [Promise] that resolves to [Success] if at least one of
-// the passed [Promise] values, p, resolved to [Success] and none resolved
-// to [Panic].
-// It resolves to [Panic] if at least one resolved to [Panic].
-// It resolves to [Error] if all resolved to [Error].
+// AnyWait waits for all the passed [Promise] values, p, to resolve
+// and returns a [Promise] that resolves to [Success] if at least one
+// of them resolved to [Success].
+// Otherwise, it resolves to [Panic] or [Error], if at least one is
+// resolved to [Panic] or [Error], respectively.
 //
-// The returned [Promise] waits for all the passed [Promise] values to resolve.
+// The [Success] values can be returned via [Result.Val], where they
+// are return at the original index their respective [Promise] values
+// were passed in.
+// Also, each value's index can be fetched from [IdxRes.Idx].
 //
-// The resulting [IdxRes] slice holds the [Result] values of all [Promise]
-// values passed, and their original order is saved in the [IdxRes.Idx] field.
+// The [Panic] and [Error] values can be return via [Result.Err],
+// which is a [MultiError] wrapping an [IdxError] errors.
+// And each [IdxError] is wrapping a [PanicError] or other error
+// values, for [Panic] or [Error], respectively.
 func AnyWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
@@ -221,13 +233,15 @@ func AnyWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	return nextProm
 }
 
-// Join returns a [Promise] that resolves to [Success] after all the passed
+// Join waits for all the passed [Promise] values, p, to resolve
+// and returns a [Promise] that resolves to [Success] with all their
+// [Result] values.
+// returns a [Promise] that resolves to [Success] after all the passed
 // [Promise] values, p, resolves.
 //
-// The returned [Promise] waits for all the passed [Promise] values to resolve.
-//
-// The resulting [IdxRes] slice holds the [Result] values of all [Promise]
-// values passed, and their original order is saved in the [IdxRes.Idx] field.
+// The values can be returned via [Result.Val], where they are return
+// at the original index their respective [Promise] values were passed in.
+// Also, each value's index can be fetched from [IdxRes.Idx].
 func Join[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 	if len(p) == 0 {
 		return Wrap[[]IdxRes[T]](nil)
@@ -248,7 +262,8 @@ func joinHandler[T any](
 
 	// callResState and callRes, collectively, represent the final [Result].
 	callResState := unknown
-	callRes := make([]IdxRes[T], 0, len(ps))
+	callRes := make([]IdxRes[T], len(ps))
+	callResLen := 0
 
 	// loopCnt records how many iterations happened in the loop below
 	var loopCnt int
@@ -329,26 +344,27 @@ func joinHandler[T any](
 
 		// a promise was resolved synchronously, update the result fields..
 		// add the result to the final promise's [Result].
-		callRes = append(callRes, res)
+		callRes[res.Idx] = res
+		callResLen++
 
 		// get the final promise's [State] based on  the current call.
-		callResState = op.NextState(res.State(), callResState)
+		callResState = op.nextState(res.State(), callResState)
 
 		// stop, if we found the target [State] based on the current call.
-		if op.ReturnOnTargetState() && op.IsTargetState(res.State()) {
+		if op.returnOnTargetState() && op.isTargetState(res.State()) {
 			break
 		}
 	}
 
 	// no resolved promises, or the resolved promise(s) didn't meet the requirements
 	// set by the provided flags.
-	if callResState == unknown || !op.ReturnOnTargetState() ||
-		!op.IsTargetState(callResState) {
+	if callResState == unknown || !op.returnOnTargetState() ||
+		!op.isTargetState(callResState) {
 		// no early return is requested, no promises got resolved by the wait
 		// logic above, or the resolved promise(s) didn't meet the requirements
 		// set for this call...
 		// get the number of pending promises against the initially provided list.
-		pending := len(ps) - len(callRes)
+		pending := len(ps) - callResLen
 
 		// if there are no pending promises and no result state computed, then it
 		// must be a Join call, which means the result state expected is Success.
@@ -359,16 +375,23 @@ func joinHandler[T any](
 		// otherwise, wait until a matching result from the pending promises.
 		for i := 0; i < pending; i++ {
 			res := <-resChan
-			callRes = append(callRes, res)
-			callResState = op.NextState(res.State(), callResState)
-			if op.ReturnOnTargetState() && op.IsTargetState(res.State()) {
+			callRes[res.Idx] = res
+			callResState = op.nextState(res.State(), callResState)
+			if op.returnOnTargetState() && op.isTargetState(res.State()) {
 				break
 			}
 		}
 	}
 
+	// remove the zero values from the callRes.
+	callRes = slices.DeleteFunc(
+		callRes,
+		func(r IdxRes[T]) bool { return r.Result == nil },
+	)
+	callRes = slices.Clip(callRes)
+
 	// resolve the next promise as expected, based on the final callResState.
-	nextProm.resolveToRes(newMultiRes(callResState, callRes))
+	nextProm.resolveToRes(newMultiRes(op, callResState, callRes))
 }
 
 func addExtCallToQ[T any](

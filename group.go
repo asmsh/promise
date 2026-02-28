@@ -59,23 +59,46 @@ func (g *Group[T]) init() {
 	})
 }
 
-func (g *Group[T]) initValidateState() *Promise[T] {
-	// make sure the group is initiated.
-	g.init()
+// groupCore contains read-only, share-able, or type-agnostic fields only.
+type groupCore struct {
+	debugCB func([]debugEvent)
 
-	// return an error if the group is in the waiting mode,
-	// disallowing the initiation of any new work.
-	if errRes := g.validateActive(); errRes != nil {
-		return newPromSync[T](g, errRes)
-	}
+	unhandledPanicCB func(any)
+	unhandledErrorCB func(error)
 
-	// attempt to reserve a goroutine for the callback,
-	// or return an error if there's no available ones.
-	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errGroupBusyResult[T]{})
-	}
+	// waiting represents whether this group has entered the waiting
+	// mode or not.
+	// it can enter the waiting mode via one of the Wait methods.
+	waiting atomic.Bool
 
-	return nil
+	// canceled represents whether this Group has been canceled or not,
+	// which happens if there's been an unhandled failure and
+	// the [GroupConfig.FailuresCancelGroup] flag was set.
+	canceled atomic.Bool
+
+	// sg is used for limiting concurrency and implementing
+	// the waiting functions.
+	sg sema.Group
+
+	// ctx will be non-nil if the Group is meant to close all Context values
+	// once any Promise that's created using it panics or returns an error.
+	// if neverCancelCBCtx is true, these 2 fields will be unset.
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	// options is generated from groupOptions.
+	options groupOptionsBitFlags
+}
+
+//go:generate genflagged -type=groupOptions -outType=groupOptionsBitFlags -outFile=group_options_flagged.go
+type groupOptions struct {
+	onetimeHandling     bool
+	neverCancelCBCtx    bool
+	failuresCancelCBCtx bool
+	failuresCancelGroup bool
+	noNilCtxDoneChan    bool
+	noWaitingBusyGroup  bool
+	saveAllGroupResults bool
 }
 
 func noopRegFunc() {
@@ -221,6 +244,7 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	}
 
 	g.init()
+
 	if errRes := g.validateActive(); errRes != nil {
 		return newPromSync[T](g, errRes)
 	}
@@ -288,6 +312,9 @@ func (g *Group[T]) Wait(triggers ...func()) {
 	g.core.sg.Wait()
 }
 
+// SelectRes returns the first [Result] value of the first resolved [Promise]
+// that started on this [Group].
+// It always returns the same [Result] value.
 func (g *Group[T]) SelectRes(triggers ...func()) Result[GroupRes[T]] {
 	g.init()
 	for _, f := range triggers {
@@ -346,6 +373,15 @@ func (g *Group[T]) AnyWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 	return res
 }
 
+// JoinRes behaves like the [Join] extension function, but only operates on
+// the promises that belong to this [Group].
+// It causes the [Group] to enter the wait mode, and wait for all ongoing promises
+// to return, then examine their [Result] values.
+// It returns the promises [Result] values either from the start of this [Group],
+// or after the provided triggers have been called, based on the Group option
+// [GroupConfig.SaveAllGroupResults].
+//
+// The returned [Result] will be of [State] [Success].
 func (g *Group[T]) JoinRes(triggers ...func()) Result[[]GroupRes[T]] {
 	g.init()
 	for _, f := range triggers {
@@ -357,129 +393,23 @@ func (g *Group[T]) JoinRes(triggers ...func()) Result[[]GroupRes[T]] {
 	return res
 }
 
-// groupCall describes a Group call and how to communicate back to it.
-type groupCall[T any] struct {
-	// resChan is used to send the Result back to the groupCall's goroutine.
-	// this is a new, per call, unbuffered and never closed channel.
-	resChan chan<- GroupRes[T]
+func (g *Group[T]) initValidateState() *Promise[T] {
+	// make sure the group is initiated.
+	g.init()
 
-	// syncChan is used to communicate that the groupCall has been resolved,
-	// so that the sending promise(s) can return without blocking on resChan.
-	// this is a new, per call, unbuffered channel.
-	syncChan <-chan struct{}
-}
-
-type groupResHistory[T any] struct {
-	// vals holds 1 [Result] of each [State], either the first or the last,
-	// based on the [GroupConfig.SetSaveLastSingleGroupResult] flag.
-	// the first most or last most [Result] will be saved at index 0.
-	vals [3]GroupRes[T]
-}
-
-// the 'resMu' must be write-locked before entering.
-func (h *groupResHistory[T]) insertRes(res GroupRes[T]) {
-	// if we only save the first [Result], then save it in the first empty place.
-	for i := range h.vals {
-		// found an empty place?
-		if h.vals[i].Result == nil {
-			h.vals[i] = res
-			break
-		}
-
-		// found another [Result] with the same [State]?
-		if h.vals[i].State() == res.State() {
-			break
-		}
-	}
-}
-
-// getRes returns the first most or last most [Result], according to how
-// the values have been saved.
-//
-// the 'resMu' must be read-locked before entering.
-func (h *groupResHistory[T]) getRes() (res GroupRes[T]) {
-	// the [Result] we're interested in is always at index 0.
-	return h.vals[0]
-}
-
-// getStateHist returns the Bitwise-OR of all different states that have
-// been sent on this group.
-//
-// the 'resMu' must be read-locked before entering.
-func (h *groupResHistory[T]) getStateHist() (state State) {
-	for i := range h.vals {
-		if h.vals[i].Result == nil {
-			continue
-		}
-		state |= h.vals[i].State()
-	}
-	return state
-}
-
-// getResForState returns the GroupRes for the provided [State], or nothing,
-// if no matching GroupRes has been saved for the provided [State].
-//
-// the 'resMu' must be read-locked before entering.
-func (h *groupResHistory[T]) getResForState(state State) (res GroupRes[T]) {
-	// the call doesn't expect a result to be added from the history.
-	if state == unknown {
-		return res
+	// return an error if the group is in the waiting mode,
+	// disallowing the initiation of any new work.
+	if errRes := g.validateActive(); errRes != nil {
+		return newPromSync[T](g, errRes)
 	}
 
-	// fetch the result from the history based on the state.
-	for i := range h.vals {
-		if h.vals[i].Result == nil {
-			continue
-		}
-		if h.vals[i].Result.State() == state {
-			return h.vals[i]
-		}
+	// attempt to reserve a goroutine for the callback,
+	// or return an error if there's no available ones.
+	if !g.reserveGoroutine(noopRegFunc) {
+		return newPromSync[T](g, errGroupBusyResult[T]{})
 	}
 
-	// no result is found for that call's state.
-	return res
-}
-
-// groupCore contains read-only, share-able, or type-agnostic fields only.
-type groupCore struct {
-	debugCB func([]debugEvent)
-
-	unhandledPanicCB func(any)
-	unhandledErrorCB func(error)
-
-	// waiting represents whether this group has entered the waiting
-	// mode or not.
-	// it can enter the waiting mode via one of the Wait methods.
-	waiting atomic.Bool
-
-	// canceled represents whether this Group has been canceled or not,
-	// which happens if there's been an unhandled failure and
-	// the [GroupConfig.FailuresCancelGroup] flag was set.
-	canceled atomic.Bool
-
-	// sg is used for limiting concurrency and implementing
-	// the waiting functions.
-	sg sema.Group
-
-	// ctx will be non-nil if the Group is meant to close all Context values
-	// once any Promise that's created using it panics or returns an error.
-	// if neverCancelCBCtx is true, these 2 fields will be unset.
-	ctx    context.Context
-	cancel context.CancelFunc
-
-	// options is generated from groupOptions.
-	options groupOptionsBitFlags
-}
-
-//go:generate genflagged -type=groupOptions -outType=groupOptionsBitFlags -outFile=group_options_flagged.go
-type groupOptions struct {
-	onetimeHandling     bool
-	neverCancelCBCtx    bool
-	failuresCancelCBCtx bool
-	failuresCancelGroup bool
-	noNilCtxDoneChan    bool
-	noWaitingBusyGroup  bool
-	saveAllGroupResults bool
+	return nil
 }
 
 // validateActive will return an [Error] [Result] if the [Group] has been closed

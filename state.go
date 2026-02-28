@@ -16,13 +16,25 @@ package promise
 
 import "fmt"
 
+// State represents the final state of a Promise execution.
 type State uint32
 
 const (
 	// the order and value here matter (increasing bitwise).
 
+	// Success indicates that the Promise's callback returned successfully.
 	Success State = 1 << iota
+
+	// Error indicates that the Promise's callback returned an error.
 	Error
+
+	// Panic indicates that the Promise's callback panicked.
+	//
+	// Any [Result] value with a Panic [Result.State] must return an error
+	// from its Err() method that implements a 'PanicV() any' method, which
+	// returns the wrapped value, V, returned from the `recover()` call.
+	// If the [Result] value doesn't implement such method, the whole [Result]
+	// value will be treated as the wrapped value, V.
 	Panic
 
 	unknown State = 0

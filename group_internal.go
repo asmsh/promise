@@ -14,6 +14,107 @@
 
 package promise
 
+// groupCall describes a Group call and how to communicate back to it.
+type groupCall[T any] struct {
+	// resChan is used to send the Result back to the groupCall's goroutine.
+	// this is a new, per call, unbuffered and never closed channel.
+	resChan chan<- GroupRes[T]
+
+	// syncChan is used to communicate that the groupCall has been resolved,
+	// so that the sending promise(s) can return without blocking on resChan.
+	// this is a new, per call, unbuffered channel.
+	syncChan <-chan struct{}
+}
+
+type groupResHistory[T any] struct {
+	// vals holds first 1 [Result] of each [State].
+	// the first most or last most [Result] will be saved at index 0.
+	vals [3]GroupRes[T]
+}
+
+// the 'resMu' must be write-locked before entering.
+func (h *groupResHistory[T]) insertRes(res GroupRes[T]) {
+	// save the first unique [Result] in the first empty place.
+	for i := range h.vals {
+		// found an empty place?
+		if h.vals[i].Result == nil {
+			h.vals[i] = res
+			break
+		}
+
+		// found another [Result] with the same [State]?
+		if h.vals[i].State() == res.State() {
+			break
+		}
+	}
+}
+
+// getRes returns the first most or last most [Result], according to how
+// the values have been saved.
+//
+// the 'resMu' must be read-locked before entering.
+func (h *groupResHistory[T]) getRes() (res GroupRes[T]) {
+	// the [Result] we're interested in is always at index 0.
+	return h.vals[0]
+}
+
+// getStateHist returns the Bitwise-OR of all different states that have
+// been sent on this group.
+//
+// the 'resMu' must be read-locked before entering.
+func (h *groupResHistory[T]) getStateHist() (state State) {
+	for i := range h.vals {
+		if h.vals[i].Result == nil {
+			continue
+		}
+		state |= h.vals[i].State()
+	}
+	return state
+}
+
+// getLenForState returns the number of [Result] values matching
+// the [State] value, state.
+//
+// the 'resMu' must be read-locked before entering.
+func (h *groupResHistory[T]) getLenForState(
+	includeAll bool,
+	state State,
+) (l int) {
+	for i := range h.vals {
+		if h.vals[i].Result == nil {
+			continue
+		}
+		if !includeAll && h.vals[i].Result.State() != state {
+			continue
+		}
+		l++
+	}
+
+	return l
+}
+
+// appendResForState adds the one or more [Result] values matching
+// the [State] value, state, to dst and return it.
+//
+// the 'resMu' must be read-locked before entering.
+func (h *groupResHistory[T]) appendResForState(
+	includeAll bool,
+	state State,
+	dst []GroupRes[T],
+) []GroupRes[T] {
+	for i := range h.vals {
+		if h.vals[i].Result == nil {
+			continue
+		}
+		if !includeAll && h.vals[i].Result.State() != state {
+			continue
+		}
+		dst = append(dst, h.vals[i])
+	}
+
+	return dst
+}
+
 // the resMu must be locked before entering.
 func (g *Group[T]) getSingleCallResSnapshot() GroupRes[T] {
 	if g.core.options.IsSaveAllGroupResults() {
@@ -118,22 +219,28 @@ func (g *Group[T]) selectResSlow(groupDone <-chan struct{}) Result[GroupRes[T]] 
 }
 
 // getMultiCallResSnapshot returns a copy of this [Group]'s results,
-// at the time of calling, based on the 'saveAllGroupResults' flag.
+// at the time of calling, based on the 'SaveAllGroupResults' flag.
 //
-// the callResState is the result of the respective 'calcInitStateFunc'
+// the callResState is the result of the respective [joinOperationLogic.InitState]
 // call, given the [Group]'s state history, at the time of calling.
 //
-// callResLen is the capacity of the returned [GroupRes] slice that's
+// extraResLen is the capacity of the returned [GroupRes] slice that's
 // requested by the caller.
 // the actual capacity will be bigger than this value by a difference
-// based on the 'saveAllGroupResults' flag.
-// the difference will be the length of 'resQ' if 'saveAllGroupResults'
-// is true, and 1 otherwise.
+// based on the 'SaveAllGroupResults' flag.
+// the difference will be the length of 'resQ' if 'SaveAllGroupResults'
+// is true, and [0:3] otherwise, based on the found matching [Result]
+// values in the history.
 //
 // the 'resMu' must be locked before entering.
-func (g *Group[T]) getMultiCallResSnapshot(callResState State, callResLen int) []GroupRes[T] {
+func (g *Group[T]) getMultiCallResSnapshot(
+	includeAll bool,
+	callResState State,
+	extraResLen int,
+) []GroupRes[T] {
+	// if we are saving all group results, return a snapshot of them.
 	if g.core.options.IsSaveAllGroupResults() {
-		callResLen += g.resQ.Len()
+		callResLen := extraResLen + g.resQ.Len()
 		callRes := make([]GroupRes[T], 0, callResLen)
 		for res := g.resQ.Front(); res != nil; res = res.Next() {
 			callRes = append(callRes, res.Value.(GroupRes[T]))
@@ -141,21 +248,24 @@ func (g *Group[T]) getMultiCallResSnapshot(callResState State, callResLen int) [
 		return callRes
 	}
 
-	// fetch the call's result from the history.
-	res := g.resHist.getResForState(callResState)
+	// update the wanted res length with addition required for this callResState.
+	callResLen := g.resHist.getLenForState(includeAll, callResState)
 
-	// if no matching [Result] is found, either return nil, or return
-	// the new callResLen with the expected cap.
-	if res.Result == nil && callResLen == 0 {
+	// if there's nothing to be returned, return nil.
+	if extraResLen == 0 && callResLen == 0 {
 		return nil
-	} else if res.Result == nil {
-		return make([]GroupRes[T], 0, callResLen)
 	}
 
-	// we found a [Result] that matches the group call...
-	// create the callRes with the expected cap, and include it in
-	// the returned callRes.
-	return append(make([]GroupRes[T], 0, callResLen+1), res)
+	// create the call result.
+	callRes := make([]GroupRes[T], 0, extraResLen+callResLen)
+
+	// if there are no results to be fetched from teh history, return early.
+	if callResLen == 0 {
+		return callRes
+	}
+
+	// populate the call result from the history and return it.
+	return g.resHist.appendResForState(includeAll, callResState, callRes)
 }
 
 func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
@@ -168,7 +278,7 @@ func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
 		// get the 'callResState' from the [Group]'s state history.
 		// for a zero [Group] we return a [Success] and empty [Result],
 		// otherwise we return the existing [Result].
-		callResState := op.InitState(resStateHist)
+		callResState := op.initState(resStateHist)
 
 		// if this is a zero [Group], or the call ignores the current
 		// [Group] state, use the [Group]'s highest [State] instead,
@@ -179,30 +289,30 @@ func (g *Group[T]) joinRes(op joinOperationLogic) Result[[]GroupRes[T]] {
 		}
 
 		// get the 'callRes' from this [Group] based on the 'callResState'.
-		callRes := g.getMultiCallResSnapshot(callResState, 0)
+		callRes := g.getMultiCallResSnapshot(op == joinOp, callResState, 0)
 		g.resMu.RUnlock()
 
-		return newMultiRes(callResState, callRes)
+		return newMultiRes(op, callResState, callRes)
 	default:
 		// if we want to return early, check if the current [Group]
 		// state is the target [State] for this call.
 		// note: if the check failed, we will need to check the history
 		// fields again, because the target [State] might be sent later.
-		if op.ReturnOnTargetState() {
+		if op.returnOnTargetState() {
 			var callRes []GroupRes[T]
 			var targetFound bool
 
 			g.resMu.RLock()
 			resStateHist := g.resHist.getStateHist()
-			callResState := op.InitState(resStateHist)
-			if op.IsTargetState(callResState) {
-				callRes = g.getMultiCallResSnapshot(callResState, 0)
+			callResState := op.initState(resStateHist)
+			if op.isTargetState(callResState) {
+				callRes = g.getMultiCallResSnapshot(op == joinOp, callResState, 0)
 				targetFound = true
 			}
 			g.resMu.RUnlock()
 
 			if targetFound {
-				return newMultiRes(callResState, callRes)
+				return newMultiRes(op, callResState, callRes)
 			}
 
 			// target is not found, move forward to the async (slow) handling...
@@ -221,7 +331,7 @@ func (g *Group[T]) joinResSlow(
 	// create the syncChan to handle unblocking promises once the target
 	// value is received, but only if we are expecting an early return.
 	var syncChan chan struct{}
-	if op.ReturnOnTargetState() {
+	if op.returnOnTargetState() {
 		syncChan = make(chan struct{})
 	}
 
@@ -238,19 +348,19 @@ func (g *Group[T]) joinResSlow(
 	var callResState State
 	var callRes []GroupRes[T]
 	var targetFound bool
-	if op.ReturnOnTargetState() {
+	if op.returnOnTargetState() {
 		// we want an early return, once the target [Result] is found.
 		g.resMu.RLock()
 		resStateHist := g.resHist.getStateHist()
-		callResState = op.InitState(resStateHist)
-		if op.IsTargetState(callResState) {
+		callResState = op.initState(resStateHist)
+		if op.isTargetState(callResState) {
 			// we found our target, so return the expected [Result] values.
-			callRes = g.getMultiCallResSnapshot(callResState, 0)
+			callRes = g.getMultiCallResSnapshot(op == joinOp, callResState, 0)
 			targetFound = true
 		} else {
 			// expect at least all active promises to be included.
-			callResLen := g.core.sg.ActiveCount()
-			callRes = g.getMultiCallResSnapshot(callResState, callResLen)
+			extraResLen := g.core.sg.ActiveCount()
+			callRes = g.getMultiCallResSnapshot(op == joinOp, callResState, extraResLen)
 		}
 		g.resMu.RUnlock()
 	} else {
@@ -287,9 +397,9 @@ func (g *Group[T]) joinResSlow(
 		// expecting at least all ongoing promises to be included.
 		g.resMu.RLock()
 		resStateHist := g.resHist.getStateHist()
-		callResState = op.InitState(resStateHist)
-		callResLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
-		callRes = g.getMultiCallResSnapshot(callResState, callResLen)
+		callResState = op.initState(resStateHist)
+		extraResLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
+		callRes = g.getMultiCallResSnapshot(op == joinOp, callResState, extraResLen)
 		g.resMu.RUnlock()
 	}
 
@@ -304,9 +414,9 @@ resultLoop:
 		// the 'resChan'.
 		select {
 		case res := <-resChan:
-			callResState = op.NextState(res.State(), callResState)
+			callResState = op.nextState(res.State(), callResState)
 			callRes = append(callRes, res)
-			if op.ReturnOnTargetState() && op.IsTargetState(res.State()) {
+			if op.returnOnTargetState() && op.isTargetState(res.State()) {
 				break resultLoop
 			}
 		case <-groupDone:
@@ -318,7 +428,7 @@ resultLoop:
 	// on sending to the resChan.
 	// note: this has to be before the removal of the 'groupCall' from
 	// the 'callsQ', otherwise we will have a deadlock on 'callsQMu'.Lock().
-	if op.ReturnOnTargetState() {
+	if op.returnOnTargetState() {
 		close(syncChan)
 	}
 
@@ -327,7 +437,7 @@ resultLoop:
 	g.callsQ.Remove(call)
 	g.callsQMu.Unlock()
 
-	return newMultiRes(callResState, callRes)
+	return newMultiRes(op, callResState, callRes)
 }
 
 var (
@@ -340,37 +450,31 @@ var (
 
 // joinOperationLogic encapsulates the logic for each of the join calls.
 type joinOperationLogic interface {
-	// InitState takes history [State] and returns the [Result] [State]
+	// initState takes history [State] and returns the [Result] [State]
 	// that should be fetched from the [Group] history and be included
 	// in the [Result] returned by the current call.
 	// It returns [unknown] if no fetching from the history should be done.
-	InitState(stateHist State) State
+	initState(stateHist State) State
 
-	// NextState takes the current and previous [State] values and returns
+	// nextState takes the current and previous [State] values and returns
 	// the next [State], which will be the resolve state, if there are no
 	// more promises to process.
-	NextState(currState State, prevState State) (nextState State)
+	nextState(currState State, prevState State) (nextState State)
 
-	// ReturnOnTargetState is an identity method telling whether the current
+	// returnOnTargetState is an identity method telling whether the current
 	// operation should return once the target [State] is found or it should
 	// keep going until all promises are processed.
-	ReturnOnTargetState() bool
+	returnOnTargetState() bool
 
-	// IsTargetState takes the current [State] value and returns whether
+	// isTargetState takes the current [State] value and returns whether
 	// it's the target for this call, and we should resolve/return.
-	IsTargetState(currState State) bool
+	isTargetState(currState State) bool
 }
 
 type allOperation struct{}
 
-// InitState returns the [Result] [State] that should be fetched from
-// the [Group] history and be included in the [Result] returned by
-// [All], or [AllWait].
-// It returns 0 ([unknown]) if no fetching from the history should be done.
-// [Panic] has the highest priority.
-// [Success] is ignored, as no [Success] should be fetched from history.
-// It returns either [Panic], [Error], or 0 ([unknown]).
-func (allOperation) InitState(stateHist State) State {
+// allOperation can only fetch [Panic] or [Error] from the history.
+func (allOperation) initState(stateHist State) State {
 	// the order here matters.
 	switch {
 	case stateHist == unknown:
@@ -387,11 +491,9 @@ func (allOperation) InitState(stateHist State) State {
 	return stateHist
 }
 
-// NextState returns the resolve state of the promise returned by [All],
-// or [AllWait].
-// [Panic] has the highest priority.
-// [Error] has the highest priority between [Success] and [Error].
-func (allOperation) NextState(currState State, prevState State) (nextState State) {
+// allOperation gives higher priority to [Panic], then [Error] and [Success].
+func (allOperation) nextState(currState State, prevState State) (nextState State) {
+	// the order here matters.
 	switch {
 	case currState == Panic || prevState == Panic:
 		return Panic
@@ -404,40 +506,34 @@ func (allOperation) NextState(currState State, prevState State) (nextState State
 	}
 }
 
-func (allOperation) ReturnOnTargetState() bool {
+// allOperation returns once it finds its target [State].
+func (allOperation) returnOnTargetState() bool {
 	return true
 }
 
-// IsTargetState breaks on [Error] only, as it ignores [Panic] and is
-// okay with [Success].
-func (allOperation) IsTargetState(currState State) bool {
-	return currState == Error
+func (allOperation) isTargetState(currState State) bool {
+	return currState == Panic || currState == Error
 }
 
 type allWaitOperation struct{ allOperation }
 
-func (a allWaitOperation) ReturnOnTargetState() bool {
+// allWaitOperation returns only after processing all promises.
+func (a allWaitOperation) returnOnTargetState() bool {
 	return false
 }
 
 type anyOperation struct{}
 
-// InitState returns the [Result] [State] that should be fetched
-// from the [Group] history and be included in the [Result] returned by
-// [Any], or [AnyWait].
-// It returns 0 ([unknown]) if no fetching from the history should be done.
-// [Panic] has the highest priority.
-// [Error] is ignored, as no [Error] should be fetched from history.
-// It returns either [Panic], [Error], or 0 ([unknown]).
-func (anyOperation) InitState(stateHist State) State {
+// anyOperation can only fetch [Success] from the history.
+func (anyOperation) initState(stateHist State) State {
 	// the order here matters.
 	switch {
 	case stateHist == unknown:
 		return unknown
-	case stateHist&Panic == Panic:
-		return Panic
 	case stateHist&Success == Success:
 		return Success
+	case stateHist&Panic == Panic:
+		return unknown
 	case stateHist&Error == Error:
 		return unknown
 	}
@@ -446,16 +542,14 @@ func (anyOperation) InitState(stateHist State) State {
 	return stateHist
 }
 
-// NextState returns the resolve state of the promise returned by [Any],
-// [AnyWait].
-// [Panic] has the highest priority.
-// [Success] has the highest priority between [Success] and [Error].
-func (anyOperation) NextState(currState State, prevState State) (nextState State) {
+// anyOperation gives higher priority to [Success], then [Panic] and [Error].
+func (anyOperation) nextState(currState State, prevState State) (nextState State) {
+	// the order here matters.
 	switch {
-	case currState == Panic || prevState == Panic:
-		return Panic
-	case currState == Success:
+	case currState == Success || prevState == Success:
 		return Success
+	case currState == Panic:
+		return Panic
 	case prevState == unknown:
 		return currState
 	default:
@@ -463,34 +557,40 @@ func (anyOperation) NextState(currState State, prevState State) (nextState State
 	}
 }
 
-func (anyOperation) ReturnOnTargetState() bool {
+func (anyOperation) returnOnTargetState() bool {
 	return true
 }
 
-// IsTargetState breaks on [Success] only, as it ignores [Panic] and is
-// okay with [Error].
-func (anyOperation) IsTargetState(currState State) bool {
+func (anyOperation) isTargetState(currState State) bool {
 	return currState == Success
 }
 
 type anyWaitOperation struct{ anyOperation }
 
-func (a anyWaitOperation) ReturnOnTargetState() bool {
+// anyWaitOperation returns only after processing all promises.
+func (a anyWaitOperation) returnOnTargetState() bool {
 	return false
 }
 
 type joinOperation struct{}
 
-func (joinOperation) InitState(State) State {
+// joinOperation includes all [Result] values from the history.
+func (joinOperation) initState(State) State {
+	// value doesn't matter, as it's handled by comparing against [joinOp].
 	return Success
 }
-func (joinOperation) NextState(State, State) State {
+
+// joinOperation always resolved to [Success].
+func (joinOperation) nextState(State, State) State {
 	return Success
 }
-func (joinOperation) ReturnOnTargetState() bool {
+
+// joinOperation returns only after processing all promises.
+func (joinOperation) returnOnTargetState() bool {
 	return false
 }
-func (joinOperation) IsTargetState(State) bool {
+
+func (joinOperation) isTargetState(State) bool {
 	// value doesn't matter, as [ReturnOnTargetState] returns false.
 	return false
 }
@@ -505,10 +605,10 @@ func calcGroupResState(stateHist State) State {
 		return Success
 	case stateHist&Panic == Panic:
 		return Panic
-	case stateHist&Success == Success:
-		return Success
 	case stateHist&Error == Error:
 		return Error
+	case stateHist&Success == Success:
+		return Success
 	}
 
 	// unexpected state.

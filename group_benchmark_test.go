@@ -93,7 +93,7 @@ func actualWorkPG_customWorkerResult_customGroupResult(
 		})
 	}
 
-	return UnwrapMultiResVal(pg.AllWaitRes()), nil
+	return UnwrapMultiResVal(pg.JoinRes()), nil
 }
 
 func actualWorkPG_customWorkerResult_standardGroupResult(
@@ -110,7 +110,7 @@ func actualWorkPG_customWorkerResult_standardGroupResult(
 		})
 	}
 
-	return pg.AllWaitRes().Val(), nil
+	return pg.JoinRes().Val(), nil
 }
 
 func actualWorkPG_standardWorkerResult_standardGroupResult(
@@ -127,7 +127,7 @@ func actualWorkPG_standardWorkerResult_standardGroupResult(
 		})
 	}
 
-	return pg.AllWaitRes().Val(), nil
+	return pg.JoinRes().Val(), nil
 }
 
 func actualWorkPG_standardWorkerResult_callbackGroupResult(
@@ -145,7 +145,7 @@ func actualWorkPG_standardWorkerResult_callbackGroupResult(
 		pg.GoCallback(cb)
 	}
 
-	return pg.AllWaitRes().Val(), nil
+	return pg.JoinRes().Val(), nil
 }
 
 func Test_actualWork(t *testing.T) {

@@ -197,7 +197,7 @@ func (p *Promise[T]) resCall() Result[T] {
 func getFinalRes[T any](res Result[T]) Result[T] {
 	// if no result was set, then it's implicitly the empty result
 	if res == nil {
-		return emptyResult[T]{}
+		return zeroResult[T]{}
 	}
 	return res
 }
