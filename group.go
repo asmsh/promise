@@ -110,7 +110,7 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	return g.GoCallback(goFunc[T, T](cb))
+	return goCallback(g, goFunc[T, T](cb))
 }
 
 func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
@@ -118,7 +118,7 @@ func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	return g.GoCallback(goNextErrFunc[T, T](cb))
+	return goCallback(g, goNextErrFunc[T, T](cb))
 }
 
 func (g *Group[T]) GoValErr(cb func() (T, error)) *Promise[T] {
@@ -126,7 +126,7 @@ func (g *Group[T]) GoValErr(cb func() (T, error)) *Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	return g.GoCallback(goNextValErrFunc[T, T](cb))
+	return goCallback(g, goNextValErrFunc[T, T](cb))
 }
 
 func (g *Group[T]) GoCtxErr(cb func(ctx context.Context) error) *Promise[T] {
@@ -134,7 +134,7 @@ func (g *Group[T]) GoCtxErr(cb func(ctx context.Context) error) *Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
-	return g.GoCallback(ctxNextErrFunc[T, T](cb))
+	return goCallback(g, ctxNextErrFunc[T, T](cb))
 }
 
 func (g *Group[T]) GoCtxValErr(cb func(ctx context.Context) (T, error)) *Promise[T] {
@@ -142,7 +142,7 @@ func (g *Group[T]) GoCtxValErr(cb func(ctx context.Context) (T, error)) *Promise
 		panic(nilCallbackPanicMsg)
 	}
 
-	return g.GoCallback(ctxNextValErrFunc[T, T](cb))
+	return goCallback(g, ctxNextValErrFunc[T, T](cb))
 }
 
 func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
@@ -150,7 +150,7 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 		panic(nilCallbackPanicMsg)
 	}
 
-	return g.GoCallback(ctxNextResFunc[T, T](cb))
+	return goCallback(g, ctxNextResFunc[T, T](cb))
 }
 
 func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
@@ -158,14 +158,21 @@ func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
 		panic(nilCallbackPanicMsg)
 	}
 
+	return goCallback(g, cb)
+}
+
+func goCallback[NextT, PrevT any](
+	g *Group[NextT],
+	cb Callback[NextT, PrevT],
+) *Promise[NextT] {
 	// make sure the group and in a valid state, otherwise return
 	// the error promise created.
-	if errProm := g.initValidateState(); errProm != nil {
-		return errProm
+	if errRes := g.initValidateReserve(); errRes != nil {
+		return newPromSync[NextT](g, errRes)
 	}
 
 	// create the new promise that will track the provided callback.
-	nextProm := newPromInter[T](g)
+	nextProm := newPromInter[NextT](g)
 
 	// derive the Context used in the callback from the group's, or from
 	// the new promise, effectively making the created Context closed
@@ -194,8 +201,8 @@ func (g *Group[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
 ) *Promise[T] {
-	if errProm := g.initValidateState(); errProm != nil {
-		return errProm
+	if errRes := g.initValidateReserve(); errRes != nil {
+		return newPromSync[T](g, errRes)
 	}
 
 	nextProm := newPromInter[T](g)
@@ -221,8 +228,8 @@ func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 		panic(nilResChanPanicMsg)
 	}
 
-	if errProm := g.initValidateState(); errProm != nil {
-		return errProm
+	if errRes := g.initValidateReserve(); errRes != nil {
+		return newPromSync[T](g, errRes)
 	}
 
 	nextProm := newPromInter[T](g)
@@ -296,7 +303,8 @@ func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 	return newPromSync[T](g, res)
 }
 
-// Wait enters the wait mode and waits until all [Promise]s returns.
+// Wait enters the wait mode, blocking new calls from starting,
+// then waits until all [Promise] values return.
 // If there are any triggers provided, it executes them first.
 //
 // Example:
@@ -393,20 +401,20 @@ func (g *Group[T]) JoinRes(triggers ...func()) Result[[]GroupRes[T]] {
 	return res
 }
 
-func (g *Group[T]) initValidateState() *Promise[T] {
+func (g *Group[T]) initValidateReserve() Result[T] {
 	// make sure the group is initiated.
 	g.init()
 
 	// return an error if the group is in the waiting mode,
 	// disallowing the initiation of any new work.
 	if errRes := g.validateActive(); errRes != nil {
-		return newPromSync[T](g, errRes)
+		return errRes
 	}
 
 	// attempt to reserve a goroutine for the callback,
 	// or return an error if there's no available ones.
 	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errGroupBusyResult[T]{})
+		return errGroupBusyResult[T]{}
 	}
 
 	return nil
