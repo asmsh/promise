@@ -41,6 +41,11 @@ type Group[T any] struct {
 	resHist groupResHistory[T]
 }
 
+// NewGroup creates and returns a new [Group] value of type T,
+// initialized with the provided options.
+//
+// When no options are provided, it's equivalent to a zero-value [Group],
+// which is ready to use with the [DefaultGroupConfig].
 func NewGroup[T any](opts ...GroupOption) *Group[T] {
 	g := &Group[T]{}
 	g.init()
@@ -105,6 +110,22 @@ func noopRegFunc() {
 	// do nothing
 }
 
+// Go runs the provided function, cb, in a separate goroutine, and returns
+// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
+//
+// The [Result.State] will either be [Panic], or [Success], based on whether
+// cb caused a panic, or returned normally, respectively.
+//
+// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
+// that wraps the panic value that occurred.
+// If the [Result.State] is [Success], [Result.Val] will return nil.
+//
+// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
+// will return nil.
+//
+// It will panic if cb is nil.
 func (g *Group[T]) Go(cb func()) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
@@ -113,6 +134,25 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 	return goCallback(g, goFunc[T, T](cb))
 }
 
+// GoErr runs the provided function, cb, in a separate goroutine, and returns
+// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
+//
+// The [Result.State] will either be [Panic], [Error], or [Success], based on
+// whether cb caused a panic, returned a non-nil error, or returned a nil error,
+// respectively.
+//
+// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
+// that wraps the panic value that occurred.
+// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
+// that wraps the error that cb returned.
+// If the [Result.State] is [Success], [Result.Val] will return nil.
+//
+// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
+// will return nil.
+//
+// It will panic if cb is nil.
 func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
@@ -121,6 +161,25 @@ func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
 	return goCallback(g, goNextErrFunc[T, T](cb))
 }
 
+// GoValErr runs the provided function, cb, in a separate goroutine, and returns
+// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
+//
+// The [Result.State] will either be [Panic], [Error], or [Success], based on
+// whether cb caused a panic, returned an error, or returned a value, respectively.
+//
+// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
+// that wraps the panic value that occurred.
+// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
+// that wraps the error that cb returned.
+// If the [Result.State] is [Success], [Result.Val] will return the value
+// that cb returned.
+//
+// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
+// will return nil.
+//
+// It will panic if cb is nil.
 func (g *Group[T]) GoValErr(cb func() (T, error)) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
@@ -129,6 +188,28 @@ func (g *Group[T]) GoValErr(cb func() (T, error)) *Promise[T] {
 	return goCallback(g, goNextValErrFunc[T, T](cb))
 }
 
+// GoCtxErr runs the provided function, cb, in a separate goroutine, and returns
+// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
+//
+// The cb function receives a [context.Context] value derived from the [Group]'s
+// context, if one is configured, and is canceled once cb returns.
+//
+// The [Result.State] will either be [Panic], [Error], or [Success], based on
+// whether cb caused a panic, returned a non-nil error, or returned a nil error,
+// respectively.
+//
+// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
+// that wraps the panic value that occurred.
+// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
+// that wraps the error that cb returned.
+// If the [Result.State] is [Success], [Result.Val] will return nil.
+//
+// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
+// will return nil.
+//
+// It will panic if cb is nil.
 func (g *Group[T]) GoCtxErr(cb func(ctx context.Context) error) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
@@ -137,6 +218,28 @@ func (g *Group[T]) GoCtxErr(cb func(ctx context.Context) error) *Promise[T] {
 	return goCallback(g, ctxNextErrFunc[T, T](cb))
 }
 
+// GoCtxValErr runs the provided function, cb, in a separate goroutine, and returns
+// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
+//
+// The cb function receives a [context.Context] value derived from the [Group]'s
+// context, if one is configured, and is canceled once cb returns.
+//
+// The [Result.State] will either be [Panic], [Error], or [Success], based on
+// whether cb caused a panic, returned an error, or returned a value, respectively.
+//
+// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
+// that wraps the panic value that occurred.
+// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
+// that wraps the error that cb returned.
+// If the [Result.State] is [Success], [Result.Val] will return the value
+// that cb returned.
+//
+// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
+// will return nil.
+//
+// It will panic if cb is nil.
 func (g *Group[T]) GoCtxValErr(cb func(ctx context.Context) (T, error)) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
@@ -145,6 +248,28 @@ func (g *Group[T]) GoCtxValErr(cb func(ctx context.Context) (T, error)) *Promise
 	return goCallback(g, ctxNextValErrFunc[T, T](cb))
 }
 
+// GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
+// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
+//
+// The cb function receives a [context.Context] value derived from the [Group]'s
+// context, if one is configured, and is canceled once cb returns.
+//
+// The [Result.State] will either be [Panic], [Error], or [Success], based on
+// whether cb caused a panic, returned an error, or returned a value, respectively.
+//
+// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
+// that wraps the panic value that occurred.
+// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
+// that wraps the error that cb returned.
+// If the [Result.State] is [Success], [Result.Val] will return the value
+// that cb returned.
+//
+// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
+// will return nil.
+//
+// It will panic if cb is nil.
 func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
@@ -153,6 +278,26 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 	return goCallback(g, ctxNextResFunc[T, T](cb))
 }
 
+// GoCallback runs the [Callback], cb, in a separate goroutine, and returns
+// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
+//
+// The [Result.State] will either be [Panic], [Error], or [Success], based on
+// whether cb caused a panic, returned a non-nil error, or returned a nil error,
+// respectively.
+//
+// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
+// that wraps the panic value that occurred.
+// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
+// that wraps the error that cb returned.
+// If the [Result.State] is [Success], [Result.Val] will return whatever cb
+// returned as a value, if any.
+//
+// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
+// will return nil.
+//
+// It will panic if cb is nil.
 func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
@@ -196,6 +341,11 @@ func goCallbackHandler[NextT, PrevT any](
 	debug(nextProm, endHandler, endGroupHandler, endGroupGoHandler)
 }
 
+// Delay returns a [Promise] that resolves to res after waiting for at least
+// duration d in a separate goroutine, according to how the [State] of res
+// matches the provided cond.
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
 func (g *Group[T]) Delay(
 	res Result[T],
 	d time.Duration,
@@ -223,6 +373,21 @@ func delayHandler[T any](
 	debug(nextProm, endHandler, endGroupHandler, endGroupDelayHandler)
 }
 
+// Chan returns a [Promise] that wraps the provided [Result] channel, resChan,
+// waiting in a separate goroutine for the first [Result] value sent to it,
+// which will be used to resolve the returned [Promise].
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
+//
+// Only one [Result] value is received from resChan, and any later values
+// will not be received (and will block if the channel becomes full).
+//
+// Closing the resChan will have the same effect as sending nil to it.
+//
+// Sending nil to resChan will make the [Result.State] return [Success],
+// [Result.Err] return nil, and [Result.Val] return nil.
+//
+// It will panic if resChan is nil.
 func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 	if resChan == nil {
 		panic(nilResChanPanicMsg)
@@ -245,6 +410,22 @@ func chanHandler[T any](nextProm *Promise[T], resChan <-chan Result[T]) {
 	debug(nextProm, endHandler, endGroupHandler, endGroupChanHandler)
 }
 
+// Ctx returns a [Promise] that wraps the provided [context.Context] value, ctx,
+// that's resolved in a separate goroutine once the ctx is canceled.
+// The goroutine is drawn from this [Group]'s pool, if one is set, and the
+// returned [Promise] is tracked by this [Group]'s wait and join operations.
+// The [Promise.Res] returns a [Result] value that allows knowing the [State]
+// of ctx (via [Result.State]), and the error returned from ctx (via [Result.Err]).
+//
+// Once the [context.Context.Done] channel is closed, the [Result.State] will
+// either be [Error], or [Success], based on whether [context.Context.Err]
+// returned an error, or nil, respectively.
+//
+// If the [context.Context.Done] channel is nil or never closed, the returned
+// [Promise] value will never resolve, meaning that all its methods will block.
+// This behavior can be changed by the [GroupConfig.NoNilCtxDoneChan] option.
+//
+// It will panic if ctx is nil.
 func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	if ctx == nil {
 		panic(nilCtxPanicMsg)
@@ -270,6 +451,9 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 		return newPromBlocked[T]()
 	}
 
+	// TODO: handle already closed Done chan, so that we don't create
+	//  a new goroutine if the chan is already closed.
+
 	if !g.reserveGoroutine(noopRegFunc) {
 		return newPromSync[T](g, errGroupBusyResult[T]{})
 	}
@@ -287,6 +471,10 @@ func ctxHandler[T any](nextProm *Promise[T]) {
 	debug(nextProm, endHandler, endGroupHandler, endGroupCtxHandler)
 }
 
+// Wrap returns a [Promise] that wraps the provided [Result] value, res,
+// synchronously, without creating any new goroutines.
+// The returned [Promise] belongs to this [Group].
+// The [Promise.Res] will return the provided res.
 func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 	g.init()
 
@@ -304,7 +492,7 @@ func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 }
 
 // Wait enters the wait mode, blocking new calls from starting,
-// then waits until all [Promise] values return.
+// then waits for all ongoing promises on this [Group] to return.
 // If there are any triggers provided, it executes them first.
 //
 // Example:
@@ -331,6 +519,21 @@ func (g *Group[T]) SelectRes(triggers ...func()) Result[GroupRes[T]] {
 	return g.selectRes()
 }
 
+// AllRes returns a [Result] of [Success] after all the promises
+// of this [Group] are resolved to [Success].
+// Otherwise, it returns early a [Result] of [Panic] or [Error],
+// once a [Promise] is resolved to [Panic] or [Error], respectively.
+//
+// It will return a [Result] of [Success] if it's called on a zero [Group].
+//
+// It returns the [Result] values either from the start of this [Group],
+// or after the provided triggers have been called, based on the [GroupOption]
+// [SaveAllGroupResults].
+//
+// The [Panic] and [Error] values can be return via [Result.Err],
+// which is a [MultiError] wrapping an [GroupError] errors.
+// And each [GroupError] is wrapping a [PanicError] or other error
+// values, for [Panic] or [Error], respectively.
 func (g *Group[T]) AllRes(triggers ...func()) Result[[]GroupRes[T]] {
 	g.init()
 	for _, f := range triggers {
@@ -339,18 +542,24 @@ func (g *Group[T]) AllRes(triggers ...func()) Result[[]GroupRes[T]] {
 	return g.joinRes(allOp)
 }
 
-// AllWaitRes behaves like the [AllWait] extension function, but only operates
-// on the promises that belong to this [Group].
-// It causes the [Group] to enter the wait mode, and wait for all ongoing promises
-// to return, then examine their [Result] values.
-// It returns the promises [Result] values either from the start of this [Group],
-// or after the provided triggers have been called, based on the Group option
-// [GroupConfig.SaveAllGroupResults].
+// AllWaitRes causes the [Group] to enter the wait mode, blocking new promises
+// from being created, then waits for all ongoing promises on it to return.
 //
-// The [Result] of this call will be a [Success] iff all the promises were
-// resolved to [Success], or it's called on a zero [Group].
-// It will be a [Panic] if at least one promise was resolved to [Panic].
-// It will be an [Error] if at least one promise was resolved to [Error].
+// It returns a [Result] of [Success] if all the promises were resolved
+// to [Success].
+// Otherwise, it returns a [Result] of [Panic] or [Error], if at least one
+// promise was resolved to [Panic] or [Error], respectively.
+//
+// It will return a [Result] of [Success] if it's called on a zero [Group].
+//
+// It returns the [Result] values either from the start of this [Group],
+// or after the provided triggers have been called, based on the [GroupOption]
+// [SaveAllGroupResults].
+//
+// The [Panic] and [Error] values can be return via [Result.Err],
+// which is a [MultiError] wrapping an [GroupError] errors.
+// And each [GroupError] is wrapping a [PanicError] or other error
+// values, for [Panic] or [Error], respectively.
 func (g *Group[T]) AllWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 	g.init()
 	for _, f := range triggers {
@@ -362,6 +571,21 @@ func (g *Group[T]) AllWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 	return res
 }
 
+// AnyRes returns a [Result] of [Success] once one of the promises
+// of this [Group] is resolved to [Success].
+// Otherwise, it waits and returns a [Result] of [Panic] or [Error],
+// if at least one is resolved to [Panic] or [Error], respectively.
+//
+// It will return a [Result] of [Success] if it's called on a zero [Group].
+//
+// It returns the [Result] values either from the start of this [Group],
+// or after the provided triggers have been called, based on the [GroupOption]
+// [SaveAllGroupResults].
+//
+// The [Panic] and [Error] values can be return via [Result.Err],
+// which is a [MultiError] wrapping an [GroupError] errors.
+// And each [GroupError] is wrapping a [PanicError] or other error
+// values, for [Panic] or [Error], respectively.
 func (g *Group[T]) AnyRes(triggers ...func()) Result[[]GroupRes[T]] {
 	g.init()
 	for _, f := range triggers {
@@ -370,6 +594,24 @@ func (g *Group[T]) AnyRes(triggers ...func()) Result[[]GroupRes[T]] {
 	return g.joinRes(anyOp)
 }
 
+// AnyWaitRes causes the [Group] to enter the wait mode, blocking new promises
+// from being created, then waits for all ongoing promises on it to return.
+//
+// It returns a [Result] of [Success] if at least one of the promises was
+// resolved to [Success].
+// Otherwise, it returns a [Result] of [Panic] or [Error], if at least one
+// was resolved to [Panic] or [Error], respectively.
+//
+// It will return a [Result] of [Success] if it's called on a zero [Group].
+//
+// It returns the [Result] values either from the start of this [Group],
+// or after the provided triggers have been called, based on the [GroupOption]
+// [SaveAllGroupResults].
+//
+// The [Panic] and [Error] values can be return via [Result.Err],
+// which is a [MultiError] wrapping an [GroupError] errors.
+// And each [GroupError] is wrapping a [PanicError] or other error
+// values, for [Panic] or [Error], respectively.
 func (g *Group[T]) AnyWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 	g.init()
 	for _, f := range triggers {
@@ -381,15 +623,14 @@ func (g *Group[T]) AnyWaitRes(triggers ...func()) Result[[]GroupRes[T]] {
 	return res
 }
 
-// JoinRes behaves like the [Join] extension function, but only operates on
-// the promises that belong to this [Group].
-// It causes the [Group] to enter the wait mode, and wait for all ongoing promises
-// to return, then examine their [Result] values.
-// It returns the promises [Result] values either from the start of this [Group],
-// or after the provided triggers have been called, based on the Group option
-// [GroupConfig.SaveAllGroupResults].
+// JoinRes causes the [Group] to enter the wait mode, blocking new promises
+// from being created, then waits for all ongoing promises on it to return.
 //
-// The returned [Result] will be of [State] [Success].
+// It returns a [Result] of [Success] with all promises' [Result] values.
+//
+// It returns the [Result] values either from the start of this [Group],
+// or after the provided triggers have been called, based on the [GroupOption]
+// [SaveAllGroupResults].
 func (g *Group[T]) JoinRes(triggers ...func()) Result[[]GroupRes[T]] {
 	g.init()
 	for _, f := range triggers {
