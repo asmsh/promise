@@ -26,7 +26,7 @@ type Result[T any] interface {
 	State() State
 }
 
-func EmptyRes[T any]() Result[T] {
+func ZeroRes[T any]() Result[T] {
 	return zeroResult[T]{}
 }
 

@@ -126,7 +126,7 @@ func BenchmarkGoCtxRes(b *testing.B) {
 		b.ResetTimer()
 		for range b.N {
 			p = GoCtxRes(func(ctx context.Context) Result[any] {
-				return EmptyRes[any]()
+				return ZeroRes[any]()
 			})
 		}
 		_ = p
@@ -213,7 +213,7 @@ func BenchmarkDelay(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p = Delay(EmptyRes[any](), time.Microsecond)
+			p = Delay(ZeroRes[any](), time.Microsecond)
 		}
 		_ = p
 	})
