@@ -264,7 +264,11 @@ func delayFollowHandler[T any](
 		return
 	}
 
-	nextProm.resolveToResWithDelay(res, dd, flags)
+	if shouldDelayRes(res, flags) {
+		time.Sleep(dd)
+	}
+	nextProm.resolveToRes(res)
+
 	debug(prevProm, endHandler, endPromiseHandler, endPromiseDelayHandler)
 }
 

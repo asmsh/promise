@@ -369,7 +369,10 @@ func delayHandler[T any](
 	flags delayFlags,
 ) {
 	defer nextProm.group.freeGoroutine()
-	nextProm.resolveToResWithDelay(res, dd, flags)
+	if shouldDelayRes(res, flags) {
+		time.Sleep(dd)
+	}
+	nextProm.resolveToRes(res)
 	debug(nextProm, endHandler, endGroupHandler, endGroupDelayHandler)
 }
 

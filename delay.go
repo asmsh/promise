@@ -73,3 +73,21 @@ func getDelayFlags(conds []DelayCond) delayFlags {
 	}
 	return f
 }
+
+// shouldDelayRes reports whether a delay should be applied for the given
+// Result and delayFlags combination, based on the Result's state.
+func shouldDelayRes[T any](res Result[T], flags delayFlags) bool {
+	if res == nil {
+		return flags.onSuccess
+	}
+	switch res.State() {
+	case Panic:
+		return flags.onPanic
+	case Error:
+		return flags.onError
+	case Success:
+		return flags.onSuccess
+	default:
+		return false
+	}
+}

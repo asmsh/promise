@@ -16,7 +16,6 @@ package promise
 
 import (
 	"context"
-	"time"
 )
 
 // panic messages
@@ -188,40 +187,6 @@ func (p *Promise[T]) resolveToRes(res Result[T]) {
 	case Error:
 		p.resolveToErrorRes(res)
 	case Success:
-		p.resolveToSuccessRes(res)
-	default:
-		panic("promise: unexpected Result State: " + s.String())
-	}
-}
-
-func (p *Promise[T]) resolveToResWithDelay(
-	res Result[T],
-	dd time.Duration,
-	flags delayFlags,
-) {
-	if res == nil {
-		if flags.onSuccess {
-			time.Sleep(dd)
-		}
-		p.resolveToSuccessRes(nil)
-		return
-	}
-
-	switch s := res.State(); s {
-	case Panic:
-		if flags.onPanic {
-			time.Sleep(dd)
-		}
-		p.resolveToPanicRes(res)
-	case Error:
-		if flags.onError {
-			time.Sleep(dd)
-		}
-		p.resolveToErrorRes(res)
-	case Success:
-		if flags.onSuccess {
-			time.Sleep(dd)
-		}
 		p.resolveToSuccessRes(res)
 	default:
 		panic("promise: unexpected Result State: " + s.String())
