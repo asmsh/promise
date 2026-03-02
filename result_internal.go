@@ -27,6 +27,17 @@ import (
 // structure, using the error, errors.Unwrap, errors.Is and errors.As interfaces.
 // also to ensure consistent string conversion of the results.
 
+// errPromiseGoexitResult is a static error result that returns [ErrPromiseGoexit].
+// it's used instead of saving the [ErrPromiseGoexit] error in a generic errResult value.
+type errPromiseGoexitResult[T any] struct{}
+
+func (r errPromiseGoexitResult[T]) Val() (v T)   { return v }
+func (r errPromiseGoexitResult[T]) Err() error   { return ErrPromiseGoexit }
+func (r errPromiseGoexitResult[T]) State() State { return Error }
+func (r errPromiseGoexitResult[T]) String() string {
+	return fmt.Sprintf("Error: %s", ErrPromiseGoexit.Error())
+}
+
 // errPromiseConsumedResult is a static error result that returns [ErrPromiseConsumed].
 // it's used instead of saving the [ErrPromiseConsumed] error in a generic errResult value.
 type errPromiseConsumedResult[T any] struct{}

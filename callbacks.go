@@ -76,6 +76,11 @@ func runCallbackHandler[
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
+	// validNextResP will be set to *true, only if the callback returns
+	// normally, with not panics nor runtime.Goexit calls.
+	// this is needed to support the ErrPromiseGoexit error.
+	var validNextResP = new(bool)
+
 	// create the Result pointer, and defer the result handler, to track
 	// any result returned, and ensure panic and runtime.Goexit recovery.
 	// note: this will only happen for calls that returns a next promise,
@@ -83,7 +88,7 @@ func runCallbackHandler[
 	var nextResP *Result[NextT]
 	if nextProm != nil {
 		nextResP = new(Result[NextT])
-		defer handleReturns(nextProm, prevRes, nextResP)
+		defer handleReturns(nextProm, prevRes, nextResP, validNextResP)
 	}
 
 	// make sure we close the context once we return from the callback.
@@ -91,6 +96,7 @@ func runCallbackHandler[
 
 	// run the callback and extract the result
 	nextRes := cb.Call(ctx, prevRes)
+	*validNextResP = true
 
 	// if the callback doesn't support returning Result, return early,
 	// as the rest of the logic isn't relevant anymore.

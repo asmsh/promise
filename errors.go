@@ -32,6 +32,13 @@ var (
 	// All type casting must be only done with the [errors.As] function.
 	ErrPromisePanicked = errors.New("promise panicked")
 
+	// ErrPromiseGoexit is returned via [Result.Err] when a [Promise]'s callback
+	// calls [runtime.Goexit] while being executed.
+	//
+	// All equality checks must be only done with the [errors.Is] function.
+	// All type casting must be only done with the [errors.As] function.
+	ErrPromiseGoexit = errors.New("promise called runtime.Goexit")
+
 	// ErrPromiseConsumed is returned via [Result.Err] when a [Promise]'s [Result]
 	// is being accessed for the second or more time, and the [GroupConfig.OnetimeHandling]
 	// flag is set to `true`.

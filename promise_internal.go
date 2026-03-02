@@ -378,23 +378,23 @@ func handleFollow[PrevT, NextT any](
 // handleReturns must be deferred.
 // the callback function is called after a deferred call to this method.
 // no internal call that may cause a panic should be called after this method.
-// TODO: pass a new value, panicked (similar to valid from the sync.OnceFunc implementation),
-// and make the handleReturns function uses this value to tell whether the nil value is valid
-// or not, which will be useful to tell whether runtime.Goexit is called, a panic with nil
-// value occurred, or not.
 func handleReturns[PrevT, NextT any](
 	nextProm *Promise[NextT],
 	prevRes Result[PrevT],
 	nextResP *Result[NextT],
+	validNextResP *bool,
 ) {
 	// get the new Result value based on the state of the callback
 	var nextRes Result[NextT]
 	if v := recover(); v != nil {
 		// the callback panicked, create the appropriate Result value.
 		nextRes = panicResult[NextT]{v: v}
+	} else if !*validNextResP {
+		// if it's not a valid result, and there was no panic, then
+		// the caller must have called runtime.Goexit.
+		nextRes = errPromiseGoexitResult[NextT]{}
 	} else {
-		// the callback returned normally, called runtime.Goexit, or
-		// called panic with nil value.
+		// the callback returned normally.
 		nextRes = getEffectiveNextRes(prevRes, nextResP)
 	}
 
