@@ -22,6 +22,8 @@ import (
 	"testing"
 )
 
+var testEnableLogs = false
+
 // testStrError is an error implementation that's used only for testing.
 // it's a string to allow comparing its values.
 type testStrError string

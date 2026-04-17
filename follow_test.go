@@ -65,9 +65,11 @@ func TestFollow(t *testing.T) {
 			t.Errorf("pInt.Val(): %v, want: %v\n", want, got)
 		}
 
-		t.Logf("pAny: %+v\n", pAny.Res())
-		t.Logf("pStr: %+v\n", pStr.Res())
-		t.Logf("pInt: %+v\n", pInt.Res())
+		if testEnableLogs {
+			t.Logf("pAny: %+v\n", pAny.Res())
+			t.Logf("pStr: %+v\n", pStr.Res())
+			t.Logf("pInt: %+v\n", pInt.Res())
+		}
 	})
 
 	t.Run("custom Result", func(t *testing.T) {
@@ -98,9 +100,11 @@ func TestFollow(t *testing.T) {
 			t.Errorf("pInt.Val(): %v, want: %v\n", want, got)
 		}
 
-		t.Logf("pAny: %+v\n", pAny.Res())
-		t.Logf("pStr: %+v\n", pStr.Res())
-		t.Logf("pInt: %+v\n", pInt.Res())
+		if testEnableLogs {
+			t.Logf("pAny: %+v\n", pAny.Res())
+			t.Logf("pStr: %+v\n", pStr.Res())
+			t.Logf("pInt: %+v\n", pInt.Res())
+		}
 	})
 }
 
@@ -135,9 +139,11 @@ func TestFollowCallback(t *testing.T) {
 			t.Errorf("pInt.Val(): %v, want: %v\n", want, got)
 		}
 
-		t.Logf("pAny: %+v\n", pAny.Res())
-		t.Logf("pStr: %+v\n", pStr.Res())
-		t.Logf("pInt: %+v\n", pInt.Res())
+		if testEnableLogs {
+			t.Logf("pAny: %+v\n", pAny.Res())
+			t.Logf("pStr: %+v\n", pStr.Res())
+			t.Logf("pInt: %+v\n", pInt.Res())
+		}
 	})
 
 	t.Run("custom Callback", func(t *testing.T) {
@@ -160,9 +166,11 @@ func TestFollowCallback(t *testing.T) {
 			t.Errorf("pInt.Val(): %v, want: %v\n", want, got)
 		}
 
-		t.Logf("pAny: %+v\n", pAny.Res())
-		t.Logf("pStr: %+v\n", pStr.Res())
-		t.Logf("pInt: %+v\n", pInt.Res())
+		if testEnableLogs {
+			t.Logf("pAny: %+v\n", pAny.Res())
+			t.Logf("pStr: %+v\n", pStr.Res())
+			t.Logf("pInt: %+v\n", pInt.Res())
+		}
 	})
 }
 

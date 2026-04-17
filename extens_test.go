@@ -29,8 +29,6 @@ import (
 	"github.com/asmsh/uniquerand/v2"
 )
 
-var testEnableLogs = false
-
 // used as a randomizer in compileTestCase.
 var closedChan chan struct{}
 
