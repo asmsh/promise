@@ -412,42 +412,13 @@ func getEffectiveNextRes[NextT, PrevT any](
 		return *nextResP
 	}
 
-	// if there was no previous [Result] provided, return the zero value
-	// of the next [Result].
-	// this happens for callbacks that aren't following a previous [Promise],
-	// and doesn't support returning a new [Result], which is the [Go] callback.
+	// maintain the nil Result, for calls on nil Result.
 	if prevRes == nil {
-		return effRes
+		return nil
 	}
 
-	// no new result is set, and the previous Result is non-nil, so try
-	// to cast the previous Result to the new Result's type...
-
-	// first, try casting the whole prev Result instance...
-	if nextRes, ok := any(prevRes).(Result[NextT]); ok {
-		return nextRes
-	}
-
-	// otherwise, reconstruct the Result from the prev value...
-	nextRes := result[NextT]{
-		err:   prevRes.Err(),
-		state: prevRes.State(),
-	}
-
-	// try to set the next Result's val...
-	if nextResVal, ok := any(prevRes.Val()).(NextT); ok {
-		// this will only fail if prevRes.Val is nil, or if it's not
-		// of NextT type.
-		//
-		// TODO: when can it be not of NextT type?
-		// this can't happen, as the go type system guarantees that
-		// the PrevT of the previous [Promise] is assignable to NextT
-		// of the next [Promise].
-		// and since we only call this function when
-		nextRes.val = nextResVal
-	}
-
-	return nextRes
+	// otherwise, the previous Result must be of type Result[NextT].
+	return any(prevRes).(Result[NextT])
 }
 
 func handleExtCalls[T any](p *Promise[T]) (handled bool) {

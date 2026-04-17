@@ -81,9 +81,9 @@ func runCallbackHandler[
 	// this is needed to support the ErrPromiseGoexit error.
 	var validNextResP = new(bool)
 
-	// create the Result pointer, and defer the result handler, to track
-	// any result returned, and ensure panic and runtime.Goexit recovery.
-	// note: this will only happen for calls that returns a next promise,
+	// create the Result pointer and defer the result handler to track
+	// any result returned and ensure panic and runtime.Goexit recovery.
+	// note: this will only happen for calls that return the next promise,
 	// otherwise, the nextProm is nil.
 	var nextResP *Result[NextT]
 	if nextProm != nil {
