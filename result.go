@@ -19,21 +19,27 @@ import (
 	"fmt"
 )
 
-// Result is a Container for generic result values
+// Result is a container for a [Promise]'s execution result.
 type Result[T any] interface {
 	Val() T
 	Err() error
 	State() State
 }
 
+// ZeroRes creates a [Success] [Result] that returns the zero value of T.
 func ZeroRes[T any]() Result[T] {
 	return zeroResult[T]{}
 }
 
+// ValRes creates a [Success] [Result] that returns the given value.
 func ValRes[T any](val T) Result[T] {
 	return valResult[T]{val: val}
 }
 
+// ErrRes creates an [Error] [Result] that returns the given error,
+// if it's not nil.
+// Otherwise, it returns a [Success] [Result] that returns the zero
+// value of T.
 func ErrRes[T any](err error) Result[T] {
 	if err == nil {
 		return zeroResult[T]{}
@@ -41,10 +47,14 @@ func ErrRes[T any](err error) Result[T] {
 	return errResult[T]{err: err}
 }
 
+// ValErrRes creates either a [Success] or [Error] [Result] based on
+// whether err is nil or not, respectively.
+// In either case the provided val is returned from [Result.Val].
 func ValErrRes[T any](val T, err error) Result[T] {
 	return valErrResult[T]{val: val, err: err}
 }
 
+// PanicRes creates a [Panic] [Result] wrapping the provided panic value.
 func PanicRes[T any](v any) Result[T] {
 	return panicResult[T]{v: v}
 }

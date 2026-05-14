@@ -182,10 +182,13 @@ func getEffSet(set ...bool) bool {
 // It can be applied to a [Group] by passing [ApplyConfig] to [NewGroup],
 // or by using the individual option functions directly.
 type GroupConfig struct {
-	// Size is the number of goroutines which this group is allowed to run.
+	// Size is the number of goroutines that this group is allowed to run.
 	// This includes goroutines created for both, constructor calls(Go, GoCtxRes, etc.),
 	// and follow calls([Promise.Then], [Promise.Catch], etc.).
 	// If it's 0 or less, then the group size is unlimited.
+	//
+	// If the group is full, then new calls might block or return the [ErrGroupBusy]
+	// error, based on the [GroupConfig.NoWaitingBusyGroup] flag.
 	Size int
 
 	// UnhandledPanicCB is called with the panic value once any [Promise] in

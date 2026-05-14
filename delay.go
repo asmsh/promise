@@ -1,7 +1,7 @@
 package promise
 
 // DelayCond describes when the wait duration provided to [Delay] or [Group.Delay]
-// takes effect, in respect with the provided [Result] value to the same call.
+// takes effect, in respect to the provided [Result] value to the same call.
 type DelayCond int
 
 func (m DelayCond) String() string {
@@ -19,7 +19,7 @@ func (m DelayCond) String() string {
 	}
 }
 
-// any values other than the listed below will be ignored
+// any values other than the ones listed below will be ignored.
 const (
 	// OnAll means that [Delay] will wait on all [Result] values,
 	// regardless of what [Result.State] returns.

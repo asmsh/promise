@@ -59,10 +59,11 @@ type CallbackFunc[NextT, PrevT any] interface {
 		func(context.Context, Result[PrevT]) Result[NextT]
 }
 
+// Callback represents a typed operation that takes a previous result and returns a new result.
 type Callback[NextT, PrevT any] interface {
 	// Call executes the actual callback logic.
-	// prevRes might be nil, if the backing callback is called
-	// in a constructor, and not in a follow method.
+	// prevRes might be nil if the backing callback is called
+	// in a constructor and not in a follow method.
 	Call(ctx context.Context, prevRes Result[PrevT]) (nextRes Result[NextT])
 }
 

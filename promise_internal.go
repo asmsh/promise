@@ -418,6 +418,11 @@ func getEffectiveNextRes[NextT, PrevT any](
 	}
 
 	// otherwise, the previous Result must be of type Result[NextT].
+	//
+	// NOTE: this is safe because the only way for the previous promise
+	// to have a different type is if it was a [Follow] or [FollowCallback]
+	// call, and both have their IsTargetState returning true, which means
+	// they will never reach this function.
 	return any(prevRes).(Result[NextT])
 }
 

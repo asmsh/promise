@@ -116,6 +116,8 @@ func (e PanicError) Unwrap() error {
 	}
 	return nil
 }
+
+// PanicV returns the underlying panic value wrapped by this error.
 func (e PanicError) PanicV() any { return e.V }
 
 // IdxError is the error container for an error returned from
