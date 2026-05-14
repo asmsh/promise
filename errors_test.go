@@ -45,27 +45,27 @@ func TestErrPromisePanicked(t *testing.T) {
 
 	t.Run("async-1", func(t *testing.T) {
 		panicV := newTestStrError()
-		res := Go(func() { panic(panicV) }).Res()
+		res := Go(func() { panic(panicV) }).WaitRes()
 		helper(t, panicV, res)
 	})
 
 	t.Run("async-2", func(t *testing.T) {
 		panicV := "test panic"
 		g := NewGroup[any]()
-		res := g.Go(func() { panic(panicV) }).Res()
+		res := g.Go(func() { panic(panicV) }).WaitRes()
 		helper(t, panicV, res)
 	})
 
 	t.Run("sync-1", func(t *testing.T) {
 		panicV := newTestStrError()
-		res := Wrap(PanicRes[any](panicV)).Res()
+		res := Wrap(PanicRes[any](panicV)).WaitRes()
 		helper(t, panicV, res)
 	})
 
 	t.Run("sync-2", func(t *testing.T) {
 		panicV := "test panic"
 		g := NewGroup[any]()
-		res := g.Wrap(PanicRes[any](panicV)).Res()
+		res := g.Wrap(PanicRes[any](panicV)).WaitRes()
 		helper(t, panicV, res)
 	})
 
@@ -75,7 +75,7 @@ func TestErrPromisePanicked(t *testing.T) {
 		// from PanicError.
 		panicV := "test panic"
 		origRes := newResult[any](nil, PanicError{panicV}, Panic)
-		res := Wrap(origRes).Res()
+		res := Wrap(origRes).WaitRes()
 		helper(t, panicV, res)
 	})
 
@@ -90,7 +90,7 @@ func TestErrPromisePanicked(t *testing.T) {
 		origRes := customRes[any]{
 			Result: newResult[any]("test panic", nil, Panic),
 		}
-		res := g.Wrap(origRes).Res()
+		res := g.Wrap(origRes).WaitRes()
 		helper(t, origRes, res)
 	})
 
@@ -105,7 +105,7 @@ func TestErrPromisePanicked(t *testing.T) {
 		origRes := customRes[any]{
 			Result: newResult[any]("test panic", fmt.Errorf("%w", PanicError{"test panic"}), Panic),
 		}
-		res := g.Wrap(origRes).Res()
+		res := g.Wrap(origRes).WaitRes()
 		helper(t, origRes, res)
 	})
 
@@ -122,7 +122,7 @@ func TestErrPromisePanicked(t *testing.T) {
 		origRes := customRes[any]{
 			Result: newResult[any](nil, PanicError{panicV}, Panic),
 		}
-		res := g.Wrap(origRes).Res()
+		res := g.Wrap(origRes).WaitRes()
 		helper(t, panicV, res)
 	})
 }
@@ -130,7 +130,7 @@ func TestErrPromisePanicked(t *testing.T) {
 func TestErrPromiseConsumed(t *testing.T) {
 	helper := func(t *testing.T, wantState State, wantV any, p *Promise[any]) {
 		// first result should reflect the wanted state and value.
-		res1 := p.Res()
+		res1 := p.WaitRes()
 		if want, got := wantState, res1.State(); want != got {
 			t.Errorf("State: want %q, got %q", want, got)
 		}
@@ -139,7 +139,7 @@ func TestErrPromiseConsumed(t *testing.T) {
 		}
 
 		// second result and onward should be Error of ErrPromiseConsumed.
-		res2 := p.Res()
+		res2 := p.WaitRes()
 		if want, got := Error, res2.State(); want != got {
 			t.Errorf("State: want %q, got %q", want, got)
 		}
@@ -155,7 +155,7 @@ func TestErrPromiseConsumed(t *testing.T) {
 		}
 
 		// subsequent calls should return the same Result.
-		res3 := p.Res()
+		res3 := p.WaitRes()
 		if res2 != res3 {
 			t.Errorf("Res: want %q, got %q", res2, res3)
 		}

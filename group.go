@@ -111,7 +111,7 @@ func noopRegFunc() {
 }
 
 // Go runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -135,7 +135,7 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 }
 
 // GoErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -162,7 +162,7 @@ func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
 }
 
 // GoValErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -189,7 +189,7 @@ func (g *Group[T]) GoValErr(cb func() (T, error)) *Promise[T] {
 }
 
 // GoCtxErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -219,7 +219,7 @@ func (g *Group[T]) GoCtxErr(cb func(ctx context.Context) error) *Promise[T] {
 }
 
 // GoCtxValErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -249,7 +249,7 @@ func (g *Group[T]) GoCtxValErr(cb func(ctx context.Context) (T, error)) *Promise
 }
 
 // GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -279,7 +279,7 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 }
 
 // GoCallback runs the [Callback], cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -417,7 +417,7 @@ func chanHandler[T any](nextProm *Promise[T], resChan <-chan Result[T]) {
 // that's resolved in a separate goroutine once the ctx is canceled.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
-// The [Promise.Res] returns a [Result] value that allows knowing the [State]
+// The [Promise.WaitRes] returns a [Result] value that allows knowing the [State]
 // of ctx (via [Result.State]), and the error returned from ctx (via [Result.Err]).
 //
 // Once the [context.Context.Done] channel is closed, the [Result.State] will
@@ -477,7 +477,7 @@ func ctxHandler[T any](nextProm *Promise[T]) {
 // Wrap returns a [Promise] that wraps the provided [Result] value, res,
 // synchronously, without creating any new goroutines.
 // The returned [Promise] belongs to this [Group].
-// The [Promise.Res] will return the provided res.
+// The [Promise.WaitRes] will return the provided res.
 func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 	g.init()
 

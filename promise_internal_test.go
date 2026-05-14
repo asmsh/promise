@@ -28,7 +28,7 @@ func TestGetEffectiveNextRes_Flows(t *testing.T) {
 	t.Run("Section1/normal_callback_return", func(t *testing.T) {
 		res := GoCtxRes(func(ctx context.Context) Result[string] {
 			return ValRes("ok")
-		}).Res()
+		}).WaitRes()
 
 		if res == nil {
 			t.Fatal("expected non-nil result")
@@ -50,7 +50,7 @@ func TestGetEffectiveNextRes_Flows(t *testing.T) {
 			Catch(func(ctx context.Context, res Result[any]) Result[any] {
 				t.Fatal("Catch callback should not be executed")
 				return nil
-			}).Res()
+			}).WaitRes()
 
 		if res == nil {
 			t.Fatal("expected non-nil result")
@@ -73,7 +73,7 @@ func TestGetEffectiveNextRes_Flows(t *testing.T) {
 		}).Then(func(ctx context.Context, res Result[any]) Result[any] {
 			t.Fatal("Then callback should not be executed on Error")
 			return nil
-		}).Res()
+		}).WaitRes()
 
 		if res == nil {
 			t.Fatal("expected non-nil result")

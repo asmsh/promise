@@ -91,7 +91,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			res = prom.Res()
+			res = prom.WaitRes()
 		}
 
 		_ = res
@@ -104,7 +104,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			res = prom.Res()
+			res = prom.WaitRes()
 		}
 
 		_ = res
@@ -117,7 +117,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			res = prom.Res()
+			res = prom.WaitRes()
 		}
 
 		_ = res
@@ -131,7 +131,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			res = prom.Res()
+			res = prom.WaitRes()
 		}
 
 		_ = res
@@ -147,7 +147,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 			prom := getSuccessBenchmarkPromise()
 			b.StartTimer()
 
-			res = prom.Res()
+			res = prom.WaitRes()
 		}
 
 		_ = res
@@ -161,7 +161,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			res = prom.Res()
+			res = prom.WaitRes()
 		}
 
 		_ = res
@@ -177,7 +177,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 			prom := getSuccessBenchmarkPromise(ValRes[any]("test test"))
 			b.StartTimer()
 
-			res = prom.Res()
+			res = prom.WaitRes()
 		}
 
 		_ = res
@@ -191,7 +191,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			res = prom.Res()
+			res = prom.WaitRes()
 		}
 
 		_ = res
@@ -207,7 +207,7 @@ func BenchmarkPromise_Res(b *testing.B) {
 			prom := getErrorBenchmarkPromise()
 			b.StartTimer()
 
-			res = prom.Res()
+			res = prom.WaitRes()
 		}
 
 		_ = res
@@ -256,7 +256,7 @@ func BenchmarkPromise_Callback(b *testing.B) {
 					prom.Wait()
 				}
 				if bc.callRes {
-					prom.Res()
+					prom.WaitRes()
 				}
 			}
 		})
@@ -285,7 +285,7 @@ func BenchmarkPromise_Then(b *testing.B) {
 						prom.Wait()
 					}
 					if bc.callRes {
-						prom.Res()
+						prom.WaitRes()
 					}
 				}
 			})
@@ -313,7 +313,7 @@ func BenchmarkPromise_Then(b *testing.B) {
 						prom.Wait()
 					}
 					if bc.callRes {
-						prom.Res()
+						prom.WaitRes()
 					}
 				}
 			})
@@ -343,7 +343,7 @@ func BenchmarkPromise_Catch(b *testing.B) {
 						prom.Wait()
 					}
 					if bc.callRes {
-						res := prom.Res()
+						res := prom.WaitRes()
 						_ = res
 					}
 				}
@@ -372,7 +372,7 @@ func BenchmarkPromise_Catch(b *testing.B) {
 						prom.Wait()
 					}
 					if bc.callRes {
-						prom.Res()
+						prom.WaitRes()
 					}
 				}
 			})
@@ -404,7 +404,7 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 							prom.Wait()
 						}
 						if bc.callRes {
-							prom.Res()
+							prom.WaitRes()
 						}
 					}
 				})
@@ -435,7 +435,7 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 							prom.Wait()
 						}
 						if bc.callRes {
-							prom.Res()
+							prom.WaitRes()
 						}
 					}
 				})
@@ -469,7 +469,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
-			res = p.Res()
+			res = p.WaitRes()
 		}
 
 		_ = res
@@ -486,7 +486,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
-			res = p.Res()
+			res = p.WaitRes()
 			err = res.Err()
 			if err != nil {
 				b.Fatalf("unexpected error: %v, from res: %v", err, res)
@@ -508,7 +508,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
-			res = p.Res()
+			res = p.WaitRes()
 			val = res.Val()
 			if val != nil {
 				b.Fatalf("unexpected val: %v, from res: %v", val, res)
@@ -544,7 +544,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any](valOrigPtr)
 			})
-			res = p.Res()
+			res = p.WaitRes()
 		}
 
 		_ = res
@@ -562,7 +562,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any](valOrigPtr)
 			})
-			res = p.Res()
+			res = p.WaitRes()
 			err = res.Err()
 			if err != nil {
 				b.Fatalf("unexpected error: %v, from res: %v", err, res)
@@ -585,7 +585,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any](valOrigPtr)
 			})
-			res = p.Res()
+			res = p.WaitRes()
 			val = res.Val()
 			if val != valOrigPtr {
 				b.Fatalf("unexpected val: %v, from res: %v", val, res)
@@ -619,7 +619,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
 				panic("test panic")
 			})
-			res = p.Res()
+			res = p.WaitRes()
 		}
 
 		_ = res
@@ -636,7 +636,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
 				panic("test panic")
 			})
-			res = p.Res()
+			res = p.WaitRes()
 			err = res.Err()
 
 			if upErr := (PanicError{}); errors.As(err, &upErr) && upErr.V != "test panic" {
@@ -659,7 +659,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
 				panic("test panic")
 			})
-			res = p.Res()
+			res = p.WaitRes()
 			val = res.Val()
 			if val != nil {
 				b.Fatalf("unexpected val: %v, from res: %v", val, res)
@@ -704,7 +704,7 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
-			res = p.Res()
+			res = p.WaitRes()
 		}
 
 		_ = res
@@ -741,7 +741,7 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
 			})
-			res = p.Res()
+			res = p.WaitRes()
 		}
 
 		_ = res
@@ -789,7 +789,7 @@ func BenchmarkPromise_Chain_Long(b *testing.B) {
 			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
-			res = p.Res()
+			res = p.WaitRes()
 		}
 
 		_ = res
@@ -834,7 +834,7 @@ func BenchmarkPromise_Chain_Long(b *testing.B) {
 			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
 			})
-			res = p.Res()
+			res = p.WaitRes()
 		}
 
 		_ = res

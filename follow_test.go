@@ -66,9 +66,9 @@ func TestFollow(t *testing.T) {
 		}
 
 		if testEnableLogs {
-			t.Logf("pAny: %+v\n", pAny.Res())
-			t.Logf("pStr: %+v\n", pStr.Res())
-			t.Logf("pInt: %+v\n", pInt.Res())
+			t.Logf("pAny: %+v\n", pAny.WaitRes())
+			t.Logf("pStr: %+v\n", pStr.WaitRes())
+			t.Logf("pInt: %+v\n", pInt.WaitRes())
 		}
 	})
 
@@ -101,9 +101,9 @@ func TestFollow(t *testing.T) {
 		}
 
 		if testEnableLogs {
-			t.Logf("pAny: %+v\n", pAny.Res())
-			t.Logf("pStr: %+v\n", pStr.Res())
-			t.Logf("pInt: %+v\n", pInt.Res())
+			t.Logf("pAny: %+v\n", pAny.WaitRes())
+			t.Logf("pStr: %+v\n", pStr.WaitRes())
+			t.Logf("pInt: %+v\n", pInt.WaitRes())
 		}
 	})
 }
@@ -140,9 +140,9 @@ func TestFollowCallback(t *testing.T) {
 		}
 
 		if testEnableLogs {
-			t.Logf("pAny: %+v\n", pAny.Res())
-			t.Logf("pStr: %+v\n", pStr.Res())
-			t.Logf("pInt: %+v\n", pInt.Res())
+			t.Logf("pAny: %+v\n", pAny.WaitRes())
+			t.Logf("pStr: %+v\n", pStr.WaitRes())
+			t.Logf("pInt: %+v\n", pInt.WaitRes())
 		}
 	})
 
@@ -167,9 +167,9 @@ func TestFollowCallback(t *testing.T) {
 		}
 
 		if testEnableLogs {
-			t.Logf("pAny: %+v\n", pAny.Res())
-			t.Logf("pStr: %+v\n", pStr.Res())
-			t.Logf("pInt: %+v\n", pInt.Res())
+			t.Logf("pAny: %+v\n", pAny.WaitRes())
+			t.Logf("pStr: %+v\n", pStr.WaitRes())
+			t.Logf("pInt: %+v\n", pInt.WaitRes())
 		}
 	})
 }

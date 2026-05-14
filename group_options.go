@@ -193,16 +193,16 @@ type GroupConfig struct {
 
 	// UnhandledPanicCB is called with the panic value once any [Promise] in
 	// this [Group] resolves to [Panic] and it's not handled by any follow
-	// calls, like [Promise.Recover] or [Promise.Res].
+	// calls, like [Promise.Recover] or [Promise.WaitRes].
 	UnhandledPanicCB func(v any)
 
 	// UnhandledErrorCB is called with the error value once any [Promise] in
 	// this [Group] resolves to [Error] and it's not handled by any follow
-	// calls, like [Promise.Catch] or [Promise.Res].
+	// calls, like [Promise.Catch] or [Promise.WaitRes].
 	UnhandledErrorCB func(err error)
 
 	// OnetimeHandling enforces that the [Result] value returned from any
-	// callback is only used one-time (via [Promise.Res] or as an argument
+	// callback is only used one-time (via [Promise.WaitRes] or as an argument
 	// to any other callback that accepts a [Result] value).
 	// This will cause any further attempt to use that [Result] value to
 	// return an [Error] [Result] with the [ErrPromiseConsumed] error.
@@ -212,10 +212,10 @@ type GroupConfig struct {
 	// passed to all callbacks, once any callback returns an [Error] or a [Panic]
 	// [Result] that's not handled.
 	//
-	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.Res],
+	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.WaitRes],
 	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
 	//
-	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.Res],
+	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.WaitRes],
 	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
 	//
 	// The default behavior is never canceling a callback's [context.Context] value
@@ -230,10 +230,10 @@ type GroupConfig struct {
 	// the [Group.Delay], [Group.Chan], and [Group.Ctx] methods to return a [Promise]
 	// with an [Error] [Result] with the [ErrGroupCanceled] error.
 	//
-	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.Res],
+	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.WaitRes],
 	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
 	//
-	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.Res],
+	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.WaitRes],
 	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
 	//
 	// The default behavior is always allowing new calls that return a [Promise] value,

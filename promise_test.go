@@ -68,7 +68,7 @@ func TestPanicking(t *testing.T) {
 		p := Go(func() {
 			panic(wantV)
 		})
-		res := p.Res()
+		res := p.WaitRes()
 		if res == nil {
 			t.Fatalf("Res() = %v, want: non-nil", res)
 		}
@@ -85,7 +85,7 @@ func TestPanicking(t *testing.T) {
 func TestPanicNil(t *testing.T) {
 	res := Go(func() {
 		panic(nil)
-	}).Res()
+	}).WaitRes()
 
 	if res == nil {
 		t.Fatal("Res() = nil, want non-nil")
@@ -127,7 +127,7 @@ func TestGoexit(t *testing.T) {
 	t.Run("Go", func(t *testing.T) {
 		res := Go(func() {
 			runtime.Goexit()
-		}).Res()
+		}).WaitRes()
 		checkRes(t, res)
 	})
 
@@ -139,7 +139,7 @@ func TestGoexit(t *testing.T) {
 				runtime.Goexit()
 				return nil
 			}).
-			Res()
+			WaitRes()
 		checkRes(t, res)
 	})
 
@@ -152,7 +152,7 @@ func TestGoexit(t *testing.T) {
 			// This must never be called; the promise should carry through.
 			runtime.Goexit()
 			return nil
-		}).Res()
+		}).WaitRes()
 		if res == nil {
 			t.Fatal("Res() = nil, want non-nil")
 		}
@@ -168,7 +168,7 @@ func TestGoexit(t *testing.T) {
 		}).Recover(func(ctx context.Context, res Result[any]) Result[any] {
 			runtime.Goexit()
 			return nil
-		}).Res()
+		}).WaitRes()
 		if res == nil {
 			t.Fatal("Res() = nil, want non-nil")
 		}
@@ -200,7 +200,7 @@ func TestRejection(t *testing.T) {
 		p := GoCtxRes(func(ctx context.Context) Result[any] {
 			return ErrRes[any](wantErr)
 		})
-		res := p.Res()
+		res := p.WaitRes()
 		if res == nil {
 			t.Errorf("Res() = nil, want: non-nil")
 		}
@@ -218,7 +218,7 @@ func TestFinally(t *testing.T) {
 		}).Finally(func(ctx context.Context) {
 			called.Store(true)
 			return
-		}).Res()
+		}).WaitRes()
 
 		if !called.Load() {
 			t.Error("Finally wasn't called")
@@ -242,7 +242,7 @@ func TestFinally(t *testing.T) {
 		}).Finally(func(ctx context.Context) {
 			called.Store(true)
 			panic(wantV)
-		}).Res()
+		}).WaitRes()
 
 		if !called.Load() {
 			t.Error("Finally wasn't called")
@@ -265,7 +265,7 @@ func TestFinally(t *testing.T) {
 		}).Finally(func(ctx context.Context) {
 			called.Store(true)
 			return
-		}).Res()
+		}).WaitRes()
 
 		if !called.Load() {
 			t.Error("Finally wasn't called")
@@ -288,7 +288,7 @@ func TestFinally(t *testing.T) {
 		}).Finally(func(ctx context.Context) {
 			called.Store(true)
 			return
-		}).Res()
+		}).WaitRes()
 
 		if !called.Load() {
 			t.Error("Finally wasn't called")

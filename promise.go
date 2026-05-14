@@ -100,20 +100,20 @@ type extCall[T any] struct {
 }
 
 func (p *Promise[T]) Val() T {
-	return p.Res().Val()
+	return p.WaitRes().Val()
 }
 
 func (p *Promise[T]) Err() error {
-	return p.Res().Err()
+	return p.WaitRes().Err()
 }
 
 func (p *Promise[T]) State() State {
-	return p.Res().State()
+	return p.WaitRes().State()
 }
 
 // String will block until the promise is resolved.
 func (p *Promise[T]) String() string {
-	return fmt.Sprintf("%v", p.Res())
+	return fmt.Sprintf("%v", p.WaitRes())
 }
 
 func (p *Promise[T]) Wait() {
@@ -163,7 +163,7 @@ func (p *Promise[T]) waitCall() {
 	p.chainSideEffects(p.chainStatus.Load(), true)
 }
 
-func (p *Promise[T]) Res() Result[T] {
+func (p *Promise[T]) WaitRes() Result[T] {
 	p.regChainRead()
 	return p.resCall()
 }

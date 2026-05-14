@@ -76,7 +76,7 @@ func example2() {
 		// the promise is resolved before the timeout passes
 
 		// handle the result of the promise, as it's now resolved.
-		res := p.Res()
+		res := p.WaitRes()
 		fmt.Println("The promise is resolved result =", res)
 	case t := <-timeoutChan:
 		// the needed timeout duration has passed before the promise is resolved

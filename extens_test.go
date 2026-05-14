@@ -864,7 +864,7 @@ func TestPanics(t *testing.T) {
 
 			if test.p != nil {
 				p := test.p()
-				r := p.Res()
+				r := p.WaitRes()
 
 				if testEnableLogs {
 					t.Logf("p res: %v {%T}\n", r, r)
@@ -893,7 +893,7 @@ func TestPanics(t *testing.T) {
 					return nil
 				})
 
-				rNew := newP.Res()
+				rNew := newP.WaitRes()
 
 				if testEnableLogs {
 					t.Logf("newP res: %v {%T}\n", rNew, rNew)
@@ -908,7 +908,7 @@ func TestPanics(t *testing.T) {
 				}
 			} else if test.ip != nil {
 				ip := test.ip()
-				r := ip.Res()
+				r := ip.WaitRes()
 
 				if testEnableLogs {
 					t.Logf("ip res: %v {%T}\n", r, r)
@@ -937,7 +937,7 @@ func TestPanics(t *testing.T) {
 					return nil
 				})
 
-				rNew := newIp.Res()
+				rNew := newIp.WaitRes()
 
 				if testEnableLogs {
 					t.Logf("newIp res: %v {%T}\n", rNew, rNew)
@@ -952,7 +952,7 @@ func TestPanics(t *testing.T) {
 				}
 			} else {
 				ips := test.ips()
-				r := ips.Res()
+				r := ips.WaitRes()
 
 				if testEnableLogs {
 					t.Logf("ips res: %v {%T}\n", r, r)
@@ -1007,7 +1007,7 @@ func TestPanics(t *testing.T) {
 					return newRes
 				})
 
-				rNew := newIps.Res()
+				rNew := newIps.WaitRes()
 
 				if testEnableLogs {
 					t.Logf("newIps res: %v {%T}\n", rNew, rNew)
@@ -1218,7 +1218,7 @@ func helperTest[TFun extFuncs[TRes], TRes extRes](
 			}
 		case singleIdxFunc:
 			p := f(tt.ps...)
-			gotRes := p.Res()
+			gotRes := p.WaitRes()
 
 			// get the expected generated result.
 			// it's the first element as it's gonna be the Promise
@@ -1271,7 +1271,7 @@ func helperTest[TFun extFuncs[TRes], TRes extRes](
 			}
 		case multiIdxFunc:
 			p := f(tt.ps...)
-			gotRes := p.Res()
+			gotRes := p.WaitRes()
 
 			// addToMultiRes adds the genRes to the multiRes value at the
 			// expected index, which is the index of the original promise.
@@ -1434,10 +1434,10 @@ func TestJoin(t *testing.T) {
 		joinP2.Wait()
 
 		if joinP1.State() != Success {
-			t.Errorf("Join: %v, expected: %v", joinP1.Res(), Success)
+			t.Errorf("Join: %v, expected: %v", joinP1.WaitRes(), Success)
 		}
 		if joinP2.State() != Error {
-			t.Errorf("Join: %v, expected: %v", joinP1.Res(), Error)
+			t.Errorf("Join: %v, expected: %v", joinP1.WaitRes(), Error)
 		}
 	})
 
@@ -1472,10 +1472,10 @@ func TestJoin(t *testing.T) {
 		joinP2.Wait()
 
 		if joinP1.State() != Success {
-			t.Errorf("Join: %v, expected: %v", joinP1.Res(), Success)
+			t.Errorf("Join: %v, expected: %v", joinP1.WaitRes(), Success)
 		}
 		if joinP2.State() != Error {
-			t.Errorf("Join: %v, expected: %v", joinP1.Res(), Error)
+			t.Errorf("Join: %v, expected: %v", joinP1.WaitRes(), Error)
 		}
 	})
 

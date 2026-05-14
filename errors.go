@@ -43,7 +43,7 @@ var (
 	// is being accessed for the second or more time, and the [GroupConfig.OnetimeHandling]
 	// flag is set to `true`.
 	//
-	// Accessing a [Promise]'s [Result] is done via [Promise.Res] or as an argument
+	// Accessing a [Promise]'s [Result] is done via [Promise.WaitRes] or as an argument
 	// to any other callback that accepts a [Result] value.
 	//
 	// All equality checks must be only done with the [errors.Is] function.
@@ -88,10 +88,10 @@ var (
 	// This is a synchronous error that will happen before the [Promise] value is returned.
 	// All equality checks must be only done with the [errors.Is] function.
 	//
-	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.Res],
+	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.WaitRes],
 	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
 	//
-	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.Res],
+	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.WaitRes],
 	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
 	ErrGroupCanceled = errors.New("group is canceled")
 )

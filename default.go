@@ -20,7 +20,7 @@ import (
 )
 
 // Go runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 //
 // The [Result.State] will either be [Panic], or [Success], based on whether
 // cb caused a panic, or returned normally, respectively.
@@ -42,7 +42,7 @@ func Go(cb func()) *Promise[any] {
 }
 
 // GoErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 //
 // The [Result.State] will either be [Panic], [Error], or [Success], based on
 // whether cb caused a panic, returned an error, or returned nil, respectively.
@@ -66,7 +66,7 @@ func GoErr(cb func() error) *Promise[any] {
 }
 
 // GoValErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 //
 // The [Result.State] will either be [Panic], [Error], or [Success], based on
 // whether cb caused a panic, returned an error, or returned a value, respectively.
@@ -91,7 +91,7 @@ func GoValErr[T any](cb func() (T, error)) *Promise[T] {
 }
 
 // GoCtxErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 //
 // The cb function receives a [context.Context] value that is canceled once
 // cb returns.
@@ -118,7 +118,7 @@ func GoCtxErr(cb func(ctx context.Context) error) *Promise[any] {
 }
 
 // GoCtxValErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 //
 // The cb function receives a [context.Context] value that is canceled once
 // cb returns.
@@ -146,7 +146,7 @@ func GoCtxValErr[T any](cb func(ctx context.Context) (T, error)) *Promise[T] {
 }
 
 // GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 //
 // The [Result.State] will either be [Panic], [Error], or [Success], based on
 // whether cb caused a panic, returned an error, or returned a value, respectively.
@@ -171,7 +171,7 @@ func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
 }
 
 // GoFunc runs the provided callback function, cb, in a separate goroutine,
-// and returns a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// and returns a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 //
 // The cb function must satisfy the [CallbackFunc] constraint, which accepts
 // any of the supported callback function signatures.
@@ -203,7 +203,7 @@ func GoFunc[
 }
 
 // GoCallback runs the [Callback], cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.Res] tracks the execution of cb.
+// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 //
 // The [Result.State] will either be [Panic], [Error], or [Success], based on
 // whether cb caused a panic, returned an error, or returned nil, respectively.
@@ -253,7 +253,7 @@ func Chan[T any](resChan <-chan Result[T]) *Promise[T] {
 
 // Ctx returns a [Promise] that wraps the provided [context.Context] value, ctx,
 // that's resolved in a separate goroutine once the ctx is canceled.
-// The [Promise.Res] returns a [Result] value that allows knowing the [State]
+// The [Promise.WaitRes] returns a [Result] value that allows knowing the [State]
 // of ctx (via [Result.State]), and the error returned from ctx (via [Result.Err]).
 //
 // Once the [context.Context.Done] channel is closed, the [Result.State] will
@@ -270,7 +270,7 @@ func Ctx(ctx context.Context) *Promise[any] {
 
 // Wrap returns a [Promise] that wraps the provided [Result] value, res,
 // synchronously, without creating any new goroutines.
-// The [Promise.Res] will return the provided res.
+// The [Promise.WaitRes] will return the provided res.
 func Wrap[T any](res Result[T]) *Promise[T] {
 	return (*Group[T]).Wrap(nil, res)
 }
