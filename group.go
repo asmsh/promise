@@ -313,11 +313,11 @@ func goCallback[NextT, PrevT any](
 	// make sure the group and in a valid state, otherwise return
 	// the error promise created.
 	if errRes := g.initValidateReserve(); errRes != nil {
-		return newPromSync[NextT](g, errRes)
+		return newPromSync(g, errRes)
 	}
 
 	// create the new promise that will track the provided callback.
-	nextProm := newPromInter[NextT](g)
+	nextProm := newPromInter(g)
 
 	// derive the Context used in the callback from the group's, or from
 	// the new promise, effectively making the created Context closed
@@ -352,10 +352,10 @@ func (g *Group[T]) Delay(
 	cond ...DelayCond,
 ) *Promise[T] {
 	if errRes := g.initValidateReserve(); errRes != nil {
-		return newPromSync[T](g, errRes)
+		return newPromSync(g, errRes)
 	}
 
-	nextProm := newPromInter[T](g)
+	nextProm := newPromInter(g)
 	flags := getDelayFlags(cond)
 	debug(nextProm, startHandler, startGroupHandler, startGroupDelayHandler)
 	go delayHandler(nextProm, res, d, flags)
@@ -397,10 +397,10 @@ func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 	}
 
 	if errRes := g.initValidateReserve(); errRes != nil {
-		return newPromSync[T](g, errRes)
+		return newPromSync(g, errRes)
 	}
 
-	nextProm := newPromInter[T](g)
+	nextProm := newPromInter(g)
 	debug(nextProm, startHandler, startGroupHandler, startGroupChanHandler)
 	go chanHandler(nextProm, resChan)
 	return nextProm
@@ -437,14 +437,14 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	g.init()
 
 	if errRes := g.validateActive(); errRes != nil {
-		return newPromSync[T](g, errRes)
+		return newPromSync(g, errRes)
 	}
 
 	// handle contexts with nil done channel, as a nil channel is never closed,
 	// and if used with this package it will block follow calls on it forever.
 	if ctx.Done() == nil {
 		if g != nil && g.core.options.IsNoNilCtxDoneChan() {
-			return newPromSync[T](g, errCtxNilDoneResult[T]{})
+			return newPromSync(g, errCtxNilDoneResult[T]{})
 		}
 
 		// since this ctx value will never be closed, the equivalent
@@ -458,10 +458,10 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 	//  a new goroutine if the chan is already closed.
 
 	if !g.reserveGoroutine(noopRegFunc) {
-		return newPromSync[T](g, errGroupBusyResult[T]{})
+		return newPromSync(g, errGroupBusyResult[T]{})
 	}
 
-	nextProm := newPromCtx[T](g, ctx)
+	nextProm := newPromCtx(g, ctx)
 	debug(nextProm, startHandler, startGroupHandler, startGroupCtxHandler)
 	go ctxHandler(nextProm)
 	return nextProm
@@ -482,7 +482,7 @@ func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 	g.init()
 
 	if errRes := g.validateActive(); errRes != nil {
-		return newPromSync[T](g, errRes)
+		return newPromSync(g, errRes)
 	}
 
 	if res != nil && res.State() == Panic {
@@ -491,7 +491,7 @@ func (g *Group[T]) Wrap(res Result[T]) *Promise[T] {
 		}
 	}
 
-	return newPromSync[T](g, res)
+	return newPromSync(g, res)
 }
 
 // Wait enters the wait mode, blocking new calls from starting,
