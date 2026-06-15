@@ -31,6 +31,8 @@ import (
 //
 // The zero value will block forever on any calls.
 type Promise[T any] struct {
+	_ noCopy
+
 	// group is a pointer to the promise group which this promise is part of,
 	// or nil, if it's not part of any group.
 	group *Group[T]

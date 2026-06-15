@@ -21,6 +21,8 @@ import (
 //
 // The zero value is a ready to use Group with the [DefaultGroupConfig].
 type Group[T any] struct {
+	_ noCopy
+
 	core *groupCore
 	once sync.Once
 
