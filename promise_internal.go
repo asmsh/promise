@@ -443,15 +443,12 @@ func handleExtCalls[T any](p *Promise[T]) (handled bool) {
 		return false
 	}
 
-	// get the final and ready-to-use result
-	res := getFinalRes(p.res)
-
 	// handle having a single extension call
-	handled = handleExtCall(extQ.call, res)
+	handled = handleExtCall(extQ.call, p.res)
 
 	// handle having multiple extension calls
 	for _, call := range extQ.extra {
-		handled = handleExtCall(call, res) || handled
+		handled = handleExtCall(call, p.res) || handled
 		debug(p, doneHandleExtCall)
 	}
 
@@ -478,19 +475,17 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 
 	debug(p, startHandleGroupCalls) // debug starts here, since no Group == no debug.
 
-	res := getFinalRes(p.res)
-
 	// get a snapshot of the group calls queue to be handled.
 	p.group.callsQMu.RLock()
 	for call := p.group.callsQ.Front(); call != nil; call = call.Next() {
-		handled = handleGroupCall(call.Value, res) || handled
+		handled = handleGroupCall(call.Value, p.res) || handled
 		debug(p, doneHandleGroupCall)
 	}
 	p.group.callsQMu.RUnlock()
 
 	// save the group state and result for calls added later.
 	p.group.resMu.Lock()
-	groupRes := GroupRes[T]{Result: res}
+	groupRes := GroupRes[T]{Result: p.res}
 
 	p.group.resHist.insertRes(groupRes)
 

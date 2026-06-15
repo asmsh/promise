@@ -130,6 +130,9 @@ func selectHandler[T any](
 	// because this is a Select extension call, only one result is expected.
 	if res.Result == nil {
 		res = <-resChan
+
+		// replace the nil result with a usable value.
+		res.Result = getFinalRes(res.Result)
 	}
 
 	// resolve the next promise as expected, based on the final callResState.
@@ -375,6 +378,8 @@ func joinHandler[T any](
 		// otherwise, wait until a matching result from the pending promises.
 		for i := 0; i < pending; i++ {
 			res := <-resChan
+			// replace the nil result with a usable value.
+			res.Result = getFinalRes(res.Result)
 			callRes[res.Idx] = res
 			callResState = op.nextState(res.State(), callResState)
 			if op.returnOnTargetState() && op.isTargetState(res.State()) {

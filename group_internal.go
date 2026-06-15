@@ -34,6 +34,8 @@ type groupResHistory[T any] struct {
 
 // the 'resMu' must be write-locked before entering.
 func (h *groupResHistory[T]) insertRes(res GroupRes[T]) {
+	res.Result = getFinalRes(res.Result)
+
 	// save the first unique [Result] in the first empty place.
 	for i := range h.vals {
 		// found an empty place?
@@ -414,6 +416,7 @@ resultLoop:
 		// the 'resChan'.
 		select {
 		case res := <-resChan:
+			res.Result = getFinalRes(res.Result)
 			callResState = op.nextState(res.State(), callResState)
 			callRes = append(callRes, res)
 			if op.returnOnTargetState() && op.isTargetState(res.State()) {
