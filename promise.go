@@ -118,7 +118,13 @@ func (p *Promise[T]) String() string {
 
 func (p *Promise[T]) Wait() {
 	p.regChainWait()
-	p.waitCall()
+
+	// wait the promise to be resolved.
+	<-p.WaitChan()
+
+	// execute the side effects if the chain doesn't have a read call nor
+	// is already handled.
+	p.chainSideEffects(true)
 }
 
 // WaitChan returns a channel that will be closed once this [Promise]
@@ -144,33 +150,32 @@ func (p *Promise[T]) WaitChan() <-chan struct{} {
 		return p.syncChan
 	}
 
-	// if the syncChan is nil, then the current res is final and
-	// the syncChan is saved in it.
-	// note: this is needed for the Ctx constructors.
-	if sr, ok := p.res.(interface{ WaitChan() <-chan struct{} }); ok {
-		return sr.WaitChan()
-	}
-
-	// this will never happen.
-	panic("promise: internal: unexpected syncChan value")
+	return p.waitChanSlow()
 }
 
-func (p *Promise[T]) waitCall() {
-	// wait the promise to be resolved and get its [State]
-	p.waitState()
-	// execute the side effects, if the chain doesn't have a read call nor
-	// is already handled
-	p.chainSideEffects(p.chainStatus.Load(), true)
+// waitChanSlow is outlined to allow WaitChan to be inlined.
+func (p *Promise[T]) waitChanSlow() <-chan struct{} {
+	// the syncChan is nil, so if the current res is set,
+	// the syncChan will be saved in it.
+	// note: this is needed for the Ctx constructors.
+	if p.res != nil {
+		if sr, ok := p.res.(interface{ WaitChan() <-chan struct{} }); ok {
+			return sr.WaitChan()
+		}
+
+		// this will never happen.
+		panic("promise: internal: unexpected syncChan value")
+	}
+
+	// otherwise, this is a zero Promise, return the default sync chan.
+	return neverClosedSyncChan
 }
 
 func (p *Promise[T]) WaitRes() Result[T] {
 	p.regChainRead()
-	return p.resCall()
-}
 
-func (p *Promise[T]) resCall() Result[T] {
-	// wait the promise to be resolved and get its [State]
-	p.waitState()
+	// wait the promise to be resolved.
+	<-p.WaitChan()
 
 	// if it's a call to handle the result, set the 'Handled' flag.
 	// also, keep track of whether this handle was valid(first) or not,
@@ -250,7 +255,7 @@ func delayFollowHandler[T any](
 ) {
 	defer prevProm.group.freeGoroutine()
 
-	prevProm.waitState()
+	<-prevProm.WaitChan()
 
 	// mark prevProm as 'Handled', and check whether we should continue or not.
 	// the res value returned will hold the correct value that should be used.
