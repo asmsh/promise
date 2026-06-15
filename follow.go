@@ -64,7 +64,7 @@ func FollowCallback[
 		return newPromSync[NextT](nextGroup, errGroupBusyResult[NextT]{})
 	}
 
-	nextProm := newPromInter[NextT](nextGroup)
+	nextProm := newPromAsync[NextT](nextGroup)
 	ctx, cancel := callbackCtx(nextGroup, nextProm.syncChan)
 	debug(p, startHandler, startPromiseFollowCallbackHandler)
 	go followHandler(

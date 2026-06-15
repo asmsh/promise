@@ -234,7 +234,7 @@ func (p *Promise[T]) Delay(
 		return errProm
 	}
 
-	nextProm := newPromInter(p.group)
+	nextProm := newPromAsync(p.group)
 	flags := getDelayFlags(cond)
 	debug(p, startHandler, startPromiseHandler, startPromiseDelayHandler)
 	go delayFollowHandler(p, nextProm, d, flags)
@@ -311,7 +311,7 @@ func (p *Promise[T]) Follow(
 		return errProm
 	}
 
-	nextProm := newPromInter(p.group)
+	nextProm := newPromAsync(p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseFollowHandler)
 	go followHandler(
@@ -337,7 +337,7 @@ func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
 		return errProm
 	}
 
-	nextProm := newPromInter(p.group)
+	nextProm := newPromAsync(p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseFollowCallbackHandler)
 	go followHandler(
@@ -365,7 +365,7 @@ func (p *Promise[T]) Then(
 		return errProm
 	}
 
-	nextProm := newPromInter(p.group)
+	nextProm := newPromAsync(p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseThenHandler)
 	go followHandler(
@@ -393,7 +393,7 @@ func (p *Promise[T]) Catch(
 		return errProm
 	}
 
-	nextProm := newPromInter(p.group)
+	nextProm := newPromAsync(p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseCatchHandler)
 	go followHandler(
@@ -421,7 +421,7 @@ func (p *Promise[T]) Recover(
 		return errProm
 	}
 
-	nextProm := newPromInter(p.group)
+	nextProm := newPromAsync(p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseRecoverHandler)
 	go followHandler(
@@ -449,7 +449,7 @@ func (p *Promise[T]) Finally(
 		return errProm
 	}
 
-	nextProm := newPromInter(p.group)
+	nextProm := newPromAsync(p.group)
 	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
 	debug(p, startHandler, startPromiseHandler, startPromiseFinallyHandler)
 	go followHandler(

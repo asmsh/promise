@@ -317,7 +317,7 @@ func goCallback[NextT, PrevT any](
 	}
 
 	// create the new promise that will track the provided callback.
-	nextProm := newPromInter(g)
+	nextProm := newPromAsync(g)
 
 	// derive the Context used in the callback from the group's, or from
 	// the new promise, effectively making the created Context closed
@@ -355,7 +355,7 @@ func (g *Group[T]) Delay(
 		return newPromSync(g, errRes)
 	}
 
-	nextProm := newPromInter(g)
+	nextProm := newPromAsync(g)
 	flags := getDelayFlags(cond)
 	debug(nextProm, startHandler, startGroupHandler, startGroupDelayHandler)
 	go delayHandler(nextProm, res, d, flags)
@@ -400,7 +400,7 @@ func (g *Group[T]) Chan(resChan <-chan Result[T]) *Promise[T] {
 		return newPromSync(g, errRes)
 	}
 
-	nextProm := newPromInter(g)
+	nextProm := newPromAsync(g)
 	debug(nextProm, startHandler, startGroupHandler, startGroupChanHandler)
 	go chanHandler(nextProm, resChan)
 	return nextProm

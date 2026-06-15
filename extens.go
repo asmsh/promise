@@ -37,7 +37,7 @@ func Select[T any](p ...*Promise[T]) *Promise[IdxRes[T]] {
 		return Wrap[IdxRes[T]](nil)
 	}
 
-	nextProm := newPromInter[IdxRes[T]](nil)
+	nextProm := newPromAsync[IdxRes[T]](nil)
 	go selectHandler(nextProm, p)
 	return nextProm
 }
@@ -155,7 +155,7 @@ func All[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
-	nextProm := newPromInter[[]IdxRes[T]](nil)
+	nextProm := newPromAsync[[]IdxRes[T]](nil)
 	go joinHandler(nextProm, p, allOp)
 	return nextProm
 }
@@ -180,7 +180,7 @@ func AllWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
-	nextProm := newPromInter[[]IdxRes[T]](nil)
+	nextProm := newPromAsync[[]IdxRes[T]](nil)
 	go joinHandler(nextProm, p, allWaitOp)
 	return nextProm
 }
@@ -203,7 +203,7 @@ func Any[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
-	nextProm := newPromInter[[]IdxRes[T]](nil)
+	nextProm := newPromAsync[[]IdxRes[T]](nil)
 	go joinHandler(nextProm, p, anyOp)
 	return nextProm
 }
@@ -228,7 +228,7 @@ func AnyWait[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
-	nextProm := newPromInter[[]IdxRes[T]](nil)
+	nextProm := newPromAsync[[]IdxRes[T]](nil)
 	go joinHandler(nextProm, p, anyWaitOp)
 	return nextProm
 }
@@ -247,7 +247,7 @@ func Join[T any](p ...*Promise[T]) *Promise[[]IdxRes[T]] {
 		return Wrap[[]IdxRes[T]](nil)
 	}
 
-	nextProm := newPromInter[[]IdxRes[T]](nil)
+	nextProm := newPromAsync[[]IdxRes[T]](nil)
 	go joinHandler(nextProm, p, joinOp)
 	return nextProm
 }

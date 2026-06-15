@@ -517,9 +517,9 @@ func handleGroupCall[T any](callVal any, res Result[T]) bool {
 	}
 }
 
-// newPromInter creates a new Promise which is resolved asynchronously,
+// newPromAsync creates a new Promise which is resolved asynchronously,
 // via an internal allocated channel.
-func newPromInter[T any](g *Group[T]) *Promise[T] {
+func newPromAsync[T any](g *Group[T]) *Promise[T] {
 	return &Promise[T]{
 		group:    g,
 		syncChan: make(chan struct{}),
