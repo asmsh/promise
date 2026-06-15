@@ -2722,8 +2722,7 @@ func TestGroupDoesNotRunNewFunctionsAfterPreviousError(t *testing.T) {
 
 	group.GoCtxRes(func(ctx context.Context) Result[any] {
 		return ErrRes[any](errors.New("test error"))
-	})
-	time.Sleep(time.Second)
+	}).Wait()
 
 	var ran atomic.Bool
 	group.GoCtxRes(func(ctx context.Context) Result[any] {

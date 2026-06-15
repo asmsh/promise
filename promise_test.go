@@ -49,7 +49,7 @@ func newTestPtrError() error {
 	return &testPtrError{txt: "ptr_test_error"}
 }
 
-func TestPanicking(t *testing.T) {
+func TestPromise_Panicking(t *testing.T) {
 	wantV := "test_panic"
 
 	t.Run("Callback handling", func(t *testing.T) {
@@ -57,7 +57,7 @@ func TestPanicking(t *testing.T) {
 			panic(wantV)
 		}).Recover(func(ctx context.Context, res Result[any]) Result[any] {
 			if perr := new(PanicError); !errors.As(res.Err(), perr) || perr.V != wantV {
-				t.Fatalf("Res() got unexpected error: %v", res.Err())
+				t.Fatalf("Recover callback got unexpected error: %v", res.Err())
 			}
 			return nil
 		})
@@ -70,7 +70,7 @@ func TestPanicking(t *testing.T) {
 		})
 		res := p.WaitRes()
 		if res == nil {
-			t.Fatalf("Res() = %v, want: non-nil", res)
+			t.Fatalf("WaitRes() = %v, want: non-nil", res)
 		}
 		if perr := new(PanicError); !errors.As(res.Err(), perr) || perr.V != wantV {
 			t.Fatalf("Res() got unexpected error: %v", res.Err())
@@ -78,17 +78,17 @@ func TestPanicking(t *testing.T) {
 	})
 }
 
-// TestPanicNil verifies that panic(nil) produces a [Panic] state, not an [Error]
-// state with [ErrPromiseGoexit].  Under Go 1.21+ panic(nil) is wrapped in a
-// *runtime.PanicNilError, making recover() return a non-nil value and keeping
-// the distinction from runtime.Goexit intact.
-func TestPanicNil(t *testing.T) {
+// TestPromise_PanicNil verifies that panic(nil) produces a [Panic] state,
+// not an [Error] state with [ErrPromiseGoexit].  Under Go 1.21+ panic(nil)
+// is wrapped in a *runtime.PanicNilError, making recover() return a non-nil
+// value and keeping the distinction from runtime.Goexit intact.
+func TestPromise_PanicNil(t *testing.T) {
 	res := Go(func() {
 		panic(nil)
 	}).WaitRes()
 
 	if res == nil {
-		t.Fatal("Res() = nil, want non-nil")
+		t.Fatal("WaitRes() = nil, want non-nil")
 	}
 	if got := res.State(); got != Panic {
 		t.Errorf("State() = %v, want %v (panic(nil) should not be treated as Goexit)", got, Panic)
@@ -101,15 +101,16 @@ func TestPanicNil(t *testing.T) {
 	}
 }
 
-// TestGoexit verifies that calling runtime.Goexit inside any callback causes
-// the resulting Promise to resolve to an [Error] state wrapping [ErrPromiseGoexit],
-// and that it is correctly distinguished from both a normal return and a panic.
-func TestGoexit(t *testing.T) {
+// TestPromise_Goexit verifies that calling runtime.Goexit inside any callback
+// causes the resulting Promise to resolve to an [Error] state wrapping
+// [ErrPromiseGoexit], and that it is correctly distinguished from both a normal
+// return and a panic.
+func TestPromise_Goexit(t *testing.T) {
 	// checkRes is a helper that asserts the Goexit result contract.
 	checkRes := func(t *testing.T, res Result[any]) {
 		t.Helper()
 		if res == nil {
-			t.Fatal("Res() = nil, want non-nil")
+			t.Fatal("WaitRes() = nil, want non-nil")
 		}
 		if got := res.State(); got != Error {
 			t.Errorf("State() = %v, want %v", got, Error)
@@ -181,7 +182,7 @@ func TestGoexit(t *testing.T) {
 	})
 }
 
-func TestRejection(t *testing.T) {
+func TestPromise_Rejection(t *testing.T) {
 	wantErr := newTestStrError()
 
 	t.Run("Callback handling", func(t *testing.T) {

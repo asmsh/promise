@@ -83,7 +83,7 @@ func BenchmarkPromise_Wait(b *testing.B) {
 	})
 }
 
-func BenchmarkPromise_Res(b *testing.B) {
+func BenchmarkPromise_WaitRes(b *testing.B) {
 	b.Run("sync-success-resolved_nil-res", func(b *testing.B) {
 		var res Result[any]
 		prom := Wrap[any](nil)
