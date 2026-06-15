@@ -101,14 +101,29 @@ type extCall[T any] struct {
 	idx int
 }
 
+// Val returns the value resulting from the promise's execution.
+// It blocks until the promise is resolved.
+//
+// Subsequent calls return the same value, unless [GroupConfig.OnetimeHandling]
+// is enabled, in which the zero value of T is returned.
 func (p *Promise[T]) Val() T {
 	return p.WaitRes().Val()
 }
 
+// Err returns the error resulting from the promise's execution.
+// It blocks until the promise is resolved.
+//
+// Subsequent calls return the same value, unless [GroupConfig.OnetimeHandling]
+// is enabled, in which case [ErrPromiseConsumed] is returned.
 func (p *Promise[T]) Err() error {
 	return p.WaitRes().Err()
 }
 
+// State returns the final state of the promise's execution.
+// It blocks until the promise is resolved.
+//
+// Subsequent calls return the same value, unless [GroupConfig.OnetimeHandling]
+// is enabled, in which case [Error] is returned.
 func (p *Promise[T]) State() State {
 	return p.WaitRes().State()
 }
@@ -118,6 +133,7 @@ func (p *Promise[T]) String() string {
 	return fmt.Sprintf("%v", p.WaitRes())
 }
 
+// Wait blocks until the promise is resolved.
 func (p *Promise[T]) Wait() {
 	p.regChainWait()
 
@@ -132,8 +148,8 @@ func (p *Promise[T]) Wait() {
 // WaitChan returns a channel that will be closed once this [Promise]
 // is resolved and its [Result] is available.
 //
-// Once the returned channel is closed, all blocked calls on this [Promise]
-// will be unblocked, and all subsequent calls will return with no blocking.
+// Once the channel is closed, all calls blocked on this [Promise]
+// are unblocked, and any subsequent calls complete without blocking.
 //
 // Subsequent calls return the same value.
 func (p *Promise[T]) WaitChan() <-chan struct{} {
@@ -175,6 +191,12 @@ func (p *Promise[T]) waitChanSlow() <-chan struct{} {
 	return neverClosedSyncChan
 }
 
+// WaitRes return the [Result] of the promise's execution.
+// It blocks until the promise is resolved.
+//
+// Subsequent calls return the same value, unless [GroupConfig.OnetimeHandling]
+// is enabled, in which case a [Result] with the [ErrPromiseConsumed] error
+// is returned.
 func (p *Promise[T]) WaitRes() Result[T] {
 	p.regChainRead()
 
