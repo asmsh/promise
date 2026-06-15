@@ -132,7 +132,7 @@ func (p *Promise[T]) unhandledPanic() {
 	// block new calls from being started, if it's requested to cancel
 	// the group on unhandled failures.
 	if p.group.core.options.IsFailuresCancelGroup() {
-		p.group.core.waiting.Store(true)
+		p.group.core.canceled.Store(true)
 	}
 
 	// cancel the group's context, if it's request to cancel all
@@ -156,7 +156,7 @@ func (p *Promise[T]) unhandledError() {
 	debug(p, startUnhandledErrorLogic)
 
 	if p.group.core.options.IsFailuresCancelGroup() {
-		p.group.core.waiting.Store(true)
+		p.group.core.canceled.Store(true)
 	}
 
 	if p.group.core.cancel != nil {
