@@ -169,79 +169,17 @@ func (p *Promise[T]) unhandledError() {
 	}
 }
 
-func (p *Promise[T]) resolveToRes(res Result[T]) {
-	// res will be nil after a Finally callback on a Promise with nil Result,
-	// after a callback that doesn't support returning Result, or when it's
-	// explicitly returned from a callback that supports returning Result.
-	if res == nil {
-		p.resolveToSuccessRes(nil)
-		return
-	}
-
-	// resolve the provided Promise to the provided Result, accordingly.
-	// note: if res is a Promise value, the State call will block until that
-	// Promise is resolved.
-	switch s := res.State(); s {
-	case Panic:
-		p.resolveToPanicRes(res)
-	case Error:
-		p.resolveToErrorRes(res)
-	case Success:
-		p.resolveToSuccessRes(res)
-	default:
-		panic("promise: unexpected Result State: " + s.String())
-	}
-}
-
-func (p *Promise[T]) resolveToPanicRes(res Result[T]) {
-	debug(p, resolve, resolvePanic)
-	// save the result before executing any callbacks.
-	p.res = res
-	// execute the side effects, if the chain doesn't have a wait or read calls,
-	// nor is already handled
-	p.chainSideEffects(p.chainStatus.Load(), false)
-	// unblock all calls waiting on p.
-	if p.syncChan != nil {
-		close(p.syncChan)
-	}
-	// handle all extension calls that involve p.
-	handleExtCalls(p)
-	// handle all group calls for p's group.
-	handleGroupCalls(p)
-
-	// note: any code that gets added after close(p.syncChan) isn't guaranteed
-	// to be executed without extra wait arrangements (via Group Wait methods,
-	// or extension functions).
-}
-
-func (p *Promise[T]) resolveToErrorRes(res Result[T]) {
-	debug(p, resolve, resolveError)
-	p.res = res
-	p.chainSideEffects(p.chainStatus.Load(), false)
-	if p.syncChan != nil {
-		close(p.syncChan)
-	}
-	handleExtCalls(p)
-	handleGroupCalls(p)
-}
-
-func (p *Promise[T]) resolveToSuccessRes(res Result[T]) {
-	debug(p, resolve, resolveSuccess)
-	p.res = res
-	// no side effects to be done for Success result.
-	if p.syncChan != nil {
-		close(p.syncChan)
-	}
-	handleExtCalls(p)
-	handleGroupCalls(p)
-}
-
 // note: if there's a result to be set, it must be set before calling it.
-func (p *Promise[T]) chainSideEffects(cs chainStatus, waitCall bool) {
-	if p.res == nil {
+func (p *Promise[T]) chainSideEffects(waitCall bool) {
+	// Note: if p.res is itself a Promise, the State call will resolve it,
+	// hence it will be blocking.
+	if p.res == nil || p.res.State() == Success {
 		return
 	}
+	p.chainSideEffectsSlow(p.chainStatus.Load(), waitCall)
+}
 
+func (p *Promise[T]) chainSideEffectsSlow(cs chainStatus, waitCall bool) {
 	// if the chain is not empty (there's a follow, read or wait calls), return
 	// early, unless it's a wait call and the waitCall logic is the caller.
 	// as the unhandled logic will be delayed until the last call in the chain.
@@ -263,6 +201,28 @@ func (p *Promise[T]) chainSideEffects(cs chainStatus, waitCall bool) {
 	case Error:
 		p.unhandledError()
 	}
+}
+
+func (p *Promise[T]) resolveToRes(res Result[T]) {
+	debug(p, resolve)
+
+	// save the result before executing any callbacks.
+	p.res = res
+	// execute the side effects, if the chain doesn't have a wait or read calls,
+	// nor is already handled
+	p.chainSideEffects(false)
+	// unblock all calls waiting on p.
+	if p.syncChan != nil {
+		close(p.syncChan)
+	}
+	// handle all extension calls that involve p.
+	handleExtCalls(p)
+	// handle all group calls for p's group.
+	handleGroupCalls(p)
+
+	// note: any code that gets added after close(p.syncChan) isn't guaranteed
+	// to be executed without extra wait arrangements (via Group Wait methods,
+	// or extension functions).
 }
 
 var (
@@ -364,7 +324,7 @@ func handleFollow[PrevT, NextT any](
 	// if the promise result has been used, either return or resolve with the expected error
 	if !validHandle {
 		if resolveOnErr {
-			nextProm.resolveToErrorRes(errPromiseConsumedResult[NextT]{})
+			nextProm.resolveToRes(errPromiseConsumedResult[NextT]{})
 			return nil, false
 		}
 		return errPromiseConsumedResult[PrevT]{}, false
@@ -384,18 +344,22 @@ func handleReturns[PrevT, NextT any](
 	nextResP *Result[NextT],
 	validNextResP *bool,
 ) {
-	// get the new Result value based on the state of the callback
+	// get the new Result value based on the state of the callback.
 	var nextRes Result[NextT]
 	if v := recover(); v != nil {
 		// the callback panicked, create the appropriate Result value.
 		nextRes = panicResult[NextT]{v: v}
 	} else if !*validNextResP {
-		// if it's not a valid result, and there was no panic, then
+		// it's not a valid result, and there was no panic, so
 		// the caller must have called runtime.Goexit.
 		nextRes = errPromiseGoexitResult[NextT]{}
-	} else {
+	} else if nextResP != nil {
 		// the callback returned normally.
-		nextRes = getEffectiveNextRes(prevRes, nextResP)
+		// if a next Result is set, return it.
+		// this happens for callbacks that support returning a new [Result].
+		nextRes = *nextResP
+	} else {
+		nextRes = getEffectiveNextRes[NextT](prevRes)
 	}
 
 	// resolve the provided Promise to the new Result value.
@@ -404,14 +368,7 @@ func handleReturns[PrevT, NextT any](
 
 func getEffectiveNextRes[NextT, PrevT any](
 	prevRes Result[PrevT],
-	nextResP *Result[NextT],
 ) (effRes Result[NextT]) {
-	// if a next Result is set, return it.
-	// this happens for callbacks that support returning a new [Result].
-	if nextResP != nil {
-		return *nextResP
-	}
-
 	// maintain the nil Result, for calls on nil Result.
 	if prevRes == nil {
 		return nil
@@ -541,7 +498,7 @@ func newPromSync[T any](g *Group[T], res Result[T]) *Promise[T] {
 		// no other fields are needed, since sync promises are resolved directly
 		// after created, so any extension call will depend on the syncChan chan.
 	}
-	p.chainSideEffects(chainStatusRead, false) // anything other than empty or handled.
+	p.chainSideEffectsSlow(chainStatusRead, false) // anything other than empty or handled.
 	return p
 }
 

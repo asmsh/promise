@@ -265,7 +265,7 @@ func delayFollowHandler[T any](
 		if flags.onError {
 			time.Sleep(dd)
 		}
-		nextProm.resolveToErrorRes(res)
+		nextProm.resolveToRes(res)
 		return
 	}
 
@@ -487,12 +487,12 @@ func followHandler[NextT, PrevT any](
 	// return and carry the current Result to the next Promise if it's not the target.
 	if !op.IsTargetState(s) {
 		if nextProm == nil {
-			// this should not happen, as operations that defines a certain
+			// this should not happen, as operations that define a certain
 			// set of target states must create and pass a next promise.
 			panic("promise: internal: next promise is unexpectedly nil")
 		}
 
-		nextRes := getEffectiveNextRes[NextT, PrevT](prevProm.res, nil)
+		nextRes := getEffectiveNextRes[NextT](prevProm.res)
 		nextProm.resolveToRes(nextRes)
 		return
 	}
