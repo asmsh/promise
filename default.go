@@ -34,11 +34,7 @@ import (
 //
 // It will panic if cb is nil.
 func Go(cb func()) *Promise[any] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	return goCallback(nil, goFunc[any, any](cb))
+	return (*Group[any]).Go(nil, cb)
 }
 
 // GoErr runs the provided function, cb, in a separate goroutine, and returns
@@ -58,11 +54,7 @@ func Go(cb func()) *Promise[any] {
 //
 // It will panic if cb is nil.
 func GoErr(cb func() error) *Promise[any] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	return goCallback(nil, goNextErrFunc[any, any](cb))
+	return (*Group[any]).GoErr(nil, cb)
 }
 
 // GoValErr runs the provided function, cb, in a separate goroutine, and returns
@@ -83,11 +75,7 @@ func GoErr(cb func() error) *Promise[any] {
 //
 // It will panic if cb is nil.
 func GoValErr[T any](cb func() (T, error)) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	return goCallback(nil, goNextValErrFunc[T, T](cb))
+	return (*Group[T]).GoValErr(nil, cb)
 }
 
 // GoCtxErr runs the provided function, cb, in a separate goroutine, and returns
@@ -110,11 +98,7 @@ func GoValErr[T any](cb func() (T, error)) *Promise[T] {
 //
 // It will panic if cb is nil.
 func GoCtxErr(cb func(ctx context.Context) error) *Promise[any] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	return goCallback(nil, ctxNextErrFunc[any, any](cb))
+	return (*Group[any]).GoCtxErr(nil, cb)
 }
 
 // GoCtxValErr runs the provided function, cb, in a separate goroutine, and returns
@@ -138,11 +122,7 @@ func GoCtxErr(cb func(ctx context.Context) error) *Promise[any] {
 //
 // It will panic if cb is nil.
 func GoCtxValErr[T any](cb func(ctx context.Context) (T, error)) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	return goCallback(nil, ctxNextValErrFunc[T, T](cb))
+	return (*Group[T]).GoCtxValErr(nil, cb)
 }
 
 // GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
@@ -163,11 +143,7 @@ func GoCtxValErr[T any](cb func(ctx context.Context) (T, error)) *Promise[T] {
 //
 // It will panic if cb is nil.
 func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	return goCallback(nil, ctxNextResFunc[T, T](cb))
+	return (*Group[T]).GoCtxRes(nil, cb)
 }
 
 // GoFunc runs the provided callback function, cb, in a separate goroutine,
