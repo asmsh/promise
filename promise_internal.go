@@ -508,6 +508,7 @@ func newPromSync[T any](g *Group[T], res Result[T]) *Promise[T] {
 func newPromBlocked[T any]() *Promise[T] {
 	return &Promise[T]{
 		syncChan: neverClosedSyncChan,
-		// no other fields need to be initialized, since this promise will never be resolved.
+		// no other fields need to be initialized,
+		// since this promise will never be resolved.
 	}
 }

@@ -44,14 +44,14 @@ type Promise[T any] struct {
 	// it has one writer (one goroutine), which is the owner (this promise),
 	// which will close it, but can have multiple readers (chain promises).
 	//
-	// note: it should be accessed directly only if it's known to not be nil,
+	// note: it should be accessed directly only if it's not be nil,
 	// otherwise it will be saved in res and should be accessed via WaitChan.
 	syncChan chan struct{}
 
 	// holds the result of the promise.
 	// written once, before the syncChan is closed.
 	//
-	// don't read it unless the syncChan is known to be closed.
+	// don't read it unless the syncChan is closed or nil.
 	res Result[T]
 
 	// chainStatus holds the status of this promise's chain.
@@ -60,7 +60,7 @@ type Promise[T any] struct {
 	chainStatus atomic.Uint32
 }
 
-// extQueue wil be owned, at any time, by a single goroutine.
+// extQueue will be owned, at any time, by a single goroutine.
 type extQueue[T any] struct {
 	// initState is the state value at the time this callsQ was created.
 	// note: the reason for this field is, during extension calls,
@@ -91,7 +91,7 @@ type extCall[T any] struct {
 
 	// syncChan is the channel used to communicate that the extension call's
 	// promise has been resolved, so that the sending promise can return.
-	// this is typically extension call's promise's syncChan.
+	// this is typically an extension call's promise's syncChan.
 	syncChan <-chan struct{}
 
 	// idx is the index of this result's promise within the list of promises
@@ -135,21 +135,23 @@ func (p *Promise[T]) Wait() {
 //
 // Subsequent calls return the same value.
 func (p *Promise[T]) WaitChan() <-chan struct{} {
-	// note: internally, this method is used whenever we want to wait
-	// on Promise which its syncChan isn't guaranteed to be non-nil.
-	// this generally only needed because of the Ctx constructors, because
-	// the Done chan is a receive-only, and this implementation expects
-	// a bi-direction syncChan, in order to be able to close it.
-	// however, since the Ctx Done chan is closed by external actor,
+	// note: this method is the entry point to using the syncChan,
+	// as it handles the syncChan being nil.
+	// the syncChan will be nil in the case of the Ctx constructors,
+	// which saves the syncChan in res as a Result value that implements:
+	// WaitChan() <-chan struct{}.
+	// this is only needed because the Context.Done chan is a receive-only,
+	// and this implementation expects a bi-direction syncChan to be able
+	// to close it.
+	// however, since the Context.Done chan is closed by an external actor,
 	// we can't close it, and we only need to care about waiting on it.
-	// so, for the purpose of saving the receive-only syncChan, it will
-	// be saved in a Result value that implements: WaitChan() <-chan struct{}.
 
 	// if the syncChan is already set, return it.
 	if p.syncChan != nil {
 		return p.syncChan
 	}
 
+	// otherwise, try to read it from the res.
 	return p.waitChanSlow()
 }
 
@@ -200,7 +202,7 @@ func (p *Promise[T]) WaitRes() Result[T] {
 // getFinalRes returns the final result to be used when returned outside
 // the scope of the internal functions here.
 func getFinalRes[T any](res Result[T]) Result[T] {
-	// if no result was set, then it's implicitly the empty result
+	// if no result was set, then it's implicitly the zero result
 	if res == nil {
 		return zeroResult[T]{}
 	}
@@ -222,8 +224,8 @@ func (p *Promise[T]) validateState() *Promise[T] {
 		return p
 	}
 
-	// attempt to reserve a goroutine for the rescheduling,
-	// or return an error if there's no available ones.
+	// attempt to reserve a goroutine for the rescheduling
+	// or return an error if there are no available ones.
 	if !p.group.reserveGoroutine(p.regChainRead) {
 		return newPromSync(p.group, errGroupBusyResult[T]{})
 	}
@@ -286,7 +288,8 @@ func (p *Promise[T]) Callback(
 
 	// note: this will also handle the error, if any, synchronously.
 	if errProm := p.validateState(); errProm != nil {
-		// TODO: the returned errProm isn't needed, so maybe get rid of it.
+		// TODO: the returned errProm isn't needed, so avoid creating it.
+		//  we only need the chainSideEffects call.
 		return
 	}
 

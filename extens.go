@@ -389,6 +389,8 @@ func joinHandler[T any](
 	}
 
 	// remove the zero values from the callRes.
+	// zero values can happen if we didn't populate the full callRes
+	// by breaking early on a target result.
 	callRes = slices.DeleteFunc(
 		callRes,
 		func(r IdxRes[T]) bool { return r.Result == nil },
