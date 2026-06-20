@@ -26,40 +26,40 @@ type Func[NextT, PrevT any] interface {
 	// might change if this happens: https://github.com/golang/go/issues/45380
 
 	func() |
-	func() error |
-	func() NextT |
-	func() (NextT, error) |
-	func() Result[NextT] |
+		func() error |
+		func() NextT |
+		func() (NextT, error) |
+		func() Result[NextT] |
 
-	func(PrevT) |
-	func(PrevT) error |
-	func(PrevT) NextT |
-	func(PrevT) (NextT, error) |
-	func(PrevT) Result[NextT] |
+		func(PrevT) |
+		func(PrevT) error |
+		func(PrevT) NextT |
+		func(PrevT) (NextT, error) |
+		func(PrevT) Result[NextT] |
 
-	func(Result[PrevT]) |
-	func(Result[PrevT]) error |
-	func(Result[PrevT]) NextT |
-	func(Result[PrevT]) (NextT, error) |
-	func(Result[PrevT]) Result[NextT] |
+		func(Result[PrevT]) |
+		func(Result[PrevT]) error |
+		func(Result[PrevT]) NextT |
+		func(Result[PrevT]) (NextT, error) |
+		func(Result[PrevT]) Result[NextT] |
 
-	func(context.Context) |
-	func(context.Context) error |
-	func(context.Context) NextT |
-	func(context.Context) (NextT, error) |
-	func(context.Context) Result[NextT] |
+		func(context.Context) |
+		func(context.Context) error |
+		func(context.Context) NextT |
+		func(context.Context) (NextT, error) |
+		func(context.Context) Result[NextT] |
 
-	func(context.Context, PrevT) |
-	func(context.Context, PrevT) error |
-	func(context.Context, PrevT) NextT |
-	func(context.Context, PrevT) (NextT, error) |
-	func(context.Context, PrevT) Result[NextT] |
+		func(context.Context, PrevT) |
+		func(context.Context, PrevT) error |
+		func(context.Context, PrevT) NextT |
+		func(context.Context, PrevT) (NextT, error) |
+		func(context.Context, PrevT) Result[NextT] |
 
-	func(context.Context, Result[PrevT]) |
-	func(context.Context, Result[PrevT]) error |
-	func(context.Context, Result[PrevT]) NextT |
-	func(context.Context, Result[PrevT]) (NextT, error) |
-	func(context.Context, Result[PrevT]) Result[NextT]
+		func(context.Context, Result[PrevT]) |
+		func(context.Context, Result[PrevT]) error |
+		func(context.Context, Result[PrevT]) NextT |
+		func(context.Context, Result[PrevT]) (NextT, error) |
+		func(context.Context, Result[PrevT]) Result[NextT]
 }
 
 // callback represents a typed operation that takes a previous result and returns a new result.
@@ -71,8 +71,8 @@ type callback[NextT, PrevT any] interface {
 }
 
 func runCallbackHandler[
-NextT any,
-PrevT any,
+	NextT any,
+	PrevT any,
 ](
 	nextProm *Promise[NextT],
 	cb callback[NextT, PrevT],
@@ -115,9 +115,9 @@ PrevT any,
 // callbackFrom converts any supported callback function signature into
 // a strongly-typed callback interface.
 func callbackFrom[
-NextT any,
-PrevT any,
-CBFuncT Func[NextT, PrevT],
+	NextT any,
+	PrevT any,
+	CBFuncT Func[NextT, PrevT],
 ](
 	cbFunc CBFuncT,
 ) callback[NextT, PrevT] {

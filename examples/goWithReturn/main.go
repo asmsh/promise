@@ -29,8 +29,8 @@ import (
 func main() {
 	p := promise.
 		GoFunc[*http.Response, any](func(ctx context.Context) promise.Result[*http.Response] {
-			return promise.ValErrRes(http.Get("https://golang.org/"))
-		}).
+		return promise.ValErrRes(http.Get("https://golang.org/"))
+	}).
 		Follow(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
 			if res.State() != promise.Success {
 				return res
