@@ -101,43 +101,12 @@ for _, r := range joined.WaitRes().Val() {
 
 Other combinators: `All` (short-circuits on failure), `AllWait`, `Any` (short-circuits on first success), `AnyWait`, `Select` (first to resolve).
 
-## Advanced Examples
-
-### Asynchronous HTTP Request
-
-```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "net/http"
-    "github.com/asmsh/promise"
-)
-
-func main() {
-    promise.GoFunc[*http.Response, any](func(ctx context.Context) (*http.Response, error) {
-        req, _ := http.NewRequestWithContext(ctx, "GET", "https://go.dev", nil)
-        return http.DefaultClient.Do(req)
-    }).Follow(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
-        if res.State() != promise.Success {
-            fmt.Println("Error:", res.Err())
-            return res
-        }
-        resp := res.Val()
-        fmt.Println("Status:", resp.Status)
-        resp.Body.Close()
-        return res
-    }).Wait()
-}
-```
-
 ## Comparisons
 
-| Feature            |   `promise`   | `sync.WaitGroup` |  Raw Channels  |
-|:-------------------|:-------------:|:----------------:|:--------------:|
-| **Return Values**  | ✅ Yes (Typed) |       ❌ No       | ✅ Yes (Manual) |
-| **Error Handling** | ✅ First-class |       ❌ No       |    ✅ Manual    |
-| **Chaining**       |  ✅ Built-in   |       ❌ No       |      ❌ No      |
-| **Panic Safety**   |  ✅ Automatic  |       ❌ No       |      ❌ No      |
-| **Complexity**     |      Low      |       Low        |  Medium/High   |
+| Feature            |   `promise`    | `sync.WaitGroup` |  Raw Channels   |
+|:-------------------|:--------------:|:----------------:|:---------------:|
+| **Return Values**  | ✅ Yes (Typed) |      ❌ No       | ✅ Yes (Manual) |
+| **Error Handling** | ✅ First-class |      ❌ No       |    ✅ Manual    |
+| **Chaining**       |  ✅ Built-in   |      ❌ No       |      ❌ No      |
+| **Panic Safety**   |  ✅ Automatic  |      ❌ No       |      ❌ No      |
+| **Complexity**     |      Low       |       Low        |   Medium/High   |
