@@ -15,938 +15,407 @@
 package promise
 
 import (
+	"context"
+	"sync/atomic"
 	"time"
-
-	"github.com/asmsh/promise/internal/status"
 )
 
-// GoPromise is the default implementation of the Promise interface
+// Promise represents some asynchronous work (a goroutine),
+// tracking its progress and recording its result.
+//
+// A Promise is safe for concurrent use by multiple goroutines.
+//
+// It implements the [Result] interface, so it can be returned from
+// supported callbacks.
 //
 // The zero value will block forever on any calls.
-type GoPromise struct {
+type Promise[T any] struct {
+	_ noCopy
+
+	// group is a pointer to the promise group which this promise is part of,
+	// or nil, if it's not part of any group.
+	group *Group[T]
+
+	// initiated lazily, by the first extension call.
+	// this is sent on by the different extension calls.
+	// it's never closed.
+	extChanP atomic.Pointer[chan extQueue[T]]
+
+	// closed when this promise is resolved.
+	// it has one writer (one goroutine), which is the owner (this promise),
+	// which will close it, but can have multiple readers (chain promises).
+	//
+	// note: it should be accessed directly only if it's not be nil,
+	// otherwise it will be saved in res and should be accessed via WaitChan.
+	syncChan chan struct{}
+
 	// holds the result of the promise.
-	// written once, before the resChan channel is closed.
+	// written once, before the syncChan is closed.
 	//
-	// don't read it unless the resChan is known to be closed.
-	res Res
+	// don't read it unless the syncChan is closed or nil.
+	res Result[T]
 
-	// closed or received from when this promise is resolved.
-	//
-	// when this chan is created internally, it will be an unbuffered chan,
-	// in that case the result will be written to the res field, then it
-	// will be closed.
-	//
-	// when this chan is created externally and passed, it will be either a
-	// buffered chan, or an unbuffered chan, but it must be a bi-directional
-	// chan(so that it can be closed internally).
-	// in that case, to resolve the promise, the chan creator either sends
-	// the result to it, for only one time, OR, just close it.
-	// when the promise is resolved by closing the chan, it will always be
-	// fulfilled with a nil result, otherwise, it will be either fulfilled
-	// or rejected, depending on whether the sent result contains a non-nil
-	// error as its last element or not.
-	// the result of the promise will be the sent result.
-	//
-	// note: not following the expected behaviour, either when passing the chan
-	// or when resolving the promise, will result in a run-time panic, either
-	// internally or in the creator side, and may introduce a data race on this
-	// channel.
-	resChan chan Res
-
-	// hold the status of the different states, fates, flags, and other data
-	// about the promise.
-	// refer to the docs of the promStatus type for more info.
-	//
-	// the res field is guaranteed to be immutable, after the fate value is
-	// Resolved or Handled, so don't read it before then.
-	status status.PromStatus
+	// chainStatus holds the status of this promise's chain.
+	// once there are any calls registered on this promise, or
+	// the promise has been already handled, it will be non-zero.
+	chainStatus atomic.Uint32
 }
 
-// closedResChan is a closed channel that's shared between all instances
-// returned from the 'sync' constructor below.
-// this can be removed if we made the 'resolved' fate 'happens after' closing
-// the resChan, so that we can depend on the value of the status for checking
-// whether the promise is resolved or not.
-var closedResChan = make(chan Res)
+// extQueue will be owned, at any time, by a single goroutine.
+type extQueue[T any] struct {
+	// initState is the state value at the time this callsQ was created.
+	// note: the reason for this field is, during extension calls,
+	// if the promise was resolved while creating this extQueue's chan,
+	// the two select cases for the blocking scenario might be available
+	// at the same time.
+	// because the syncChan will be closed, and the extQ value will
+	// be available only to this goroutine, at the same time.
+	// so we need a way to still detect if the promise was resolved and
+	// read its result sync, otherwise its result would be lost.
+	initState State
 
-func init() {
-	// closed once, as init func runs once
-	close(closedResChan)
+	// whether the call value is valid or not.
+	valid bool
+
+	// call is the default extension call.
+	call extCall[T]
+
+	// extra holds any other extension calls, in addition to the one in call.
+	extra []extCall[T]
 }
 
-// internal type aliases for callback
-type (
-	thenCb    = func(res Res, ok bool) Res
-	catchCb   = func(err error, res Res, ok bool) Res
-	recoverCb = func(v interface{}, ok bool) Res
-	finallyCb = func(ok bool) Res
-	readCb    = func(res Res, ok bool, args []interface{})
-)
+// extCall describes an extension call and how to communicate back to it.
+type extCall[T any] struct {
+	// resChan is used to send the result back to the extension call's promise.
+	// this is a new, per extension call, unbuffered channel.
+	resChan chan<- IdxRes[T]
 
-// panic messages
-const (
-	nilCallbackPanicMsg   = "promise: The provided callback is nil"
-	nilResChanPanicMsg    = "promise: The provided resChan is nil"
-	multipleSendsPanicMsg = "promise: Only one send should be done on the resChan"
-)
+	// syncChan is the channel used to communicate that the extension call's
+	// promise has been resolved, so that the sending promise can return.
+	// this is typically an extension call's promise's syncChan.
+	syncChan <-chan struct{}
 
-// newGoPromInter creates a new GoPromise which is resolved internally,
-// using an internal allocated channel.
-func newGoPromInter(nonSafe bool) *GoPromise {
-	p := &GoPromise{
-		resChan: make(chan Res),
-	}
-
-	// set the flags of the promise, accordingly
-	if nonSafe {
-		p.status = status.PromStatus(status.FlagsIsNotSafe)
-	}
-	return p
+	// idx is the index of this result's promise within the list of promises
+	// passed to the extension call.
+	idx int
 }
 
-// newGoPromExter creates a new GoPromise which is resolved externally,
-// using an external allocated channel, the passed resChan.
-func newGoPromExter(resChan chan Res, nonSafe bool) *GoPromise {
-	if resChan == nil {
-		panic(nilResChanPanicMsg)
-	}
-
-	p := &GoPromise{
-		resChan: resChan,
-	}
-
-	// set the flags of the promise, accordingly
-	s := status.FlagsIsExternal
-	if nonSafe {
-		s |= status.FlagsIsNotSafe
-	}
-	p.status = status.PromStatus(s)
-	return p
-}
-
-// newGoPromSync creates a new GoPromise which is resolved synchronously,
-// just after it's created.
-func newGoPromSync(nonSafe bool) *GoPromise {
-	p := &GoPromise{resChan: closedResChan}
-
-	// set the flags of the promise, accordingly
-	if nonSafe {
-		p.status = status.PromStatus(status.FlagsIsNotSafe)
-	}
-	return p
-}
-
-// Status returns the status of this promise at this specific moment.
+// Val returns the value resulting from the promise's execution.
+// It blocks until the promise is resolved.
 //
-// The returned value corresponds only to the time it was created at.
-func (p *GoPromise) Status() Status {
-	s := p.status.Read()
-	return Status(s)
+// Subsequent calls return the same value, unless the promise is part of a
+// [Group] with [GroupConfig.OnetimeHandling] enabled, in which case the
+// zero value of T is returned.
+func (p *Promise[T]) Val() T {
+	return p.WaitRes().Val()
 }
 
-// Wait waits the promise to be resolved. It returns false, if the promise
-// has panicked, otherwise it returns true.
-func (p *GoPromise) Wait() (ok bool) {
-	p.status.RegWait()
-	return p.waitCall(false, false, 0) // wait infinitely
-}
-
-// WaitChan returns a newly created channel, which true will be sent on,
-// for only one time, after waiting the promise to be resolved.
+// Err returns the error resulting from the promise's execution.
+// It blocks until the promise is resolved.
 //
-// If it's called on a resolved promise, true will be sent without waiting.
-func (p *GoPromise) WaitChan() chan bool {
-	c := make(chan bool, 1) // buffered, so that the goroutine always exit
-	go func(c chan bool) {
-		ok := p.Wait()
-		c <- ok
-	}(c)
-	return c
+// Subsequent calls return the same value, unless the promise is part of a
+// [Group] with [GroupConfig.OnetimeHandling] enabled, in which case
+// [ErrPromiseConsumed] is returned.
+func (p *Promise[T]) Err() error {
+	return p.WaitRes().Err()
 }
 
-// GetRes waits the promise to be resolved, and returns its result, res,
-// and ok = true, if the promise hasn't panicked, otherwise it returns
-// res = nil, and ok = false.
-func (p *GoPromise) GetRes() (res Res, ok bool) {
-	p.status.RegRead()
-	ok = p.waitCall(true, false, 0) // wait infinitely
+// State returns the final state of the promise's execution.
+// It blocks until the promise is resolved.
+//
+// Subsequent calls return the same value, unless the promise is part of a
+// [Group] with [GroupConfig.OnetimeHandling] enabled, in which case
+// [Error] is returned.
+func (p *Promise[T]) State() State {
+	return p.WaitRes().State()
+}
+
+// Wait blocks until the promise is resolved and its [Result] is available
+// via the [WaitRes].
+func (p *Promise[T]) Wait() {
+	p.regChainWait()
+
+	// wait the promise to be resolved.
+	<-p.WaitChan()
+
+	// execute the side effects if the chain doesn't have a read call nor
+	// is already handled.
+	p.chainSideEffects(true)
+}
+
+// WaitChan returns a channel that will be closed once this [Promise]
+// is resolved and its [Result] is available.
+//
+// Once the channel is closed, all calls blocked on this [Promise]
+// are unblocked, and any subsequent calls complete without blocking.
+//
+// Subsequent calls return the same value.
+func (p *Promise[T]) WaitChan() <-chan struct{} {
+	// note: this method is the entry point to using the syncChan,
+	// as it handles the syncChan being nil.
+	// the syncChan will be nil in the case of the Ctx constructors,
+	// which saves the syncChan in res as a Result value that implements:
+	// WaitChan() <-chan struct{}.
+	// this is only needed because the Context.Done chan is a receive-only,
+	// and this implementation expects a bi-direction syncChan to be able
+	// to close it.
+	// however, since the Context.Done chan is closed by an external actor,
+	// we can't close it, and we only need to care about waiting on it.
+
+	// if the syncChan is already set, return it.
+	if p.syncChan != nil {
+		return p.syncChan
+	}
+
+	// otherwise, try to read it from the res.
+	return p.waitChanSlow()
+}
+
+// waitChanSlow is outlined to allow WaitChan to be inlined.
+func (p *Promise[T]) waitChanSlow() <-chan struct{} {
+	// the syncChan is nil, so if the current res is set,
+	// the syncChan will be saved in it.
+	// note: this is needed for the Ctx constructors.
+	if p.res != nil {
+		if sr, ok := p.res.(interface{ WaitChan() <-chan struct{} }); ok {
+			return sr.WaitChan()
+		}
+
+		// this will never happen.
+		panic("promise: internal: unexpected syncChan value")
+	}
+
+	// otherwise, this is a zero Promise, return the default sync chan.
+	return neverClosedSyncChan
+}
+
+// WaitRes return the [Result] of the promise's execution.
+// It blocks until the promise is resolved.
+//
+// Subsequent calls return the same value, unless the promise is part of a
+// [Group] with [GroupConfig.OnetimeHandling] enabled, in which case a
+// [Result] with the [ErrPromiseConsumed] error is returned.
+func (p *Promise[T]) WaitRes() Result[T] {
+	p.regChainRead()
+
+	// wait the promise to be resolved.
+	<-p.WaitChan()
+
+	// if it's a call to handle the result, set the 'Handled' flag.
+	// also, keep track of whether this handle was valid(first) or not,
+	// to decide whether we should return the actual result of the promise
+	// or an erroneous one.
+	validHandle := p.setChainHandled()
+
+	// if the promise isn't a one-time promise, all handle calls will be valid
+	if !p.isOnetimePromise() {
+		validHandle = true
+	}
+
+	// if the promise result has been used, return the expected error
+	if !validHandle {
+		return errPromiseConsumedResult[T]{}
+	}
+
+	// the promise result can be accessed multiple times...
+	return getFinalRes(p.res)
+}
+
+// getFinalRes returns the final result to be used when returned outside
+// the scope of the internal functions here.
+func getFinalRes[T any](res Result[T]) Result[T] {
+	// if no result was set, then it's implicitly the zero result
+	if res == nil {
+		return zeroResult[T]{}
+	}
+	return res
+}
+
+func (p *Promise[T]) validateState() *Promise[T] {
+	// return an error if its group is in the waiting mode,
+	// disallowing the initiation of any new work.
+	if errRes := p.group.validateActive(); errRes != nil {
+		return newPromSync(p.group, errRes)
+	}
+
+	if p.syncChan == neverClosedSyncChan {
+		// since the syncChan is the never closed chan value, this promise
+		// will never be resolved, so no point in allocating a new value.
+		// note: this can only happen if the promise is created by passing a
+		// Context value that's never canceled(nil Done) to the Ctx constructor.
+		return p
+	}
+
+	// attempt to reserve a goroutine for the rescheduling
+	// or return an error if there are no available ones.
+	if !p.group.reserveGoroutine(p.regChainRead) {
+		return newPromSync(p.group, errGroupBusyResult[T]{})
+	}
+
+	return nil
+}
+
+// Delay returns a [Promise] that resolves to the same result as p after
+// waiting for at least duration d in a separate goroutine, according to
+// whether the result's [State] matches the provided cond values.
+//
+// The goroutine is drawn from p's [Group]'s pool, if one is set.
+//
+// If no cond is provided, the delay applies to all result states.
+func (p *Promise[T]) Delay(
+	d time.Duration,
+	cond ...DelayCond,
+) *Promise[T] {
+	if errProm := p.validateState(); errProm != nil {
+		return errProm
+	}
+
+	nextProm := newPromAsync(p.group)
+	flags := getDelayFlags(cond)
+	debug(p, startHandler, startPromiseHandler, startPromiseDelayHandler)
+	go delayFollowHandler(p, nextProm, d, flags)
+	return nextProm
+}
+
+// delay creates Promise values with the same type
+func delayFollowHandler[T any](
+	prevProm *Promise[T],
+	nextProm *Promise[T],
+	dd time.Duration,
+	flags delayFlags,
+) {
+	defer prevProm.group.freeGoroutine()
+
+	<-prevProm.WaitChan()
+
+	// mark prevProm as 'Handled', and check whether we should continue or not.
+	// the res value returned will hold the correct value that should be used.
+	res, ok := handleFollow(prevProm, nextProm, false)
 	if !ok {
-		return
-	}
-
-	// return a copy of the result, to keep the saved one immutable
-	res = p.res.Copy()
-	return
-}
-
-// ok priority: panics > timeout > onetime
-func (p *GoPromise) waitCall(resCall, once bool, d time.Duration) (ok bool) {
-	// wait the promise to be resolved, for at least time d, and
-	// then read its status.
-	timedout := p.wait(d, false)
-	s := p.status.Read()
-
-	// if the promise is panicked, panic with the same panic value
-	// if there's no follow calls registered on the promise (cause
-	// panic can be recovered through only one of them, a Recover
-	// call), and it's still not handled, but only if the safe mode
-	// is enabled(the default), otherwise just return false.
-	if status.IsStatePanicked(s) {
-		if !status.IsChainModeFollow(s) &&
-			!status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
-			panic(p.res[0])
-		} else {
-			return false
-		}
-	}
-
-	// if the wait timed-out, return false
-	if timedout {
-		return false
-	}
-
-	// set the flags and update the ok value, accordingly
-	if resCall {
-		// if the caller need the result, set the handled flag
-		ok, s = p.status.SetHandled()
-	} else {
-		// otherwise, don't set it, but use its value anyway
-		ok = !status.IsFateHandled(s)
-	}
-
-	// if the promise is rejected, panic with uncaught error if
-	// there's no follow or read calls registered on the promise
-	// (cause rejection can be caught through only any of them,
-	// a Catch or GetRes call), and it's still not handled, but
-	// only if the safe mode is enabled(the default).
-	if status.IsStateRejected(s) {
-		if !status.IsChainModeRead(s) && !status.IsChainModeFollow(s) &&
-			!status.IsFateHandled(s) && !status.IsFlagsNotSafe(s) {
-			err, _ := p.res.Err()
-			panic(newUnCaughtErr(err))
-		}
-	}
-
-	// ignore the handled flag result if the promise isn't onetime
-	if !once {
-		ok = true
-	}
-	return
-}
-
-// there are two ways for this method to work in, internal, or external way.
-//
-// the internal way: the resChan will be an unbuffered chan, which is allocated
-// internally.
-// the promise is resolved when the resChan is closed, and the res field will
-// has the result of the promise.
-//
-// the external way: the resChan will be bi-directional chan(buffered or not),
-// which is allocated externally, by the user.
-// the promise is resolved when a value is sent to the resChan chan, or it's
-// closed. if a value is sent, that value will be the result of the promise,
-// otherwise, the result will be nil.
-//
-// resolveOnTimeout if true, will set the state to pending(keep it as pending),
-// and the fate to resolved, when the wait times-out.
-// it should be true in all follow methods, in all implementation.
-// it should be true in 'wait' calls only in the 'timed' implementation, and
-// when the provided duration exceeds the wanted timeout.
-//
-// it returns true only if the wait times-out, otherwise it returns false.
-func (p *GoPromise) wait(d time.Duration, resolveOnTimeout bool) (timeout bool) {
-	s := p.status.Read()
-
-	// if the fate is Resolved or Handled don't wait, as they are guaranteed
-	// to happen after the result is saved, and after the resChan is closed.
-	if status.IsFateResolved(s) || status.IsFateHandled(s) {
-		return false
-	}
-
-	// create the timer chan if a non-zero duration is passed
-	var tc <-chan time.Time
-	if d > 0 {
-		t := time.NewTimer(d)
-		defer t.Stop()
-		tc = t.C
-	}
-
-	// wait with the appropriate wait procedure
-	if status.IsFlagsExternal(s) {
-		timeout = p.exterWaitProc(tc, resolveOnTimeout)
-	} else {
-		timeout = p.interWaitProc(tc, resolveOnTimeout)
-	}
-
-	return
-}
-
-// exterWaitProc executes the wait procedure responsible for promises with
-// externally allocated resChan.
-// this method will be called in only one specific case, when the promise
-// is created with the external flag set.
-// it returns true only if the provided timerChan is received from, otherwise
-// it returns false.
-func (p *GoPromise) exterWaitProc(timerChan <-chan time.Time, resolveOnTimeout bool) (timeout bool) {
-	select {
-	case res, ok := <-p.resChan: // the chan is closed or a value is received
-		if ok {
-			// set the status to Resolving, and handle the result only if
-			// it's just set, otherwise panic, accordingly.
-			set, s := p.status.SetResolving()
-			if set {
-				// handle the (only one) result received, accordingly.
-				//
-				// this will close the chan, regardless it's already closed or
-				// not, but as it's required that the chan be used to do only
-				// one operation on it, either a single send or a close, and as
-				// it's closed when a send happen, and only one send will ever
-				// result in reaching this point, panicking for a second close
-				// call, either internally or externally(in the user's code) is
-				// allowed, and considered a result for a bad usage of the chan.
-				p.resolveToRes(res)
-
-				// only one value should be sent, but more is sent, panic
-				if len(p.resChan) != 0 {
-					panic(multipleSendsPanicMsg)
-				}
-			} else if !(status.IsFateResolved(s) && status.IsStatePending(s)) {
-				// the only allowed reason for not setting the fate to Resolving
-				// here, is that the promise is resolved to pending, because of
-				// a timeout, otherwise..
-				//
-				// this may happen if two or more values are sent, and the
-				// first value is processed and this is the second value.
-				// only one value should be sent, but more is sent, panic.
-				panic(multipleSendsPanicMsg)
-			}
-		} else {
-			// the chan is closed, either by us or by the user, set the status
-			// to fulfilled and resolved.
-			//
-			// if the chan is closed by us, then the res and status fields are
-			// now set as expected, and attempting to set them again will not
-			// succeed, and that's acceptable.
-			// if it's closed by the user, which is considered acceptable, only
-			// if the user didn't send any values and just closed the chan, the
-			// res field will be empty, cause the user didn't send any values,
-			// and the status will be empty, so set it to fulfilled and resolve,
-			// cause no reason to reject can happen.
-			p.status.SetFulfilledResolved()
-		}
-
-		return false
-	case <-timerChan:
-		if resolveOnTimeout {
-			// set the status to resolved here, without closing the channel,
-			// as it's used externally and a value maybe sent on it later.
-			p.status.SetPendingResolved()
-		}
-		return true
-	}
-}
-
-// interWaitProc executes the wait procedure responsible for promises with
-// internally allocated resChan.
-// it returns true only if the provided timerChan is received from, otherwise
-// it returns false.
-func (p *GoPromise) interWaitProc(timerChan <-chan time.Time, resolveOnTimeout bool) (timeout bool) {
-	select {
-	case <-p.resChan:
-		// internally created res chan will always be closed by the previous
-		// promise, after setting the res and status fields as expected.
-		return false
-	case <-timerChan:
-		if resolveOnTimeout {
-			// resolve to pending, only if it's required
-			p.resolveToPending()
-		}
-		return true
-	}
-}
-
-// Delay returns a GoPromise value which will be resolved to this GoPromise(
-// by adopting its Res value, state, and fate), after a delay of at least
-// duration d. The delay starts after this GoPromise is resolved, accordingly.
-//
-// If this promise is resolved to fulfilled or pending, resolving the returned
-// promise will be delayed, only if onSucceed = true.
-//
-// If this promise is resolved to rejected or panicked, resolving the returned
-// promise will be delayed, only if onFail = true.
-//
-// If the promise is running in the safe mode(the default), the returned
-// Promise is a rejected promise, and the error is not caught(by a Catch call)
-// before the end of that promise's chain, a panic will happen with an error
-// value of type *UnCaughtErr, which has that uncaught error 'wrapped' inside it.
-//
-// If the returned promise is a panicked promise, and it's not recovered(by a
-// Recover call) before the end of the promise's chain, or before calling Finally,
-// it will re-panic(with the same value passed to the original 'panic' call).
-func (p *GoPromise) Delay(d time.Duration, onSucceed, onFail bool) Promise {
-	_, s := p.status.RegFollow()
-	newProm := newGoPromInter(status.IsFlagsNotSafe(s))
-	go newProm.delayCall(p, d, onSucceed, onFail, false, 0)
-	return newProm
-}
-
-func (p *GoPromise) delayCall(prev *GoPromise, dd time.Duration, onSucceed, onFail bool, once bool, wd time.Duration) {
-	// wait the previous promise to be resolved, for at least time wd
-	prev.wait(wd, true)
-
-	if s := prev.status.Read(); status.IsStatePending(s) {
-		// a pending state is considered a success
-		if onSucceed {
+		// it's not a valid handle. it's considered a failure.
+		if flags.onError {
 			time.Sleep(dd)
 		}
-		p.resolveToPending()
-	} else if status.IsStateFulfilled(s) {
-		// set the previous promise as handled, and if it was already handled,
-		// resolve the delayed promise and handle it in the same step.
-		//
-		// this will be true if the previous promise wasn't already handled and
-		// this call just did, so the delayed promise should not be handled when
-		// resolved(handleDelayed = false).
-		// it will be false if the previous promise was already handled, so the
-		// delayed promise should be handled when resolved(handleDelayed = true),
-		// as this delay call is made on an already handled promise.
-		prevJustHandled, _ := prev.status.SetHandled()
-		handleDelayed := !prevJustHandled
-
-		// a fulfilled state is considered a success
-		if onSucceed {
-			time.Sleep(dd)
-		}
-		p.resolveToFulfill(prev.res, handleDelayed)
-	} else if status.IsStateRejected(s) {
-		prevJustHandled, _ := prev.status.SetHandled()
-		handleDelayed := !prevJustHandled
-
-		// a rejected state is considered a failure
-		if onFail {
-			time.Sleep(dd)
-		}
-		p.resolveToReject(prev.res, handleDelayed)
-	} else if status.IsStatePanicked(s) {
-		prevJustHandled, _ := prev.status.SetHandled()
-		handleDelayed := !prevJustHandled
-
-		// a panicked state is considered a failure
-		if onFail {
-			time.Sleep(dd)
-		}
-		p.resolveToPanic(prev.res, handleDelayed)
-	}
-}
-
-// Then waits the promise to be resolved, and calls the thenCb function, if
-// the promise is resolved to fulfilled or pending.
-//
-// It returns a GoPromise value whose result will be the Res value returned
-// from the thenCb.
-//
-// The Res value returned from the callback must not be modified after return.
-//
-// The thenCb is passed with two arguments, this promise's result, res, and
-// a boolean, ok, which will always be true.
-//
-// It will panic if a nil callback is passed.
-//
-// For more, see 'Callback Notes' in the package comment.
-func (p *GoPromise) Then(thenCb func(res Res, ok bool) Res) Promise {
-	if thenCb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	_, s := p.status.RegFollow()
-	newProm := newGoPromInter(status.IsFlagsNotSafe(s))
-	go newProm.thenCall(p, thenCb, false, 0)
-	return newProm
-}
-
-func (p *GoPromise) thenCall(prev *GoPromise, cb thenCb, once bool, d time.Duration) {
-	// wait the previous promise to be resolved, for at least time d
-	prev.wait(d, true)
-
-	// ok is initially true and will be updated if the state is pending,
-	// which mean that the promise has timedout(either now or before).
-	ok := true
-
-	// then can handle 'fulfilled' & 'pending' states, so return otherwise
-	if s := prev.status.Read(); status.IsStatePending(s) {
-		ok = false
-	} else if !status.IsStateFulfilled(s) {
-		p.handleInvalidFollow(prev.res, s)
+		nextProm.resolveToRes(res)
 		return
 	}
 
-	// if the previous promise hasn't timedout and is fulfilled, set the handled
-	// flag, as the promise is about to be handled, and update ok accordingly.
-	if ok {
-		ok, _ = prev.status.SetHandled()
-		if !once {
-			// ignore the handled flag result if the promise isn't onetime
-			ok = true
-		}
+	if shouldDelayRes(res, flags) {
+		time.Sleep(dd)
 	}
+	nextProm.resolveToRes(res)
 
-	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Res)
-	defer p.handleReturns(resP)
-
-	// run the callback, accordingly
-	if !ok {
-		// the wait has timedout, or the promise is a onetime promise
-		// and has already been handled.
-		*resP = cb(nil, false)
-	} else {
-		// pass a copy of the previous result, to keep it immutable
-		prevRes := prev.res.Copy()
-		*resP = cb(prevRes, true)
-	}
+	debug(prevProm, endHandler, endPromiseHandler, endPromiseDelayHandler)
 }
 
-// this handles invalid follow from then, catch, and recover calls.
-// for any promise, this is guaranteed to be called only once, as it's called
-// with the newly created promise as a receiver.
-func (p *GoPromise) handleInvalidFollow(prevRes Res, prevStatus uint32) {
-	if status.IsStatePending(prevStatus) {
-		// the previous promise is pending, resolve to timeout
-		p.resolveToPending()
-	} else if status.IsStateFulfilled(prevStatus) {
-		// the previous promise is fulfilled, fulfill with its result
-		p.resolveToFulfill(prevRes, false)
-	} else if status.IsStateRejected(prevStatus) {
-		// the previous promise is rejected, reject with its result
-		p.resolveToReject(prevRes, false)
-	} else if status.IsStatePanicked(prevStatus) {
-		// the previous promise is panicked, panic with its result
-		p.resolveToPanic(prevRes, false)
-	}
-}
-
-// handleReturns must be deferred.
-// the callback function is called after a deferred call to this method.
-// no internal call that may cause a panic should be called after this method.
-func (p *GoPromise) handleReturns(resP *Res) {
-	// make sure that only one call will resolve the promise, or return if
-	// the promise is already resolved, so that we don't recover panics when
-	// we don't need to.
-	set, _ := p.status.SetResolving()
-	if !set {
-		return
-	}
-
-	v := recover()
-	if v == nil {
-		// no panic, resolve to the Res value pointed to, as the callback is
-		// either returned normally, or through a call to runtime.Goexit call,
-		// and in either case the Res value pointed to will not change here.
-		var res Res
-		if resP != nil {
-			res = *resP
-		}
-		p.resolveToRes(res)
-	} else {
-		// a panic happened, resolve to panicked, with the panic value(inside
-		// a Res value).
-		p.resolveToPanic(Res{v}, false)
-	}
-}
-
-// resolveToRes resolves the promise when the computation has finished normally,
-// without panic nor timeout.
-// the promise is either rejected or fulfilled, depending on whether the last
-// element of res is a non-nil error value or not, respectively.
+// Callback runs the provided function, cb, in a separate goroutine once
+// this promise is resolved.
+// Unlike [Promise.Follow], it does not return a new [Promise]; if it's
+// part of a [Group], failures from cb are only surfaced via the [Group]'s
+// [GroupConfig.UnhandledPanicCB] and [GroupConfig.UnhandledErrorCB] callbacks.
 //
-// if called from exterWaitProc, then it will be called once on the same
-// promise, as it's protected by the Resolving fate setter.
-// if called from handleReturns, then it will be called once on the same
-// promise, as it's protected by the Resolving fate setter.
-// if called from finallyCall(before handleReturns), then it will be called
-// once once on the same promise, by design.
-// if called from the resolverCb, then it will be called once on the same
-// promise, as it's protected by the Resolving fate setter.
-func (p *GoPromise) resolveToRes(res Res) {
-	if _, isError := res.Err(); isError {
-		p.resolveToReject(res, false)
-	} else {
-		p.resolveToFulfill(res, false)
-	}
-}
-
-// if called from handleInvalidFollow, then it will be called once on the
-// same promise, by design.
-// if called from handleReturns, then it will be called once on the same
-// promise, as it's called on return, and that can happen once.
-func (p *GoPromise) resolveToPanic(res Res, andHandle bool) {
-	// save the result, update the status, and close the resChan to unblock
-	// all waiting calls.
-	p.res = res
-	_, s := p.status.SetPanickedResolved()
-	if andHandle {
-		p.status.SetHandled() // set to Handled, if requested
-	}
-	close(p.resChan)
-
-	// re-broadcast the panic if the safe mode is enabled(the default),
-	// and the promise is not followed, nor has any read or wait calls.
-	if !status.IsFlagsNotSafe(s) && status.IsChainEmpty(s) {
-		panic(res[0])
-	}
-}
-
-func (p *GoPromise) resolveToReject(res Res, andHandle bool) {
-	// save the result, update the status, and close the resChan to unblock
-	// all waiting calls.
-	p.res = res
-	_, s := p.status.SetRejectedResolved()
-	if andHandle {
-		p.status.SetHandled() // set to Handled, if requested
-	}
-	close(p.resChan)
-
-	// panic if the safe mode is enabled(the default), and the promise
-	// is not followed, nor has any read or wait calls.
-	if !status.IsFlagsNotSafe(s) && status.IsChainEmpty(s) {
-		err, _ := p.res.Err()
-		panic(newUnCaughtErr(err))
-	}
-}
-
-func (p *GoPromise) resolveToFulfill(res Res, andHandle bool) {
-	// save the result, update the status, and close the resChan to unblock
-	// all waiting calls.
-	p.res = res
-	p.status.SetFulfilledResolved()
-	if andHandle {
-		p.status.SetHandled() // set to Handled, if requested
-	}
-	close(p.resChan)
-}
-
-// resolveToPending sets the state to Pending, and the fate to Resolved, then
-// close the resChan, only if the promise isn't Resolved.
+// The goroutine is drawn from p's [Group]'s pool, if one is set.
 //
-// it is needed for the TimedPromise, and maybe called more than one time on
-// the same promise, after the promise's wait times-out.
-func (p *GoPromise) resolveToPending() {
-	set, _ := p.status.SetPendingResolved()
-
-	// return if the promise is already resolved, to keep the following code
-	// executed once.
-	if !set {
-		return
-	}
-
-	// close the resChan to unblock all waiting calls
-	close(p.resChan)
-}
-
-func (p *GoPromise) panicSync(res Res) {
-	p.res = res
-	p.status.SetPanickedResolvedSync()
-}
-
-func (p *GoPromise) rejectSync(res Res) {
-	p.res = res
-	p.status.SetRejectedResolvedSync()
-}
-
-func (p *GoPromise) fulfillSync(res Res) {
-	p.res = res
-	p.status.SetFulfilledResolvedSync()
-}
-
-// Catch waits the promise to be resolved, and calls the catchCb function,
-// if the promise is resolved to rejected.
-//
-// It returns a GoPromise value whose result will be the Res value returned
-// from the catchCb.
-//
-// The Res value returned from the callback must not be modified after return.
-//
-// The catchCb is passed with three arguments, the error that caused this
-// promise to be rejected, err, this promise's result, res(including the
-// error at the end), and a boolean, ok, which will always be true.
-//
-// The result is passed here with the error, because, in Go, errors are
-// just values, so returning them is not always considered an unwanted
-// behaviour(example: io.EOF error), so some logic may depend on both.
-//
-// Note that if the catchCb returned the res as-is, the returned promise
-// will be rejected also(because there's a non-nil error at its end).
-//
-// It will panic if a nil callback is passed.
-//
-// For more, see 'Callback Notes' in the package comment.
-func (p *GoPromise) Catch(catchCb func(err error, res Res, ok bool) Res) Promise {
-	if catchCb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	_, s := p.status.RegFollow()
-	newProm := newGoPromInter(status.IsFlagsNotSafe(s))
-	go newProm.catchCall(p, catchCb, false, 0)
-	return newProm
-}
-
-func (p *GoPromise) catchCall(prev *GoPromise, cb catchCb, once bool, d time.Duration) {
-	// wait the previous promise to be resolved, for at least time d
-	prev.wait(d, true)
-
-	// catch can handle only 'rejected' state, so if the previous promise
-	// has timedout, the state can't be 'rejected', so handle it accordingly.
-	if s := prev.status.Read(); !status.IsStateRejected(s) {
-		p.handleInvalidFollow(prev.res, s)
-		return
-	}
-
-	// the previous promise hasn't timedout but is rejected, set the handled
-	// flag, as the promise is about to be handled, and update ok accordingly.
-	ok, _ := prev.status.SetHandled()
-	if !once {
-		// ignore the handled flag result if the promise isn't onetime
-		ok = true
-	}
-
-	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Res)
-	defer p.handleReturns(resP)
-
-	// run the callback, accordingly
-	if !ok {
-		// the promise is a onetime promise and has already been handled
-		*resP = cb(nil, nil, false)
-	} else {
-		// get the error responsible for rejecting the previous promise
-		err, _ := prev.res.Err()
-
-		// pass a copy of the previous result, to keep it immutable
-		prevRes := prev.res.Copy()
-		*resP = cb(err, prevRes, true)
-	}
-}
-
-// Recover waits the promise to be resolved, and calls the recoverCb function,
-// if the promise is resolved to panicked.
-//
-// It returns a GoPromise value whose result will be the Res value returned
-// from the recoverCb.
-//
-// The Res value returned from the callback must not be modified after return.
-//
-// The recoverCb is passed with two arguments, the value that was passed
-// to the 'panic' call which caused this promise to be panicked, v, and a
-// boolean, ok, which will always be true.
-//
-// It will panic if a nil callback is passed.
-//
-// For more, see 'Callback Notes' in the package comment.
-func (p *GoPromise) Recover(recoverCb func(v interface{}, ok bool) Res) Promise {
-	if recoverCb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	_, s := p.status.RegFollow()
-	newProm := newGoPromInter(status.IsFlagsNotSafe(s))
-	go newProm.recoverCall(p, recoverCb, false, 0)
-	return newProm
-}
-
-func (p *GoPromise) recoverCall(prev *GoPromise, cb recoverCb, once bool, d time.Duration) {
-	// wait the previous promise to be resolved, for at least time d
-	prev.wait(d, true)
-
-	// recover can handle only 'panicked' state, so if the previous promise
-	// has timedout, the state can't be 'panicked', so handle it accordingly.
-	if s := prev.status.Read(); !status.IsStatePanicked(s) {
-		p.handleInvalidFollow(prev.res, s)
-		return
-	}
-
-	// the previous promise hasn't timedout and is panicked, set the handled
-	// flag, as the promise is about to be handled, and update ok accordingly.
-	ok, _ := prev.status.SetHandled()
-	if !once {
-		// ignore the handled flag result if the promise isn't onetime
-		ok = true
-	}
-
-	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Res)
-	defer p.handleReturns(resP)
-
-	// run the callback, accordingly
-	if !ok {
-		// the promise is a onetime promise and has already been handled
-		*resP = cb(nil, false)
-	} else {
-		*resP = cb(prev.res[0], true)
-	}
-}
-
-// Finally waits the promise to be resolved, and calls the finallyCb function,
-// regardless the promise is rejected, panicked, or neither.
-//
-// If the promise has panicked, it must be handled(either sequentially, or
-// in-parallel) before calling this method, otherwise the promise will re-panic
-// before this call.
-//
-// It returns a GoPromise value, which will be resolved to this promise's result,
-// if the finallyCb returned a nil Res value.
-// If the finallyCb returned a non-nil Res value, the returned promise will be
-// resolved to that returned Res value.
-//
-// The Res value returned from the callback must not be modified after return.
-//
-// The finallyCb is passed with one arguments, a boolean, ok, which will always
-// be true.
-//
-// It will panic if a nil callback is passed.
-//
-// For more, see 'Callback Notes' in the package comment.
-func (p *GoPromise) Finally(finallyCb func(ok bool) Res) Promise {
-	if finallyCb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	_, s := p.status.RegRead()
-	newProm := newGoPromInter(status.IsFlagsNotSafe(s))
-	go newProm.finallyCall(p, finallyCb, false, 0)
-	return newProm
-}
-
-// finallyCall is like an asyncReadCall, except that it can't set the 'Handled'
-// flag(handle the promise), and it can return new promise with new result.
-// if we made the finally a normal 'follow' method(like then,..), it will be
-// possible to call it on a panicked promise and return a fulfilled promise,
-// and the panic will be dismissed implicitly, which is something we don't want.
-func (p *GoPromise) finallyCall(prev *GoPromise, cb finallyCb, once bool, d time.Duration) {
-	// wait the previous promise to be resolved, for at least time d
-	prev.wait(d, true)
-
-	// defer the return handler to handle panics and runtime.Goexit calls
-	resP := new(Res)
-	defer p.handleReturns(resP)
-
-	// run the callback, regardless the previous promise is pending, fulfilled,
-	// rejected, or panicked, then resolve according to the returned value.
-	if s := prev.status.Read(); status.IsStatePanicked(s) {
-		res := cb(false)
-		if res == nil {
-			// a nil Res value is returned, don't resolve to the previous Res,
-			// and resolve to fulfill, with nil Res, as the panic can only be
-			// handled by a Recover call and before calling Finally.
-			p.resolveToFulfill(nil, false)
-		} else {
-			// save the new result
-			*resP = res
-		}
-	} else if status.IsStatePending(s) {
-		res := cb(false)
-		if res == nil {
-			// resolve to the previous promise(pending state)
-			p.resolveToPending()
-		} else {
-			// save the new result
-			*resP = res
-		}
-	} else { // fulfilled, or rejected
-		// set the 'call' flag of the 'finally' callback(as it's about to
-		// be called), and update ok accordingly.
-		ok, _ := prev.status.SetCalledFinally()
-		if !once {
-			// ignore the handled flag result if the promise isn't onetime
-			ok = true
-		}
-
-		// run the callback, then resolve according to the returned value
-		res := cb(ok)
-		if res == nil {
-			// resolve to the previous promise(the previous result)
-			p.resolveToRes(prev.res)
-		} else {
-			// save the new result
-			*resP = res
-		}
-	}
-}
-
-func (*GoPromise) privateImplementation() {}
-
-// asyncRead is used internally to implement promise extension functions.
-//
-// as it's registered as a 'read' call, it can prevent UnCaughtErr panics if
-// the promise is about to be rejected, but it can't prevent a panicked promise
-// from re-broadcasting the panic.
-//
-// the cb will be called with ok = true, only if the promise is fulfilled
-// or rejected.
-func (p *GoPromise) asyncRead(cb func(res Res, ok bool, args []interface{}), args ...interface{}) {
-	// register this as a 'read' call, and return if no callback is passed
-	p.status.RegRead()
+// It will panic if cb is nil.
+func (p *Promise[T]) Callback(
+	cb func(ctx context.Context, res Result[T]),
+) {
 	if cb == nil {
+		panic(nilCallbackPanicMsg)
+	}
+
+	// note: this will also handle the error, if any, synchronously.
+	if errProm := p.validateState(); errProm != nil {
+		// TODO: the returned errProm isn't needed, so avoid creating it.
+		//  we only need the chainSideEffects call.
 		return
 	}
 
-	// asynchronously, wait the promise to be resolved and call cb, accordingly
-	go p.asyncReadCall(cb, args, false, 0)
+	ctx, cancel := callbackCtx(p.group, nil)
+	debug(p, startHandler, startPromiseHandler, startPromiseCallbackHandler)
+	go followHandler(
+		p,
+		nil,
+		followResFunc[T, T](cb),
+		ctx,
+		cancel,
+		false,
+		endHandler,
+		endPromiseHandler,
+		endPromiseCallbackHandler,
+	)
 }
 
-// asyncReadCall will call the cb with argument that corresponds to the result
-// of a GetRes call.
+// Follow runs the provided function, cb, in a separate goroutine once
+// this promise is resolved, and returns a new [Promise] that tracks the
+// execution of cb.
 //
-// if the promise panics without having a 'follow' call, then the program will
-// crash, so if the promise' state is found to be panicked, here, this means
-// that, either it's already handled, or there are one or more follow calls
-// in the chain that might handle it, and if the panic reached the end of the
-// chain without finding a Recover call, the promise will re-broadcast the
-// panic, so there's no need to care about panics here.
-func (p *GoPromise) asyncReadCall(cb readCb, args []interface{}, once bool, d time.Duration) {
-	// wait the promise to be resolved, for at least time d
-	p.wait(d, false)
-
-	// run the callback, regardless the previous promise is pending, fulfilled,
-	// rejected, or panicked.
-	if s := p.status.Read(); status.IsStatePending(s) || status.IsStatePanicked(s) {
-		// the previous promise has timedout, or panicked, run the callback
-		// with a nil result and ok = false, as if it timedout, the promise
-		// was timed, and if it's panicked, await can't handle panics.
-		cb(nil, false, args)
-	} else {
-		// the previous promise is fulfilled, or rejected, but both of them
-		// can be handled through await, so set the handled flag, as the
-		// promise is about to be handled, and update ok accordingly.
-		ok, _ := p.status.SetHandled()
-		if !once {
-			// ignore the handled flag result if the promise isn't onetime
-			ok = true
-		}
-		// run the callback, accordingly
-		if !ok {
-			// the promise is a onetime promise and has already been handled
-			cb(nil, false, args)
-		} else {
-			// pass the result of promise without coping it, but don't forget
-			// to copy it if the result will be passed to any user-facing calls.
-			cb(p.res, ok, args)
-		}
-	}
-}
-
-// asyncFollow is used internally to implement promise extension functions.
+// The goroutine is drawn from p's [Group]'s pool, if one is set.
 //
-// as it's registered as a 'follow' call, it can prevent UnCaughtErr panics if
-// the promise is about to be rejected, and also prevent a panicked promise from
-// re-broadcasting the panic.
+// The returned [Promise] resolves to the [Result] returned by cb.
+// If cb panics, the returned [Promise] resolves to [Panic].
 //
-// the cb will be called with ok = true, only if the promise is fulfilled
-// or rejected.
-func (p *GoPromise) asyncFollow(cb func(res Res, ok bool, args []interface{}), args ...interface{}) {
-	// register this as a 'follow' call, and return if no callback is passed
-	p.status.RegFollow()
+// It will panic if cb is nil.
+func (p *Promise[T]) Follow(
+	cb func(ctx context.Context, res Result[T]) Result[T],
+) *Promise[T] {
 	if cb == nil {
-		return
+		panic(nilCallbackPanicMsg)
 	}
+
+	if errProm := p.validateState(); errProm != nil {
+		return errProm
+	}
+
+	nextProm := newPromAsync(p.group)
+	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
+	debug(p, startHandler, startPromiseHandler, startPromiseFollowHandler)
+	go followHandler(
+		p,
+		nextProm,
+		followResNextResFunc[T, T](cb),
+		ctx,
+		cancel,
+		true,
+		endHandler,
+		endPromiseHandler,
+		endPromiseFollowHandler,
+	)
+	return nextProm
+}
+
+func followHandler[NextT, PrevT any](
+	prevProm *Promise[PrevT],
+	nextProm *Promise[NextT],
+	cb callback[NextT, PrevT],
+	ctx context.Context,
+	cancel context.CancelFunc,
+	canHandle bool,
+	endDebugEvents ...debugEvent,
+) {
+	defer prevProm.group.freeGoroutine()
+
+	<-prevProm.WaitChan()
+
+	// start with the previous Result.
+	res := prevProm.res
+
+	// mark prev Handled and check whether we should resolve next or continue.
+	if canHandle {
+		if nextProm == nil {
+			// this should not happen, as operations that can handle a target
+			// promise must create and pass a next promise.
+			panic("promise: internal: next promise is unexpectedly nil")
+		}
+
+		var valid bool
+		res, valid = handleFollow(prevProm, nextProm, canHandle)
+		if !valid {
+			return
+		}
+	}
+
+	// run the callback with the actual promise result.
+	runCallbackHandler(nextProm, cb, res, ctx, cancel)
+	debug(prevProm, endDebugEvents...)
 }

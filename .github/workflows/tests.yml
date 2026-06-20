@@ -7,18 +7,22 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   test:
     name: Test with Go ${{ matrix.go }} on OS ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    
+
     # Test with all supported Go versions on all OSes
     strategy:
       matrix:
-        go: [ '1.15', '1.14', '1.13' ]
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        go: [ '1.25', '1.24', '1.23' ]
+        os: [ ubuntu-latest, windows-latest, macOS-latest ]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -26,9 +30,9 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
-      
+
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - name: Check-out 
+      - name: Check-out
         uses: actions/checkout@v2
 
       - name: Get dependencies
@@ -40,3 +44,15 @@ jobs:
 
       - name: Test
         run: go test -v .
+
+      - name: Update coverage report
+        uses: ncruces/go-coverage-report@v0
+        with:
+          report: true
+          chart: true
+          amend: true
+        if: |
+          matrix.os == 'ubuntu-latest' &&
+          matrix.go == '1.25' &&
+          github.event_name == 'push'
+        continue-on-error: true

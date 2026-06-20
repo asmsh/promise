@@ -1,4 +1,4 @@
-// Copyright 2020 Ahmad Sameh(asmsh)
+// Copyright 2024 Ahmad Sameh(asmsh)
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+//go:build enable_promise_debug
 
-import (
-	"net/http"
+package promise
 
-	"github.com/asmsh/promise"
-)
+import "log"
 
-// AsyncGet executes a GET request for the provided url in a new goroutine,
-// and returns a [*promise.Promise] value tracking its progress.
-func AsyncGet(url string) *promise.Promise[*http.Response] {
-	return promise.GoFunc[*http.Response, any](func() (*http.Response, error) {
-		return http.Get(url)
-	})
+var debugEnabled = true
+
+var debugLogs bool
+
+func debug[T any](p *Promise[T], de ...debugEvent) {
+	if debugLogs {
+		log.Printf("debug: [%p] %v\n", p, de)
+	}
+
+	if p.group == nil {
+		return
+	}
+
+	// call the handler if one is provided
+	if p.group.core.debugCB != nil {
+		p.group.core.debugCB(de)
+	}
 }

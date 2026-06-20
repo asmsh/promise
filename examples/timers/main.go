@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -42,9 +43,9 @@ func example1() {
 
 	// wait the promise to be resolved with the needed timeout duration
 	select {
-	case ok := <-waitChan:
+	case <-waitChan:
 		// the promise is resolved before the timeout passes
-		fmt.Println("The promise is resolved with ok =", ok)
+		fmt.Println("The promise is resolved")
 	case t := <-timeoutChan:
 		// the needed timeout duration has passed before the promise is resolved
 		fmt.Println("The promise is not resolved yet, at time =", t)
@@ -56,10 +57,12 @@ func example1() {
 // example2 waits on a promise with a specified timeout, and prints its result
 // if this promise is resolved on time.
 func example2() {
-	p := promise.GoRes(func() promise.Res {
+	p := promise.GoFunc[[]string, any](func(ctx context.Context) promise.Result[[]string] {
 		/* do some work, asynchronously */
 		time.Sleep(time.Millisecond * 1) // simulates some work
-		return promise.Res{"go", "golang"}
+
+		// return some result...
+		return promise.ValRes([]string{"go", "golang"})
 	})
 
 	// create a timer channel with the needed timeout duration
@@ -69,14 +72,12 @@ func example2() {
 
 	// wait the promise to be resolved with the needed timeout duration
 	select {
-	case ok := <-waitChan:
+	case <-waitChan:
 		// the promise is resolved before the timeout passes
-		fmt.Println("The promise is resolved with ok =", ok)
 
 		// handle the result of the promise, as it's now resolved.
-		// ok will always = true here in this example.
-		res, ok := p.GetRes()
-		fmt.Println("The promise's result =", res)
+		res := p.WaitRes()
+		fmt.Println("The promise is resolved result =", res)
 	case t := <-timeoutChan:
 		// the needed timeout duration has passed before the promise is resolved
 		fmt.Println("The promise is not resolved yet, at time =", t)

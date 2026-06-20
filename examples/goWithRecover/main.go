@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"sync"
 
 	"github.com/asmsh/promise"
@@ -24,13 +25,17 @@ import (
 // from panics that happen in goroutines created by a 'go' call, in a much
 // simpler way than how it can be done using the standard way(library).
 func main() {
-	p := promise.Go(func() {
-		/* do some work, asynchronously */
-		aFuncThatMayPanic()
-	}).Recover(func(v interface{}, ok bool) (res promise.Res) {
-		// handle the panic..
-		return
-	})
+	p := promise.
+		Go(func() {
+			/* do some work, asynchronously */
+			aFuncThatMayPanic()
+		}).
+		Follow(func(ctx context.Context, res promise.Result[any]) promise.Result[any] {
+			if res.State() != promise.Panic {
+				return res
+			}
+			return nil
+		})
 
 	/* do some other work */
 

@@ -12,109 +12,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package promise provides fast, lightweight, and lock-free promise implementations.
+// Package promise provides fast, lightweight, and type-safe promise implementation for Go.
+// It hides away the complexity of managing goroutines and channels — including returning
+// results from them — providing a simple and idiomatic API for asynchronous programming.
 //
-// Besides speed and low memory overhead, it focuses on Go's idioms, like multi
-// return parameters, error being a value, the convention of returning errors as
-// the last return parameter, and the existence of panics and their difference
-// from errors.
+// # Core types
 //
-// A Promise provides an easy way for returning results from a goroutine, and/or
-// waiting for it to finish, plus other features.
+// A [Result] is a container for the result of an asynchronous operation,
+// holding a value, an error, and a [State].
 //
+// A [Promise] represents an asynchronous operation. It can be awaited via
+// [Promise.Wait], [Promise.WaitRes], or [Promise.WaitChan].
 //
-// States and Fates:-
+// A [Group] manages a collection of related promises sharing a goroutine pool
+// and providing coordination operations like [Group.AllWaitRes] and [Group.AnyRes].
 //
-// A Promise has four states, and it can be in only one of them, at any time:
+// # Starting promises
 //
-// * Pending: the computation that corresponds to this Promise has not finished.
+// Package-level constructors start new promises without a [Group]:
 //
-// * Fulfilled: the computation that corresponds to this Promise has finished and
-// returned a Res value with no error or with a nil error at the end.
+//   - [Go]: runs a func() in a goroutine.
+//   - [GoFunc]: runs any callback matching the [Func] constraint.
+//   - [Chan]: resolves once a value is sent on a channel.
+//   - [Ctx]: resolves once a [context.Context] is canceled.
+//   - [Delay]: resolves a [Result] after a duration.
+//   - [Wrap]: wraps an existing [Result] synchronously.
 //
-// * Rejected: the computation that corresponds to this Promise has finished and
-// returned a Res value with a non-nil error at the end.
+// [Group] provides the same constructors (except [GoFunc]), plus [Group.GoErr],
+// [Group.GoValErr], [Group.GoCtxErr], [Group.GoCtxValErr], and [Group.GoCtxRes]
+// for additional callback signatures.
 //
-// * Panicked: the computation that corresponds to this Promise has caused a panic.
+// # Chaining
 //
-// A Promise has three fates, and it can be in only one of them, at any time:
+// Promises can be chained to build sequential asynchronous pipelines:
 //
-// * Unresolved: the computation that corresponds to this Promise is still working,
-// and the final state of the Promise is still unknown.
+//   - [Promise.Follow]: runs a callback when the promise resolves, returning a new [Promise].
+//   - [Promise.Callback]: runs a fire-and-forget callback when the promise resolves.
+//   - [Promise.Delay]: delays the resolution of the promise by a duration.
+//   - [Follow]: type-converting follow that allows changing the result type between steps.
 //
-// * Resolved: the state of the Promise is now known, and final.
+// # Combining promises
 //
-// * Handled: the result of the Promise has been passed to some call of its methods.
+// Several functions combine multiple promises:
 //
-//
-// General Notes:-
-//
-// * Once the Promise's fate is Resolved, its result value will not change.
-//
-// * A Promise whose fate is Unresolved, its state must be Pending.
-//
-// * A Promise whose fate is Resolved, and its state is Pending, its fate will
-// never be Handled.
-//
-// * For a Promise's fate to be Handled, its fate must first be Resolved.
-//
-//
-// Implementations:-
-//
-// * The module provides one Promise implementation, GoPromise(the default).
-//
-// * The GoPromise's 'ok' callback parameter will always be true(except in
-// a Finally callback on a panicked promise).
-//
-// * The GoPromise's 'ok' return parameter(for GetRes) will always be true(
-// except on a panicked promise).
-//
-//
-// Callback Notes:-
-//
-// * The Res value returned from the callback must not be modified after return.
-//
-// * If the callback called runtime.Goexit, the returned promise will be
-// fulfilled to 'nil'.
-//
-// * The underlying implementation of the returned Promise is always the
-// default implementation(GoPromise), unless stated otherwise in the callback
-// or the corresponding constructor docs.
-//
-// * If the callback returned a non-nil error value as the last element in
-// the returned Res value, the returned Promise will be a 'rejected' promise,
-// and all subsequent promises in any promise chain derived from it, until
-// the error is caught on each of these chains(by a Catch call).
-//
-// * If the promise is running in the safe mode(the default), the returned
-// Promise is a rejected promise, and the error is not caught(by a Catch call)
-// before the end of that promise's chain, or the promise result is not read(by
-// a GetRes call), a panic will happen with an error value of type *UnCaughtErr,
-// which has that uncaught error 'wrapped' inside it.
-//
-// * If the callback caused a panic, the resulting Promise will be a 'panicked'
-// promise, and all subsequent promises in any promise chain derived from it,
-// until recovering from the panic on each of these chains(by a Recover call).
-//
-// * If the promise is running in the safe mode(the default), the returned
-// Promise is a panicked promise, and it's not recovered(by a Recover call)
-// before the end of the promise's chain, or before calling Finally,
-// it will re-panic(with the same value passed to the original 'panic' call).
-//
-//
-// Modes:-
-//
-// * The module provides two modes for promise creation, 'Safe', and 'NonSafe'.
-//
-// * In the 'NonSafe' version, a 'rejected' or 'panicked' promise(resolved
-// to the 'rejected' state or the 'panicked' state, respectively) will not
-// panic if it reached the end of its promise chain without being handled(
-// by a 'Catch' call or 'GetRes' call, in case of a 'rejected' promise, or
-// a 'Recover' call, in case of 'panicked' promise).
-// But in the 'Safe' version a panic will happen in either of these cases.
-//
-// * The 'NonSafe' version is accessible from the NonSafeAPI variable.
-//
-// * The 'Safe' version is the default, and is accessible from any function
-// in the module.
+//   - [Wait]: blocks until all promises resolve.
+//   - [Select]: resolves to the first resolved promise.
+//   - [All]: resolves to [Success] when all succeed, or short-circuits on failure.
+//   - [AllWait]: waits for all to resolve, then resolves to [Success] if all succeeded.
+//   - [Any]: resolves to [Success] once one succeeds, or fails if all fail.
+//   - [AnyWait]: waits for all to resolve, then resolves to [Success] if any succeeded.
+//   - [Join]: waits for all to resolve and collects every result.
 package promise

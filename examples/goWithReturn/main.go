@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -26,19 +27,32 @@ import (
 // a result from a 'go' call, in a much simpler way than how it can be
 // done using the standard way(library).
 func main() {
-	p := promise.GoRes(func() promise.Res {
-		resp, err := http.Get("https://golang.org/")
-		return promise.Res{resp, err}
-	}).Then(func(res promise.Res, ok bool) promise.Res {
-		// do something with resp..
-		resp := res[0].(*http.Response)
-		fmt.Printf("resp: %v\n", resp)
-		return nil
-	}).Catch(func(err error, res promise.Res, ok bool) promise.Res {
-		// handle the error..
-		fmt.Printf("err: %v\n", err)
-		return nil
-	})
+	p := promise.
+		GoFunc[*http.Response, any](func(ctx context.Context) promise.Result[*http.Response] {
+		return promise.ValErrRes(http.Get("https://golang.org/"))
+	}).
+		Follow(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
+			if res.State() != promise.Success {
+				return res
+			}
+			resp := res.Val()
+
+			// do something with resp..
+			fmt.Printf("resp: %v\n", resp)
+
+			return nil
+		}).
+		Follow(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
+			if res.State() != promise.Error {
+				return res
+			}
+			err := res.Err()
+
+			// handle the error..
+			fmt.Printf("err: %v\n", err)
+
+			return nil
+		})
 
 	/* do some other work */
 
