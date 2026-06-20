@@ -255,17 +255,22 @@ func (g *generateAsyncPromisesConfig) validate() {
 
 	if g.useUniqueDur {
 		g.uniqueDur = uniquerand.NewN(uniquerand.Config[time.Duration]{
-			// default range of 200ms, with 5ms step.
+			// default range of 800ms, with 20ms step (cap 40).
+			// the step is the minimum gap between any two resolution
+			// times; it's kept well above scheduling jitter so that
+			// ordering by delay reliably matches resolution order.
 			Min:  cmp.Or(g.minWait, 1*time.Millisecond),
-			Max:  cmp.Or(g.maxWait, 201*time.Millisecond),
-			Step: 5 * time.Millisecond,
+			Max:  cmp.Or(g.maxWait, 801*time.Millisecond),
+			Step: 20 * time.Millisecond,
 		})
 
 		g.delayedUniqueDur = uniquerand.NewN(uniquerand.Config[time.Duration]{
-			// default range of 200ms, with 5ms step.
+			// default range of 800ms, with 20ms step (cap 40).
+			// see the note on uniqueDur above; the band is kept
+			// disjoint from the non-delayed one (200ms inter-band gap).
 			Min:  cmp.Or(g.minDelayedWait, 1000*time.Millisecond),
-			Max:  cmp.Or(g.maxDelayedWait, 1200*time.Millisecond),
-			Step: 5 * time.Millisecond,
+			Max:  cmp.Or(g.maxDelayedWait, 1800*time.Millisecond),
+			Step: 20 * time.Millisecond,
 		})
 
 		if g.totalNum != 0 {
@@ -1196,8 +1201,9 @@ func helperTest[TFun extFuncs[TRes], TRes extRes](
 		tt := compileTestCase(t, tc, nil, false)
 
 		// sort the got result by the expected resolution order.
-		// note: we rely on each subsequent delays are far from each other,
-		// so that we (somewhat) can rely on an expected resolution order.
+		// note: we rely on consecutive delays being at least one step
+		// (20ms) apart, which is kept well above scheduling jitter, so
+		// that this delay order matches the actual resolution order.
 		slices.SortStableFunc(
 			tt.generatedResults,
 			func(a, b generatedResult) int { return int(a.delay - b.delay) },
@@ -1216,8 +1222,8 @@ func helperTest[TFun extFuncs[TRes], TRes extRes](
 				t.Logf("%s (counted): want: %v got %v\n", funName, len(tt.ps), counted)
 			}
 
-			lo := tt.maxWait - (2 * time.Millisecond)
-			hi := tt.maxWait + (2 * time.Millisecond)
+			lo := tt.maxWait - (10 * time.Microsecond)
+			hi := tt.maxWait + (10 * time.Millisecond)
 			if el > hi || el < lo {
 				t.Errorf("%s (delay): want (%v : %v) got %v", funName, lo, hi, el)
 			}
