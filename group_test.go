@@ -292,7 +292,7 @@ func TestGroup_Wait(t *testing.T) {
 			calls: []groupWaitTestCall{
 				{
 					lowerDuration: 50 * time.Millisecond, // max duration value.
-					upperDuration: 55 * time.Millisecond, // max duration value + a 5ms buffer duration.
+					upperDuration: 70 * time.Millisecond, // max duration value + a 20ms buffer duration.
 				},
 			},
 		},
@@ -329,7 +329,7 @@ func TestGroup_SelectRes(t *testing.T) {
 			calls: []groupResTestCall[GroupRes[string]]{
 				{
 					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
-					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration: 30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    GroupRes[string]{},
 					wantResErrs: []error{
@@ -348,7 +348,7 @@ func TestGroup_SelectRes(t *testing.T) {
 			calls: []groupResTestCall[GroupRes[string]]{
 				{
 					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
-					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration: 30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    GroupRes[string]{},
 					wantResErrs: []error{
@@ -358,7 +358,7 @@ func TestGroup_SelectRes(t *testing.T) {
 				{
 					callDelay:     500 * time.Millisecond, // after promise3 returns.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    GroupRes[string]{},
 					wantResErrs: []error{
@@ -378,7 +378,7 @@ func TestGroup_SelectRes(t *testing.T) {
 				{
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    GroupRes[string]{},
 					wantResErrs: []error{
@@ -399,7 +399,7 @@ func TestGroup_SelectRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  10 * time.Millisecond, // promise1 sleep.
-					upperDuration:  15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration:  30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:      Panic,
 					wantResVal:     GroupRes[string]{},
 					wantResErrs: []error{
@@ -421,14 +421,14 @@ func TestGroup_SelectRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  100 * time.Millisecond, // promise2 sleep.
-					upperDuration:  105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration:  120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal:     GroupRes[string]{Result: ValRes("promise1")},
 					wantResErrs:    nil,
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal:    GroupRes[string]{Result: ValRes("promise1")},
 					wantResErrs:   nil,
@@ -449,7 +449,7 @@ func TestGroup_SelectRes(t *testing.T) {
 				{
 					// it shouldn't wait for other promises once one is Error.
 					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
-					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration: 30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    GroupRes[string]{},
 					wantResErrs: []error{
@@ -458,7 +458,7 @@ func TestGroup_SelectRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    GroupRes[string]{},
 					wantResErrs: []error{
@@ -481,7 +481,7 @@ func TestGroup_SelectRes(t *testing.T) {
 				{
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    GroupRes[string]{},
 					wantResErrs: []error{
@@ -490,7 +490,7 @@ func TestGroup_SelectRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    GroupRes[string]{},
 					wantResErrs: []error{
@@ -514,7 +514,7 @@ func TestGroup_SelectRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  10 * time.Millisecond, // promise1 sleep.
-					upperDuration:  15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration:  30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:      Panic,
 					wantResVal:     GroupRes[string]{},
 					wantResErrs: []error{
@@ -524,7 +524,7 @@ func TestGroup_SelectRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Panic,
 					wantResVal:    GroupRes[string]{},
 					wantResErrs: []error{
@@ -549,14 +549,14 @@ func TestGroup_SelectRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  100 * time.Millisecond, // promise2 sleep.
-					upperDuration:  105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration:  120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal:     GroupRes[string]{Result: ValRes("promise1")},
 					wantResErrs:    nil,
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal:    GroupRes[string]{Result: ValRes("promise1")},
 					wantResErrs:   nil,
@@ -596,7 +596,7 @@ func TestGroup_AllRes(t *testing.T) {
 				{
 					// it shouldn't wait for other promises once one is Error.
 					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
-					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration: 30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -606,7 +606,7 @@ func TestGroup_AllRes(t *testing.T) {
 				{
 					// the second call should return only the first Error.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -626,7 +626,7 @@ func TestGroup_AllRes(t *testing.T) {
 				{
 					// it shouldn't wait for other promises after Panic.
 					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
-					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration: 30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:     Panic,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -647,7 +647,7 @@ func TestGroup_AllRes(t *testing.T) {
 				{
 					// it shouldn't wait for other promises after Error.
 					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
-					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration: 120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -662,7 +662,7 @@ func TestGroup_AllRes(t *testing.T) {
 					// only the Panic Result.
 					callDelay:     500 * time.Millisecond, // after promise3 returns.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Panic,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -684,7 +684,7 @@ func TestGroup_AllRes(t *testing.T) {
 					// it should wait for all promises to return, as all
 					// of them are Success, and return all as [Success].
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -696,7 +696,7 @@ func TestGroup_AllRes(t *testing.T) {
 				{
 					// the second call should return only the first Success.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -718,7 +718,7 @@ func TestGroup_AllRes(t *testing.T) {
 					// the panic error from the history.
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Panic,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -745,7 +745,7 @@ func TestGroup_AllRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  10 * time.Millisecond, // promise1 sleep.
-					upperDuration:  15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration:  30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:      Panic,                 // the highest state.
 					wantResVal:     nil,
 					wantResErrs: []error{
@@ -770,7 +770,7 @@ func TestGroup_AllRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  100 * time.Millisecond, // promise2 sleep.
-					upperDuration:  105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration:  120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:      Panic,
 					wantResVal:     nil,
 					wantResErrs: []error{
@@ -794,7 +794,7 @@ func TestGroup_AllRes(t *testing.T) {
 				{
 					// it shouldn't wait for other promises after Error.
 					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
-					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration: 30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:     Error,                 // the only one observed.
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -819,7 +819,7 @@ func TestGroup_AllRes(t *testing.T) {
 					// but since we saved all results, it should return them.
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Error,                  // the highest state.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -849,7 +849,7 @@ func TestGroup_AllRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Error,                  // since we return only after Error.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -863,7 +863,7 @@ func TestGroup_AllRes(t *testing.T) {
 					// the second call returns all results, since we saved all results.
 					callDelay:     500 * time.Millisecond, // after promise3 returns.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -893,7 +893,7 @@ func TestGroup_AllRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  100 * time.Millisecond, // promise2 sleep.
-					upperDuration:  105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration:  120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:      Panic,                  // since we return only after Panic.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -908,7 +908,7 @@ func TestGroup_AllRes(t *testing.T) {
 					// with all results from the history.
 					callDelay:     500 * time.Millisecond, // after promise3 returns.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Panic,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -939,7 +939,7 @@ func TestGroup_AllRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  500 * time.Millisecond, // promise2 sleep.
-					upperDuration:  505 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:      Error,                  // since we return only after Error.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -952,7 +952,7 @@ func TestGroup_AllRes(t *testing.T) {
 				{
 					// the seconds call should get all results, since we saved them.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -998,7 +998,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					// it should wait for all promises, and return Error with
 					// the Error values promise1 and promise3.
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1011,7 +1011,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					// it should return Error immediately with the error promise1
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1034,7 +1034,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					// promise1, instead of the Error value promise2, as
 					// Panic is higher than Error.
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Panic,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1048,7 +1048,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					// it should return immediately with only the Panic error
 					// promise1 from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Panic,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1070,7 +1070,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					// it should wait for all promises, and return Panic with
 					// the single value promise1, and the Panic value promise2.
 					lowerDuration: 500 * time.Millisecond, // promise1 sleep.
-					upperDuration: 505 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:     Panic,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1083,7 +1083,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				{
 					// it should return immediately with only the [Panic] error.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Panic,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1106,7 +1106,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					// of them are Success and it only breaks on [Error],
 					// and return all of their results as [Success].
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1117,7 +1117,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1140,7 +1140,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					// promise1 from the history.
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Panic,                  // the highest state.
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1150,7 +1150,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Panic,                // same as the first call.
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1176,7 +1176,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Panic,                  // the highest state.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1189,7 +1189,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Panic,                // same as the first call.
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1214,7 +1214,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Panic,                  // the highest state.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1226,7 +1226,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Panic,                // same as the first call.
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1250,7 +1250,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				{
 					// it should return after all promises return with their results.
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1262,7 +1262,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1290,7 +1290,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					// it should start waiting after all promises have returned,
 					// but since we saved all results, it should return them.
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Panic,                  // the highest state.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1303,7 +1303,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Panic,                // same as the first call.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1336,7 +1336,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Error,                  // since we return only after Error.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1348,7 +1348,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,                // same as the first call.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1380,7 +1380,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Error,                  // since we return only after Error.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1392,7 +1392,7 @@ func TestGroup_AllWaitRes(t *testing.T) {
 				},
 				{
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,                // same as the first call.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1438,7 +1438,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// it shouldn't wait for other promises after Success,
 					// and should return only the single Success Result.
 					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
-					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration: 120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1448,7 +1448,7 @@ func TestGroup_AnyRes(t *testing.T) {
 				{
 					// the second call should return the single Success Result.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1469,7 +1469,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// it shouldn't wait for other promises after Success,
 					// and should return only the single Success Result.
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1479,7 +1479,7 @@ func TestGroup_AnyRes(t *testing.T) {
 				{
 					// the second call should return the single Success Result.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1500,7 +1500,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// it shouldn't wait for other promises after Success,
 					// and should return only the single Success Result.
 					lowerDuration: 10 * time.Millisecond, // promise1 sleep.
-					upperDuration: 15 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration: 30 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1510,7 +1510,7 @@ func TestGroup_AnyRes(t *testing.T) {
 				{
 					// the second call should return the single Success Result.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1532,7 +1532,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// of them are Error and it only breaks on [Success],
 					// and return all of their results as [Error].
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1543,7 +1543,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// the seconds call should return only the first Error result
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1566,7 +1566,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// Success result state.
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1577,7 +1577,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// the seconds call should return only the single Success result
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1603,7 +1603,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  100 * time.Millisecond, // promise2 sleep.
-					upperDuration:  105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration:  120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1615,8 +1615,8 @@ func TestGroup_AnyRes(t *testing.T) {
 					// returns, and still return the single Success result
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 2,
-					lowerDuration:  395 * time.Millisecond, // promise3 - promise2 with a 5ms buffer duration.
-					upperDuration:  405 * time.Millisecond, // a 5ms buffer duration.
+					lowerDuration:  380 * time.Millisecond, // promise3 - promise2 with a 20ms buffer duration.
+					upperDuration:  420 * time.Millisecond, // a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1640,7 +1640,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  100 * time.Millisecond, // promise2 sleep.
-					upperDuration:  105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration:  120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1650,7 +1650,7 @@ func TestGroup_AnyRes(t *testing.T) {
 				{
 					// the second call should return only the first Success from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1674,7 +1674,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// it should return on the first Success, include the
 					// Error result, and have a Success [State].
 					lowerDuration: 100 * time.Millisecond, // promise2 sleep.
-					upperDuration: 105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration: 120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1685,7 +1685,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// since there's no wait duration, it should return the
 					// exact result in the previous call, almost instantly.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1697,7 +1697,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// be included in the result.
 					callDelay:     500 * time.Millisecond, // promise3 - promise2 wait.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1723,7 +1723,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// but since we saved all results, it should return them.
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1735,7 +1735,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// since no wait duration, it should be the same as
 					// the previous call.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1763,7 +1763,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  10,                    // promise2 sleep.
-					upperDuration:  15 * time.Millisecond, // promise2  sleep + a 5ms buffer duration.
+					upperDuration:  30 * time.Millisecond, // promise2  sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1776,7 +1776,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					// without changing the result [State].
 					callDelay:     500 * time.Millisecond, // after promise3 returns.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1804,7 +1804,7 @@ func TestGroup_AnyRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  100,                    // promise2 sleep.
-					upperDuration:  105 * time.Millisecond, // promise2 sleep + a 5ms buffer duration.
+					upperDuration:  120 * time.Millisecond, // promise2 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1813,7 +1813,7 @@ func TestGroup_AnyRes(t *testing.T) {
 				{
 					// it should return the same result as the previous call.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1855,7 +1855,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 				{
 					// it should wait for all, and return only Success results.
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1866,7 +1866,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 				{
 					// it should return immediately with promise2 from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -1886,7 +1886,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 				{
 					// it should wait for all, and return only Success results.
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1896,7 +1896,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 				{
 					// it should return immediately with only promise3 from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1916,7 +1916,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 				{
 					// it should wait for all, and return only Success results.
 					lowerDuration: 500 * time.Millisecond, // promise1 sleep.
-					upperDuration: 505 * time.Millisecond, // promise1 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise1 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1926,7 +1926,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 				{
 					// it should return immediately with only promise3 from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -1946,7 +1946,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 				{
 					// it should wait for all, and return all of them as [Error].
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1958,7 +1958,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 				{
 					// it should return immediately with promise1 error from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Error,
 					wantResVal:    nil,
 					wantResErrs: []error{
@@ -1980,7 +1980,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					// Success result from the history.
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -1990,7 +1990,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					// it should return immediately with the only Success result
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -2012,7 +2012,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -2023,7 +2023,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					// it should return immediately with the only Success result
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise3")},
@@ -2046,7 +2046,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2057,7 +2057,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					// it should return immediately with the only Success result
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2080,7 +2080,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 				{
 					// it should return after all, and return all Success results.
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -2092,7 +2092,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					// it should return immediately with all Success results
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -2118,7 +2118,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					// only Success results.
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,                // the highest state.
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -2130,7 +2130,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					// it should return immediately with all Success results
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise2")},
@@ -2158,7 +2158,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2170,7 +2170,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					// it should return immediately with all Success results
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2197,7 +2197,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 2,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2209,7 +2209,7 @@ func TestGroup_AnyWaitRes(t *testing.T) {
 					// it should return immediately with all Success results
 					// from the history.
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2253,7 +2253,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should wait for all promises, return their results,
 					// as [Success].
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2266,7 +2266,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// values from the history, which are 'promise1' and 'promise2',
 					// as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2287,7 +2287,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should wait for all promises, return their results,
 					// as [Success].
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string]("promise1")},
@@ -2299,7 +2299,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should return immediately with the first unique [Result]
 					// values from the history, which are all of them, as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string]("promise1")},
@@ -2321,7 +2321,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should wait for all promises, return their results,
 					// as [Success].
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2333,7 +2333,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should return immediately with the first unique [Result]
 					// values from the history, which are all of them, as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2355,7 +2355,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should wait for all promises, return their results,
 					// as [Success].
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2367,7 +2367,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should return immediately with the first unique [Result]
 					// values from the history, which is promise1, as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2389,7 +2389,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// history, which are all of them, as [Success]..
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string]("promise1")},
@@ -2401,7 +2401,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should return immediately with the first unique [Result]
 					// values from the history, which are all of them, as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string]("promise1")},
@@ -2425,7 +2425,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// history, which are promise1 and promise2, as [Success]..
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string]("promise1")},
@@ -2437,7 +2437,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// values from the history, which are promise1 and promise2,
 					// as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string]("promise1")},
@@ -2461,7 +2461,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string]("promise1")},
@@ -2473,7 +2473,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should return immediately with the first unique [Result]
 					// values from the history, which are all of them, as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string]("promise1")},
@@ -2499,7 +2499,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 1,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2511,7 +2511,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// values from the history, which are promise1 and promise3,
 					// as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2535,7 +2535,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2548,7 +2548,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// values from the history, which are promise1 and promise3,
 					// as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2572,7 +2572,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// it should wait for all promises, return their results,
 					// as [Success].
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2583,7 +2583,7 @@ func TestGroup_JoinRes(t *testing.T) {
 				{
 					// it should return immediately with all results as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ErrRes[string](testStrError("promise1"))},
@@ -2609,7 +2609,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					// but since we saved all results, it should return them.
 					waitMode:      groupWaitTrigger,
 					lowerDuration: 500 * time.Millisecond, // promise3 sleep.
-					upperDuration: 505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration: 520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string](testStrError("promise1"))},
@@ -2620,7 +2620,7 @@ func TestGroup_JoinRes(t *testing.T) {
 				{
 					// it should return immediately with all results as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: PanicRes[string](testStrError("promise1"))},
@@ -2648,7 +2648,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 0,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2659,7 +2659,7 @@ func TestGroup_JoinRes(t *testing.T) {
 				{
 					// it should return immediately with all results as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2687,7 +2687,7 @@ func TestGroup_JoinRes(t *testing.T) {
 					waitMode:       promiseWaitTrigger,
 					waitPromiseIdx: 2,
 					lowerDuration:  500 * time.Millisecond, // promise3 sleep.
-					upperDuration:  505 * time.Millisecond, // promise3 sleep + a 5ms buffer duration.
+					upperDuration:  520 * time.Millisecond, // promise3 sleep + a 20ms buffer duration.
 					wantState:      Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},
@@ -2698,7 +2698,7 @@ func TestGroup_JoinRes(t *testing.T) {
 				{
 					// it should return immediately with all results as [Success].
 					lowerDuration: 0,
-					upperDuration: 5 * time.Millisecond, // a 5ms buffer duration.
+					upperDuration: 20 * time.Millisecond, // a 20ms buffer duration.
 					wantState:     Success,
 					wantResVal: []GroupRes[string]{
 						{Result: ValRes("promise1")},

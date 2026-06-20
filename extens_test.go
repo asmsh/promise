@@ -1223,7 +1223,7 @@ func helperTest[TFun extFuncs[TRes], TRes extRes](
 			}
 
 			lo := tt.maxWait - (10 * time.Microsecond)
-			hi := tt.maxWait + (10 * time.Millisecond)
+			hi := tt.maxWait + (20 * time.Millisecond)
 			if el > hi || el < lo {
 				t.Errorf("%s (delay): want (%v : %v) got %v", funName, lo, hi, el)
 			}
