@@ -163,7 +163,7 @@ func MultiRes[TElem Result[T], T any](
 // Working with plain [Promise] values.
 //
 //	p := All[any]( /* list of promises */ )
-//	multiRes := p.Res()
+//	multiRes := p.WaitRes()
 //	vals := UnwrapMultiResVal(multiRes)
 //	// do something with vals...
 //

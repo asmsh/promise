@@ -88,11 +88,11 @@ var (
 	// This is a synchronous error that will happen before the [Promise] value is returned.
 	// All equality checks must be only done with the [errors.Is] function.
 	//
-	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.WaitRes],
-	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
+	// Handling an [Error] [Result] is done via one of [Promise.WaitRes],
+	// [Promise.Delay], [Promise.Follow] or [Promise.Callback].
 	//
-	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.WaitRes],
-	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
+	// Handling a [Panic] [Result] is done via one of [Promise.WaitRes],
+	// [Promise.Delay], [Promise.Follow] or [Promise.Callback].
 	ErrGroupCanceled = errors.New("group is canceled")
 )
 
@@ -137,8 +137,8 @@ func (e IdxError) Unwrap() error {
 }
 
 // GroupError is the error container for an error returned from
-// the [Group.Select], [Group.AllRes](and [Group.AllWaitRes]),
-// [Group.AnyRes](and [Group.AnyWaitRes]), or [Group.Join] group calls.
+// the [Group.SelectRes], [Group.AllRes](and [Group.AllWaitRes]),
+// [Group.AnyRes](and [Group.AnyWaitRes]), or [Group.JoinRes] group calls.
 // It's also one of the container types for the MultiError's elements.
 type GroupError struct {
 	Err error

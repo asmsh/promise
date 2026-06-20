@@ -16,7 +16,6 @@ package promise
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 	"time"
 )
@@ -104,8 +103,9 @@ type extCall[T any] struct {
 // Val returns the value resulting from the promise's execution.
 // It blocks until the promise is resolved.
 //
-// Subsequent calls return the same value, unless [GroupConfig.OnetimeHandling]
-// is enabled, in which the zero value of T is returned.
+// Subsequent calls return the same value, unless the promise is part of a
+// [Group] with [GroupConfig.OnetimeHandling] enabled, in which case the
+// zero value of T is returned.
 func (p *Promise[T]) Val() T {
 	return p.WaitRes().Val()
 }
@@ -113,8 +113,9 @@ func (p *Promise[T]) Val() T {
 // Err returns the error resulting from the promise's execution.
 // It blocks until the promise is resolved.
 //
-// Subsequent calls return the same value, unless [GroupConfig.OnetimeHandling]
-// is enabled, in which case [ErrPromiseConsumed] is returned.
+// Subsequent calls return the same value, unless the promise is part of a
+// [Group] with [GroupConfig.OnetimeHandling] enabled, in which case
+// [ErrPromiseConsumed] is returned.
 func (p *Promise[T]) Err() error {
 	return p.WaitRes().Err()
 }
@@ -122,13 +123,15 @@ func (p *Promise[T]) Err() error {
 // State returns the final state of the promise's execution.
 // It blocks until the promise is resolved.
 //
-// Subsequent calls return the same value, unless [GroupConfig.OnetimeHandling]
-// is enabled, in which case [Error] is returned.
+// Subsequent calls return the same value, unless the promise is part of a
+// [Group] with [GroupConfig.OnetimeHandling] enabled, in which case
+// [Error] is returned.
 func (p *Promise[T]) State() State {
 	return p.WaitRes().State()
 }
 
-// Wait blocks until the promise is resolved.
+// Wait blocks until the promise is resolved and its [Result] is available
+// via the [WaitRes].
 func (p *Promise[T]) Wait() {
 	p.regChainWait()
 
@@ -189,9 +192,9 @@ func (p *Promise[T]) waitChanSlow() <-chan struct{} {
 // WaitRes return the [Result] of the promise's execution.
 // It blocks until the promise is resolved.
 //
-// Subsequent calls return the same value, unless [GroupConfig.OnetimeHandling]
-// is enabled, in which case a [Result] with the [ErrPromiseConsumed] error
-// is returned.
+// Subsequent calls return the same value, unless the promise is part of a
+// [Group] with [GroupConfig.OnetimeHandling] enabled, in which case a
+// [Result] with the [ErrPromiseConsumed] error is returned.
 func (p *Promise[T]) WaitRes() Result[T] {
 	p.regChainRead()
 
@@ -252,6 +255,13 @@ func (p *Promise[T]) validateState() *Promise[T] {
 	return nil
 }
 
+// Delay returns a [Promise] that resolves to the same result as p after
+// waiting for at least duration d in a separate goroutine, according to
+// whether the result's [State] matches the provided cond values.
+//
+// The goroutine is drawn from p's [Group]'s pool, if one is set.
+//
+// If no cond is provided, the delay applies to all result states.
 func (p *Promise[T]) Delay(
 	d time.Duration,
 	cond ...DelayCond,
@@ -298,6 +308,15 @@ func delayFollowHandler[T any](
 	debug(prevProm, endHandler, endPromiseHandler, endPromiseDelayHandler)
 }
 
+// Callback runs the provided function, cb, in a separate goroutine once
+// this promise is resolved.
+// Unlike [Promise.Follow], it does not return a new [Promise]; if it's
+// part of a [Group], failures from cb are only surfaced via the [Group]'s
+// [GroupConfig.UnhandledPanicCB] and [GroupConfig.UnhandledErrorCB] callbacks.
+//
+// The goroutine is drawn from p's [Group]'s pool, if one is set.
+//
+// It will panic if cb is nil.
 func (p *Promise[T]) Callback(
 	cb func(ctx context.Context, res Result[T]),
 ) {
@@ -327,6 +346,16 @@ func (p *Promise[T]) Callback(
 	)
 }
 
+// Follow runs the provided function, cb, in a separate goroutine once
+// this promise is resolved, and returns a new [Promise] that tracks the
+// execution of cb.
+//
+// The goroutine is drawn from p's [Group]'s pool, if one is set.
+//
+// The returned [Promise] resolves to the [Result] returned by cb.
+// If cb panics, the returned [Promise] resolves to [Panic].
+//
+// It will panic if cb is nil.
 func (p *Promise[T]) Follow(
 	cb func(ctx context.Context, res Result[T]) Result[T],
 ) *Promise[T] {

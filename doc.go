@@ -13,20 +13,53 @@
 // limitations under the License.
 
 // Package promise provides fast, lightweight, and type-safe promise implementation for Go.
-// It hides away the complexity of managing goroutines and channels for complex tasks,
-// providing a simple and idiomatic API for asynchronous programming.
+// It hides away the complexity of managing goroutines and channels — including returning
+// results from them — providing a simple and idiomatic API for asynchronous programming.
 //
-// A [Promise] represents the eventual result of an asynchronous operation.
+// # Core types
 //
-// A [Group] allows managing collections of related promises. It provides high-level
-// operations like [Group.Wait], [Group.AllRes], and [Group.AnyRes],
-// facilitating complex coordination patterns.
+// A [Result] is a container for the result of an asynchronous operation,
+// holding a value, an error, and a [State].
 //
-// The package provides several ways to start promises, most notably using [Go], [GoErr],
-// [GoValErr] and [Chan] functions.
-// These functions manage goroutine execution and lifecycle, ensuring that results, errors,
-// and panics are correctly captured and passed to the following callbacks and methods.
+// A [Promise] represents an asynchronous operation. It can be awaited via
+// [Promise.Wait], [Promise.WaitRes], or [Promise.WaitChan].
 //
-// Chaining methods like [Then], [Catch], and [Recover] allow building sequential
-// asynchronous pipelines where each step can depend on the outcome of the previous one.
+// A [Group] manages a collection of related promises sharing a goroutine pool
+// and providing coordination operations like [Group.AllWaitRes] and [Group.AnyRes].
+//
+// # Starting promises
+//
+// Package-level constructors start new promises without a [Group]:
+//
+//   - [Go]: runs a func() in a goroutine.
+//   - [GoFunc]: runs any callback matching the [Func] constraint.
+//   - [Chan]: resolves once a value is sent on a channel.
+//   - [Ctx]: resolves once a [context.Context] is canceled.
+//   - [Delay]: resolves a [Result] after a duration.
+//   - [Wrap]: wraps an existing [Result] synchronously.
+//
+// [Group] provides the same constructors (except [GoFunc]), plus [Group.GoErr],
+// [Group.GoValErr], [Group.GoCtxErr], [Group.GoCtxValErr], and [Group.GoCtxRes]
+// for additional callback signatures.
+//
+// # Chaining
+//
+// Promises can be chained to build sequential asynchronous pipelines:
+//
+//   - [Promise.Follow]: runs a callback when the promise resolves, returning a new [Promise].
+//   - [Promise.Callback]: runs a fire-and-forget callback when the promise resolves.
+//   - [Promise.Delay]: delays the resolution of the promise by a duration.
+//   - [Follow]: type-converting follow that allows changing the result type between steps.
+//
+// # Combining promises
+//
+// Several functions combine multiple promises:
+//
+//   - [Wait]: blocks until all promises resolve.
+//   - [Select]: resolves to the first resolved promise.
+//   - [All]: resolves to [Success] when all succeed, or short-circuits on failure.
+//   - [AllWait]: waits for all to resolve, then resolves to [Success] if all succeeded.
+//   - [Any]: resolves to [Success] once one succeeds, or fails if all fail.
+//   - [AnyWait]: waits for all to resolve, then resolves to [Success] if any succeeded.
+//   - [Join]: waits for all to resolve and collects every result.
 package promise

@@ -183,8 +183,8 @@ func getEffSet(set ...bool) bool {
 // or by using the individual option functions directly.
 type GroupConfig struct {
 	// Size is the number of goroutines that this group is allowed to run.
-	// This includes goroutines created for both, constructor calls(Go, GoCtxRes, etc.),
-	// and follow calls([Promise.Then], [Promise.Catch], etc.).
+	// This includes goroutines created for both, constructor calls (Go, GoCtxRes, etc.),
+	// and follow calls ([Promise.Follow], [Promise.Callback], etc.).
 	// If it's 0 or less, then the group size is unlimited.
 	//
 	// If the group is full, then new calls might block or return the [ErrGroupBusy]
@@ -193,12 +193,12 @@ type GroupConfig struct {
 
 	// UnhandledPanicCB is called with the panic value once any [Promise] in
 	// this [Group] resolves to [Panic] and it's not handled by any follow
-	// calls, like [Promise.Recover] or [Promise.WaitRes].
+	// calls, like [Promise.Follow] or [Promise.WaitRes].
 	UnhandledPanicCB func(v any)
 
 	// UnhandledErrorCB is called with the error value once any [Promise] in
 	// this [Group] resolves to [Error] and it's not handled by any follow
-	// calls, like [Promise.Catch] or [Promise.WaitRes].
+	// calls, like [Promise.Follow] or [Promise.WaitRes].
 	UnhandledErrorCB func(err error)
 
 	// OnetimeHandling enforces that the [Result] value returned from any
@@ -212,11 +212,11 @@ type GroupConfig struct {
 	// passed to all callbacks, once any callback returns an [Error] or a [Panic]
 	// [Result] that's not handled.
 	//
-	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.WaitRes],
-	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
+	// Handling an [Error] [Result] is done via one of [Promise.Follow], [Promise.WaitRes],
+	// or [Promise.Delay].
 	//
-	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.WaitRes],
-	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
+	// Handling a [Panic] [Result] is done via one of [Promise.Follow], [Promise.WaitRes],
+	// or [Promise.Delay].
 	//
 	// The default behavior is never canceling a callback's [context.Context] value
 	// on any unhandled [Error] or [Panic] [Result] caused by other callbacks, and
@@ -230,11 +230,11 @@ type GroupConfig struct {
 	// the [Group.Delay], [Group.Chan], and [Group.Ctx] methods to return a [Promise]
 	// with an [Error] [Result] with the [ErrGroupCanceled] error.
 	//
-	// Handling an [Error] [Result] is done via one of [Promise.Catch], [Promise.WaitRes],
-	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
+	// Handling an [Error] [Result] is done via one of [Promise.Follow], [Promise.WaitRes],
+	// or [Promise.Delay].
 	//
-	// Handling a [Panic] [Result] is done via one of [Promise.Recover], [Promise.WaitRes],
-	// [Promise.Delay], [Promise.Follow] or [Promise.FollowCallback].
+	// Handling a [Panic] [Result] is done via one of [Promise.Follow], [Promise.WaitRes],
+	// or [Promise.Delay].
 	//
 	// The default behavior is always allowing new calls that return a [Promise] value,
 	// unless the [Group] is closed by one of the wait methods ([Group.Wait],
