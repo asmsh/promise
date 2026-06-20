@@ -57,7 +57,7 @@ func example1() {
 // example2 waits on a promise with a specified timeout, and prints its result
 // if this promise is resolved on time.
 func example2() {
-	p := promise.GoCtxRes(func(ctx context.Context) promise.Result[[]string] {
+	p := promise.GoFunc[[]string, any](func(ctx context.Context) promise.Result[[]string] {
 		/* do some work, asynchronously */
 		time.Sleep(time.Millisecond * 1) // simulates some work
 

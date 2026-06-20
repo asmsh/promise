@@ -22,10 +22,8 @@ import (
 
 // AsyncGet executes a GET request for the provided url in a new goroutine,
 // and returns a [*promise.Promise] value tracking its progress.
-//
-// This is just a draft implementation showing the use of the [promise.GoCtxRes] function.
 func AsyncGet(url string) *promise.Promise[*http.Response] {
-	return promise.GoValErr(func() (*http.Response, error) {
+	return promise.GoFunc[*http.Response, any](func() (*http.Response, error) {
 		return http.Get(url)
 	})
 }

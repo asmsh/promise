@@ -23,7 +23,7 @@ import (
 
 func getErrorBenchmarkPromise() *Promise[any] {
 	waitChan := make(chan struct{})
-	prom := GoCtxRes(func(ctx context.Context) Result[any] {
+	prom := GoFunc[any, any](func(ctx context.Context) Result[any] {
 		close(waitChan)
 		time.Sleep(100 * time.Microsecond)
 		return ErrRes[any](newTestStrError())
@@ -39,7 +39,7 @@ func getSuccessBenchmarkPromise(res ...any) *Promise[any] {
 	}
 
 	waitChan := make(chan struct{})
-	prom := GoCtxRes(func(ctx context.Context) Result[any] {
+	prom := GoFunc[any, any](func(ctx context.Context) Result[any] {
 		close(waitChan)
 		time.Sleep(100 * time.Microsecond)
 		return ValRes(resVal)
@@ -263,8 +263,8 @@ func BenchmarkPromise_Callback(b *testing.B) {
 	}
 }
 
-func BenchmarkPromise_Then(b *testing.B) {
-	b.Run("no-res", func(b *testing.B) {
+func BenchmarkPromise_Follow(b *testing.B) {
+	b.Run("success/no-res", func(b *testing.B) {
 		for _, bc := range promiseBenchs {
 			if bc.stressed {
 				continue
@@ -277,7 +277,7 @@ func BenchmarkPromise_Then(b *testing.B) {
 				b.ResetTimer()
 				for range b.N {
 					if bc.callFollow {
-						prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+						prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 							return nil
 						})
 					}
@@ -292,7 +292,7 @@ func BenchmarkPromise_Then(b *testing.B) {
 		}
 	})
 
-	b.Run("with-res", func(b *testing.B) {
+	b.Run("success/with-res", func(b *testing.B) {
 		for _, bc := range promiseBenchs {
 			if bc.stressed {
 				continue
@@ -305,7 +305,7 @@ func BenchmarkPromise_Then(b *testing.B) {
 				b.ResetTimer()
 				for range b.N {
 					if bc.callFollow {
-						prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+						prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 							return ValRes[any]("golang")
 						})
 					}
@@ -319,10 +319,8 @@ func BenchmarkPromise_Then(b *testing.B) {
 			})
 		}
 	})
-}
 
-func BenchmarkPromise_Catch(b *testing.B) {
-	b.Run("no-res", func(b *testing.B) {
+	b.Run("error/no-res", func(b *testing.B) {
 		for _, bc := range promiseBenchs {
 			if bc.stressed {
 				continue
@@ -335,7 +333,7 @@ func BenchmarkPromise_Catch(b *testing.B) {
 				b.ResetTimer()
 				for range b.N {
 					if bc.callFollow {
-						prom.Catch(func(ctx context.Context, res Result[any]) Result[any] {
+						prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 							return nil
 						})
 					}
@@ -350,37 +348,9 @@ func BenchmarkPromise_Catch(b *testing.B) {
 			})
 		}
 	})
-
-	b.Run("with-res", func(b *testing.B) {
-		for _, bc := range promiseBenchs {
-			if bc.stressed {
-				continue
-			}
-
-			b.Run(bc.name, func(b *testing.B) {
-				prom := getSuccessBenchmarkPromise()
-
-				b.ReportAllocs()
-				b.ResetTimer()
-				for range b.N {
-					if bc.callFollow {
-						prom.Catch(func(ctx context.Context, res Result[any]) Result[any] {
-							return ValRes[any]("golang")
-						})
-					}
-					if bc.callWait {
-						prom.Wait()
-					}
-					if bc.callRes {
-						prom.WaitRes()
-					}
-				}
-			})
-		}
-	})
 }
 
-func BenchmarkPromise_Then_Parallel(b *testing.B) {
+func BenchmarkPromise_Follow_Parallel(b *testing.B) {
 	b.Run("no-res", func(b *testing.B) {
 		for _, bc := range promiseBenchs {
 			b.Run(bc.name, func(b *testing.B) {
@@ -396,7 +366,7 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 				b.RunParallel(func(pb *testing.PB) {
 					for pb.Next() {
 						if bc.callFollow {
-							prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+							prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 								return nil
 							})
 						}
@@ -427,7 +397,7 @@ func BenchmarkPromise_Then_Parallel(b *testing.B) {
 				b.RunParallel(func(pb *testing.PB) {
 					for pb.Next() {
 						if bc.callFollow {
-							prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+							prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 								return ValRes[any]("golang")
 							})
 						}
@@ -452,7 +422,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ResetTimer()
 
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
 			p.Wait()
@@ -466,7 +436,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
 			res = p.WaitRes()
@@ -483,7 +453,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
 			res = p.WaitRes()
@@ -505,7 +475,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
 			res = p.WaitRes()
@@ -526,7 +496,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any](valOrigPtr)
 			})
 			p.Wait()
@@ -541,7 +511,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any](valOrigPtr)
 			})
 			res = p.WaitRes()
@@ -559,7 +529,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any](valOrigPtr)
 			})
 			res = p.WaitRes()
@@ -582,7 +552,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any](valOrigPtr)
 			})
 			res = p.WaitRes()
@@ -602,7 +572,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				panic("test panic")
 			})
 			p.Wait()
@@ -616,7 +586,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				panic("test panic")
 			})
 			res = p.WaitRes()
@@ -633,7 +603,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				panic("test panic")
 			})
 			res = p.WaitRes()
@@ -656,7 +626,7 @@ func BenchmarkPromise_Chain_Short(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				panic("test panic")
 			})
 			res = p.WaitRes()
@@ -679,11 +649,11 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
 			p.Wait()
@@ -697,11 +667,11 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
 			res = p.WaitRes()
@@ -716,11 +686,11 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
 			})
 			p.Wait()
@@ -734,11 +704,11 @@ func BenchmarkPromise_Chain_Medium(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
 			})
 			res = p.WaitRes()
@@ -756,15 +726,15 @@ func BenchmarkPromise_Chain_Long(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
 			p.Wait()
@@ -778,15 +748,15 @@ func BenchmarkPromise_Chain_Long(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return nil
 			})
 			res = p.WaitRes()
@@ -801,15 +771,15 @@ func BenchmarkPromise_Chain_Long(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
 			})
 			p.Wait()
@@ -823,15 +793,15 @@ func BenchmarkPromise_Chain_Long(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p := prom.Then(func(ctx context.Context, res Result[any]) Result[any] {
+			p := prom.Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
-			}).Then(func(ctx context.Context, res Result[any]) Result[any] {
+			}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
 				return ValRes[any]("golang")
 			})
 			res = p.WaitRes()

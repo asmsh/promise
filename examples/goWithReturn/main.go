@@ -28,10 +28,13 @@ import (
 // done using the standard way(library).
 func main() {
 	p := promise.
-		GoCtxRes(func(ctx context.Context) promise.Result[*http.Response] {
+		GoFunc[*http.Response, any](func(ctx context.Context) promise.Result[*http.Response] {
 			return promise.ValErrRes(http.Get("https://golang.org/"))
 		}).
-		Then(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
+		Follow(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
+			if res.State() != promise.Success {
+				return res
+			}
 			resp := res.Val()
 
 			// do something with resp..
@@ -39,7 +42,10 @@ func main() {
 
 			return nil
 		}).
-		Catch(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
+		Follow(func(ctx context.Context, res promise.Result[*http.Response]) promise.Result[*http.Response] {
+			if res.State() != promise.Error {
+				return res
+			}
 			err := res.Err()
 
 			// handle the error..

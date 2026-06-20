@@ -37,119 +37,10 @@ func Go(cb func()) *Promise[any] {
 	return (*Group[any]).Go(nil, cb)
 }
 
-// GoErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
-//
-// The [Result.State] will either be [Panic], [Error], or [Success], based on
-// whether cb caused a panic, returned an error, or returned nil, respectively.
-//
-// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
-// that wraps the panic value that occurred.
-// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
-// that wraps the error that cb returned.
-// If the [Result.State] is [Success], [Result.Val] will return nil.
-//
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
-//
-// It will panic if cb is nil.
-func GoErr(cb func() error) *Promise[any] {
-	return (*Group[any]).GoErr(nil, cb)
-}
-
-// GoValErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
-//
-// The [Result.State] will either be [Panic], [Error], or [Success], based on
-// whether cb caused a panic, returned an error, or returned a value, respectively.
-//
-// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
-// that wraps the panic value that occurred.
-// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
-// that wraps the error that cb returned.
-// If the [Result.State] is [Success], [Result.Val] will return the value
-// that cb returned.
-//
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
-//
-// It will panic if cb is nil.
-func GoValErr[T any](cb func() (T, error)) *Promise[T] {
-	return (*Group[T]).GoValErr(nil, cb)
-}
-
-// GoCtxErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
-//
-// The cb function receives a [context.Context] value that is canceled once
-// cb returns.
-//
-// The [Result.State] will either be [Panic], [Error], or [Success], based on
-// whether cb caused a panic, returned an error, or returned nil, respectively.
-//
-// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
-// that wraps the panic value that occurred.
-// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
-// that wraps the error that cb returned.
-// If the [Result.State] is [Success], [Result.Val] will return nil.
-//
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
-//
-// It will panic if cb is nil.
-func GoCtxErr(cb func(ctx context.Context) error) *Promise[any] {
-	return (*Group[any]).GoCtxErr(nil, cb)
-}
-
-// GoCtxValErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
-//
-// The cb function receives a [context.Context] value that is canceled once
-// cb returns.
-//
-// The [Result.State] will either be [Panic], [Error], or [Success], based on
-// whether cb caused a panic, returned an error, or returned a value, respectively.
-//
-// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
-// that wraps the panic value that occurred.
-// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
-// that wraps the error that cb returned.
-// If the [Result.State] is [Success], [Result.Val] will return the value
-// that cb returned.
-//
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
-//
-// It will panic if cb is nil.
-func GoCtxValErr[T any](cb func(ctx context.Context) (T, error)) *Promise[T] {
-	return (*Group[T]).GoCtxValErr(nil, cb)
-}
-
-// GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
-//
-// The [Result.State] will either be [Panic], [Error], or [Success], based on
-// whether cb caused a panic, returned an error, or returned a value, respectively.
-//
-// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
-// that wraps the panic value that occurred.
-// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
-// that wraps the error that cb returned.
-// If the [Result.State] is [Success], [Result.Val] will return the value
-// that cb returned.
-//
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
-//
-// It will panic if cb is nil.
-func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
-	return (*Group[T]).GoCtxRes(nil, cb)
-}
-
 // GoFunc runs the provided callback function, cb, in a separate goroutine,
 // and returns a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
 //
-// The cb function must satisfy the [CallbackFunc] constraint, which accepts
+// The cb function must satisfy the [Func] constraint, which accepts
 // any of the supported callback function signatures.
 //
 // The [Result.State] will either be [Panic], [Error], or [Success], based on
@@ -169,38 +60,13 @@ func GoCtxRes[T any](cb func(ctx context.Context) Result[T]) *Promise[T] {
 func GoFunc[
 	NextT any,
 	PrevT any,
-	CBFuncT CallbackFunc[NextT, PrevT],
+	CBFuncT Func[NextT, PrevT],
 ](cb CBFuncT) *Promise[NextT] {
 	if cb == nil {
 		panic(nilCallbackPanicMsg)
 	}
 
-	return goCallback(nil, CallbackFrom[NextT, PrevT](cb))
-}
-
-// GoCallback runs the [Callback], cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
-//
-// The [Result.State] will either be [Panic], [Error], or [Success], based on
-// whether cb caused a panic, returned an error, or returned nil, respectively.
-//
-// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
-// that wraps the panic value that occurred.
-// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
-// that wraps the error that cb returned.
-// If the [Result.State] is [Success], [Result.Val] will return whatever cb
-// returned as a value, if any.
-//
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
-//
-// It will panic if cb is nil.
-func GoCallback[NextT, PrevT any](cb Callback[NextT, PrevT]) *Promise[NextT] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	return goCallback(nil, cb)
+	return goCallback(nil, callbackFrom[NextT, PrevT](cb))
 }
 
 // Delay returns a [Promise] that resolves to res after waiting for at least

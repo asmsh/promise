@@ -875,7 +875,10 @@ func TestPanics(t *testing.T) {
 
 				err = r.Err() // needed for the whole test.
 
-				newP := p.Recover(func(ctx context.Context, res Result[any]) Result[any] {
+				newP := p.Follow(func(ctx context.Context, res Result[any]) Result[any] {
+					if res.State() != Panic {
+						return res
+					}
 					if testEnableLogs {
 						t.Logf("p recover res: %v {%T}\n", res, res)
 						t.Logf("p recover val: %v {%T}\n", res.Val(), res.Val())
@@ -919,7 +922,10 @@ func TestPanics(t *testing.T) {
 
 				err = r.Err() // needed for the whole test.
 
-				newIp := ip.Recover(func(ctx context.Context, res Result[IdxRes[any]]) Result[IdxRes[any]] {
+				newIp := ip.Follow(func(ctx context.Context, res Result[IdxRes[any]]) Result[IdxRes[any]] {
+					if res.State() != Panic {
+						return res
+					}
 					if testEnableLogs {
 						t.Logf("ip recover res: %v {%T}\n", res, res)
 						t.Logf("ip recover val: %v {%T}\n", res.Val(), res.Val())
@@ -963,7 +969,10 @@ func TestPanics(t *testing.T) {
 
 				err = r.Err() // needed for the whole test.
 
-				newIps := ips.Recover(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
+				newIps := ips.Follow(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
+					if res.State() != Panic {
+						return res
+					}
 					if testEnableLogs {
 						t.Logf("ips recover res: %v {%T}\n", res, res)
 						t.Logf("ips recover val: %v {%T}\n", res.Val(), res.Val())
@@ -1414,15 +1423,18 @@ func TestJoin(t *testing.T) {
 		p2 := GoFunc[any, any](func() error {
 			return errors.New("p2 error")
 		})
-		p3 := GoCtxRes(func(ctx context.Context) Result[any] {
+		p3 := GoFunc[any, any](func(ctx context.Context) Result[any] {
 			return ValErrRes[any]("never", errors.New("p3 error"))
 		})
-		p4 := GoCtxRes(func(ctx context.Context) Result[any] {
+		p4 := GoFunc[any, any](func(ctx context.Context) Result[any] {
 			return p1
 		})
 
 		joinP1 := Join(p1, p2, p3, p4)
-		joinP2 := joinP1.Then(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
+		joinP2 := joinP1.Follow(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
+			if res.State() != Success {
+				return res
+			}
 			for _, v := range res.Val() {
 				if testEnableLogs {
 					t.Logf("[%T] %v", v.Result, v)
@@ -1450,17 +1462,20 @@ func TestJoin(t *testing.T) {
 			time.Sleep(time.Millisecond * 100)
 			return errors.New("p2 error")
 		})
-		p3 := GoCtxRes(func(ctx context.Context) Result[any] {
+		p3 := GoFunc[any, any](func(ctx context.Context) Result[any] {
 			time.Sleep(time.Millisecond * 100)
 			return ValErrRes[any]("never", errors.New("p3 error"))
 		})
-		p4 := GoCtxRes(func(ctx context.Context) Result[any] {
+		p4 := GoFunc[any, any](func(ctx context.Context) Result[any] {
 			time.Sleep(time.Millisecond * 100)
 			return p1
 		})
 
 		joinP1 := Join(p1, p2, p3, p4)
-		joinP2 := joinP1.Then(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
+		joinP2 := joinP1.Follow(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
+			if res.State() != Success {
+				return res
+			}
 			for _, v := range res.Val() {
 				if testEnableLogs {
 					t.Logf("[%T] %v", v.Result, v)
@@ -1486,7 +1501,10 @@ func TestJoin(t *testing.T) {
 
 		called := atomic.Bool{}
 
-		join := Join(p1).Then(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
+		join := Join(p1).Follow(func(ctx context.Context, res Result[[]IdxRes[any]]) Result[[]IdxRes[any]] {
+			if res.State() != Success {
+				return res
+			}
 			called.Store(true)
 
 			for _, v := range res.Val() {

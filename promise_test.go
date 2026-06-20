@@ -52,18 +52,6 @@ func newTestPtrError() error {
 func TestPromise_Panicking(t *testing.T) {
 	wantV := "test_panic"
 
-	t.Run("Callback handling", func(t *testing.T) {
-		p := Go(func() {
-			panic(wantV)
-		}).Recover(func(ctx context.Context, res Result[any]) Result[any] {
-			if perr := new(PanicError); !errors.As(res.Err(), perr) || perr.V != wantV {
-				t.Fatalf("Recover callback got unexpected error: %v", res.Err())
-			}
-			return nil
-		})
-		p.Wait()
-	})
-
 	t.Run("Res handling", func(t *testing.T) {
 		p := Go(func() {
 			panic(wantV)
@@ -123,16 +111,12 @@ func TestPromise_Goexit(t *testing.T) {
 		}
 	}
 
-	// --- constructor callbacks ---
-
 	t.Run("Go", func(t *testing.T) {
 		res := Go(func() {
 			runtime.Goexit()
 		}).WaitRes()
 		checkRes(t, res)
 	})
-
-	// --- follow callbacks ---
 
 	t.Run("Follow", func(t *testing.T) {
 		res := Go(func() {}).
@@ -143,62 +127,13 @@ func TestPromise_Goexit(t *testing.T) {
 			WaitRes()
 		checkRes(t, res)
 	})
-
-	// Ensure that Goexit on a non-target state is a pass-through:
-	// Catch's Goexit should not fire when the predecessor is Success.
-	t.Run("Catch pass-through on Success", func(t *testing.T) {
-		res := GoCtxRes(func(ctx context.Context) Result[any] {
-			return ValRes[any]("ok")
-		}).Catch(func(ctx context.Context, res Result[any]) Result[any] {
-			// This must never be called; the promise should carry through.
-			runtime.Goexit()
-			return nil
-		}).WaitRes()
-		if res == nil {
-			t.Fatal("Res() = nil, want non-nil")
-		}
-		if got := res.State(); got != Success {
-			t.Errorf("State() = %v, want %v (Catch should be skipped on Success)", got, Success)
-		}
-	})
-
-	// Same pass-through check for Recover on a non-Panic predecessor.
-	t.Run("Recover pass-through on Error", func(t *testing.T) {
-		res := GoErr(func() error {
-			return newTestStrError()
-		}).Recover(func(ctx context.Context, res Result[any]) Result[any] {
-			runtime.Goexit()
-			return nil
-		}).WaitRes()
-		if res == nil {
-			t.Fatal("Res() = nil, want non-nil")
-		}
-		if got := res.State(); got != Error {
-			t.Errorf("State() = %v, want %v (Recover should be skipped on Error)", got, Error)
-		}
-		if errors.Is(res.Err(), ErrPromiseGoexit) {
-			t.Error("Err() wraps ErrPromiseGoexit, but Recover callback should not have been called")
-		}
-	})
 }
 
 func TestPromise_Rejection(t *testing.T) {
 	wantErr := newTestStrError()
 
-	t.Run("Callback handling", func(t *testing.T) {
-		p := GoCtxRes(func(ctx context.Context) Result[any] {
-			return ErrRes[any](wantErr)
-		}).Catch(func(ctx context.Context, res Result[any]) Result[any] {
-			if !errors.Is(res.Err(), wantErr) {
-				t.Errorf("Res() got unexpected error: %v", res.Err())
-			}
-			return nil
-		})
-		p.Wait()
-	})
-
 	t.Run("Res handling", func(t *testing.T) {
-		p := GoCtxRes(func(ctx context.Context) Result[any] {
+		p := GoFunc[any, any](func(ctx context.Context) Result[any] {
 			return ErrRes[any](wantErr)
 		})
 		res := p.WaitRes()
@@ -211,18 +146,97 @@ func TestPromise_Rejection(t *testing.T) {
 	})
 }
 
-func TestFinally(t *testing.T) {
-	t.Run("Success callback on Success", func(t *testing.T) {
+func TestPromise_Follow(t *testing.T) {
+	// Error guard (Catch-style): callback only runs on Error state.
+
+	t.Run("Success passes through on Error guard", func(t *testing.T) {
+		res := GoFunc[any, any](func(ctx context.Context) Result[any] {
+			return ValRes[any]("ok")
+		}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
+			if res.State() != Error {
+				return res
+			}
+			// must never be reached; Goexit would poison the result if it were
+			runtime.Goexit()
+			return nil
+		}).WaitRes()
+		if res == nil {
+			t.Fatal("WaitRes() = nil, want non-nil")
+		}
+		if got := res.State(); got != Success {
+			t.Errorf("State() = %v, want %v (callback should be skipped on Success)", got, Success)
+		}
+	})
+
+	t.Run("Error handled on Error guard", func(t *testing.T) {
+		wantErr := newTestStrError()
+		p := GoFunc[any, any](func(ctx context.Context) Result[any] {
+			return ErrRes[any](wantErr)
+		}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
+			if res.State() != Error {
+				return res
+			}
+			if !errors.Is(res.Err(), wantErr) {
+				t.Errorf("Follow got unexpected error: %v", res.Err())
+			}
+			return nil
+		})
+		p.Wait()
+	})
+
+	// Panic guard (Recover-style): callback only runs on Panic state.
+
+	t.Run("Error passes through on Panic guard", func(t *testing.T) {
+		res := GoFunc[any, any](func() error {
+			return newTestStrError()
+		}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
+			if res.State() != Panic {
+				return res
+			}
+			// must never be reached
+			runtime.Goexit()
+			return nil
+		}).WaitRes()
+		if res == nil {
+			t.Fatal("WaitRes() = nil, want non-nil")
+		}
+		if got := res.State(); got != Error {
+			t.Errorf("State() = %v, want %v (callback should be skipped on Error)", got, Error)
+		}
+		if errors.Is(res.Err(), ErrPromiseGoexit) {
+			t.Error("Err() wraps ErrPromiseGoexit, but Recover callback should not have been called")
+		}
+	})
+
+	t.Run("Panic handled on Panic guard", func(t *testing.T) {
+		wantV := "test_panic"
+		p := Go(func() {
+			panic(wantV)
+		}).Follow(func(ctx context.Context, res Result[any]) Result[any] {
+			if res.State() != Panic {
+				return res
+			}
+			if perr := new(PanicError); !errors.As(res.Err(), perr) || perr.V != wantV {
+				t.Fatalf("Follow got unexpected error: %v", res.Err())
+			}
+			return nil
+		})
+		p.Wait()
+	})
+
+	// No state guard (Finally-style): callback always runs regardless of input state.
+
+	t.Run("called on Success returning nil", func(t *testing.T) {
 		called := atomic.Bool{}
-		res := GoCtxRes(func(ctx context.Context) Result[any] {
+		res := GoFunc[any, any](func(ctx context.Context) Result[any] {
 			return ValRes[any]("val")
-		}).Finally(func(ctx context.Context) {
+		}).Follow(func(ctx context.Context, _ Result[any]) Result[any] {
 			called.Store(true)
-			return
+			return nil
 		}).WaitRes()
 
 		if !called.Load() {
-			t.Error("Finally wasn't called")
+			t.Error("Follow wasn't called")
 		}
 		if res.State() != Success {
 			t.Errorf("res.State() = %v, want: %v", res.State(), Success)
@@ -235,70 +249,70 @@ func TestFinally(t *testing.T) {
 		}
 	})
 
-	t.Run("Panic callback on Success", func(t *testing.T) {
+	t.Run("called on Error returning nil", func(t *testing.T) {
+		called := atomic.Bool{}
+		res := GoFunc[any, any](func(ctx context.Context) Result[any] {
+			return ErrRes[any](newTestStrError())
+		}).Follow(func(ctx context.Context, _ Result[any]) Result[any] {
+			called.Store(true)
+			return nil
+		}).WaitRes()
+
+		if !called.Load() {
+			t.Error("Follow wasn't called")
+		}
+		if res.State() != Success {
+			t.Errorf("res.State() = %v, want: %v", res.State(), Success)
+		}
+		if res.Err() != nil {
+			t.Errorf("res.Err() = %v, want: nil", res.Err())
+		}
+		if res.Val() != nil {
+			t.Errorf("res.Val() = %v, want: nil", res.Val())
+		}
+	})
+
+	t.Run("called on Panic returning nil", func(t *testing.T) {
+		called := atomic.Bool{}
+		res := GoFunc[any, any](func(ctx context.Context) Result[any] {
+			return PanicRes[any]("test_panic")
+		}).Follow(func(ctx context.Context, _ Result[any]) Result[any] {
+			called.Store(true)
+			return nil
+		}).WaitRes()
+
+		if !called.Load() {
+			t.Error("Follow wasn't called")
+		}
+		if res.State() != Success {
+			t.Errorf("res.State() = %v, want: %v", res.State(), Success)
+		}
+		if res.Err() != nil {
+			t.Errorf("res.Err() = %v, want: nil", res.Err())
+		}
+		if res.Val() != nil {
+			t.Errorf("res.Val() = %v, want: nil", res.Val())
+		}
+	})
+
+	t.Run("callback panics", func(t *testing.T) {
 		wantV := "test_panic"
 		called := atomic.Bool{}
-		res := GoCtxRes(func(ctx context.Context) Result[any] {
+		res := GoFunc[any, any](func(ctx context.Context) Result[any] {
 			return ValRes[any]("val")
-		}).Finally(func(ctx context.Context) {
+		}).Follow(func(ctx context.Context, _ Result[any]) Result[any] {
 			called.Store(true)
 			panic(wantV)
 		}).WaitRes()
 
 		if !called.Load() {
-			t.Error("Finally wasn't called")
+			t.Error("Follow wasn't called")
 		}
 		if res.State() != Panic {
-			t.Errorf("res.State() = %v, want: %v", res.State(), Success)
+			t.Errorf("res.State() = %v, want: %v", res.State(), Panic)
 		}
 		if perr := new(PanicError); !errors.As(res.Err(), perr) || perr.V != wantV {
 			t.Fatalf("res.Err() got unexpected error: %v", res.Err())
-		}
-		if res.Val() != nil {
-			t.Errorf("res.Val() = %v, want: nil", res.Val())
-		}
-	})
-
-	t.Run("Success callback on Error", func(t *testing.T) {
-		called := atomic.Bool{}
-		res := GoCtxRes(func(ctx context.Context) Result[any] {
-			return ErrRes[any](newTestStrError())
-		}).Finally(func(ctx context.Context) {
-			called.Store(true)
-			return
-		}).WaitRes()
-
-		if !called.Load() {
-			t.Error("Finally wasn't called")
-		}
-		if res.State() != Success {
-			t.Errorf("res.State() = %v, want: %v", res.State(), Success)
-		}
-		if res.Err() != nil {
-			t.Errorf("res.Err() = %v, want: nil", res.Err())
-		}
-		if res.Val() != nil {
-			t.Errorf("res.Val() = %v, want: nil", res.Val())
-		}
-	})
-
-	t.Run("Success callback on Panic", func(t *testing.T) {
-		called := atomic.Bool{}
-		res := GoCtxRes(func(ctx context.Context) Result[any] {
-			return PanicRes[any]("test_panic")
-		}).Finally(func(ctx context.Context) {
-			called.Store(true)
-			return
-		}).WaitRes()
-
-		if !called.Load() {
-			t.Error("Finally wasn't called")
-		}
-		if res.State() != Success {
-			t.Errorf("res.State() = %v, want: %v", res.State(), Success)
-		}
-		if res.Err() != nil {
-			t.Errorf("res.Err() = %v, want: nil", res.Err())
 		}
 		if res.Val() != nil {
 			t.Errorf("res.Val() = %v, want: nil", res.Val())

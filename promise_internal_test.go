@@ -16,78 +16,10 @@ package promise
 
 import (
 	"context"
-	"errors"
 	"testing"
 )
 
-// TestGetEffectiveNextRes_Flows reproduces flows that exercise the current
-// getEffectiveNextRes behavior in the full promise pipeline.
-func TestGetEffectiveNextRes_Flows(t *testing.T) {
-	// Section 1: nextResP != nil
-	// A callback that returns a concrete Result should win over any previous result.
-	t.Run("Section1/normal_callback_return", func(t *testing.T) {
-		res := GoCtxRes(func(ctx context.Context) Result[string] {
-			return ValRes("ok")
-		}).WaitRes()
-
-		if res == nil {
-			t.Fatal("expected non-nil result")
-		}
-		if res.State() != Success {
-			t.Errorf("got state %v, want Success", res.State())
-		}
-		if res.Val() != "ok" {
-			t.Errorf("got val %q, want 'ok'", res.Val())
-		}
-	})
-
-	// Section 2: nextResP == nil && prevRes == nil
-	// A nil previous Result should stay nil through pass-through handling.
-	t.Run("Section2/nil_passthrough", func(t *testing.T) {
-		// Go returns nil internally on completion.
-		// Catch ignores Success and passes the nil Result down.
-		res := Go(func() {}).
-			Catch(func(ctx context.Context, res Result[any]) Result[any] {
-				t.Fatal("Catch callback should not be executed")
-				return nil
-			}).WaitRes()
-
-		if res == nil {
-			t.Fatal("expected non-nil result")
-		}
-		if res.State() != Success {
-			t.Errorf("got %v, want Success result for implicit success pass-through", res.State())
-		}
-		if res.Val() != nil {
-			t.Errorf("got %v, want nil value", res.Val())
-		}
-	})
-
-	// Section 3: nextResP == nil && prevRes != nil
-	// When no new Result is returned, the previous Result is forwarded by
-	// type assertion as Result[NextT].
-	t.Run("Section3/same_type_passthrough", func(t *testing.T) {
-		sentinelErr := newTestStrError("sentinel")
-		res := GoErr(func() error {
-			return sentinelErr
-		}).Then(func(ctx context.Context, res Result[any]) Result[any] {
-			t.Fatal("Then callback should not be executed on Error")
-			return nil
-		}).WaitRes()
-
-		if res == nil {
-			t.Fatal("expected non-nil result")
-		}
-		if res.State() != Error {
-			t.Errorf("got state %v, want Error", res.State())
-		}
-		if !errors.Is(res.Err(), sentinelErr) {
-			t.Errorf("got err %v, want %v", res.Err(), sentinelErr)
-		}
-	})
-}
-
-func BenchmarkNewPromInter(b *testing.B) {
+func BenchmarkNewPromAsync(b *testing.B) {
 	b.Run("nil group", func(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()

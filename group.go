@@ -294,37 +294,9 @@ func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] 
 	return goCallback(g, ctxNextResFunc[T, T](cb))
 }
 
-// GoCallback runs the [Callback], cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
-// The goroutine is drawn from this [Group]'s pool, if one is set, and the
-// returned [Promise] is tracked by this [Group]'s wait and join operations.
-//
-// The [Result.State] will either be [Panic], [Error], or [Success], based on
-// whether cb caused a panic, returned a non-nil error, or returned a nil error,
-// respectively.
-//
-// If the [Result.State] is [Panic], [Result.Err] will return a [PanicError]
-// that wraps the panic value that occurred.
-// If the [Result.State] is [Error], [Result.Err] will return a non-nil error
-// that wraps the error that cb returned.
-// If the [Result.State] is [Success], [Result.Val] will return whatever cb
-// returned as a value, if any.
-//
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
-//
-// It will panic if cb is nil.
-func (g *Group[T]) GoCallback(cb Callback[T, T]) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	return goCallback(g, cb)
-}
-
 func goCallback[NextT, PrevT any](
 	g *Group[NextT],
-	cb Callback[NextT, PrevT],
+	cb callback[NextT, PrevT],
 ) *Promise[NextT] {
 	// make sure the group and in a valid state, otherwise return
 	// the error promise created.
@@ -348,7 +320,7 @@ func goCallback[NextT, PrevT any](
 
 func goCallbackHandler[NextT, PrevT any](
 	nextProm *Promise[NextT],
-	cb Callback[NextT, PrevT],
+	cb callback[NextT, PrevT],
 	ctx context.Context,
 	cancel context.CancelFunc,
 ) {
@@ -485,7 +457,11 @@ func (g *Group[T]) Ctx(ctx context.Context) *Promise[T] {
 
 func ctxHandler[T any](nextProm *Promise[T]) {
 	defer nextProm.group.freeGoroutine()
-	nextProm.waitState()
+	// block on receiving from the wait chan, which will be a Context.Done
+	// channel already saved in the nextProm.res and closed by the Context.
+	<-nextProm.WaitChan()
+	// passing the nextProm.res again is redundant, as it's already saved,
+	// but just done to keep reusing the same helper methods.
 	nextProm.resolveToRes(nextProm.res)
 	debug(nextProm, endHandler, endGroupHandler, endGroupCtxHandler)
 }

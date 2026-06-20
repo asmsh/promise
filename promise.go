@@ -325,7 +325,7 @@ func (p *Promise[T]) Callback(
 		followResFunc[T, T](cb),
 		ctx,
 		cancel,
-		callbackOp,
+		false,
 		endHandler,
 		endPromiseHandler,
 		endPromiseCallbackHandler,
@@ -352,7 +352,7 @@ func (p *Promise[T]) Follow(
 		followResNextResFunc[T, T](cb),
 		ctx,
 		cancel,
-		followOp,
+		true,
 		endHandler,
 		endPromiseHandler,
 		endPromiseFollowHandler,
@@ -360,175 +360,24 @@ func (p *Promise[T]) Follow(
 	return nextProm
 }
 
-func (p *Promise[T]) FollowCallback(cb Callback[T, T]) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	if errProm := p.validateState(); errProm != nil {
-		return errProm
-	}
-
-	nextProm := newPromAsync(p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
-	debug(p, startHandler, startPromiseHandler, startPromiseFollowCallbackHandler)
-	go followHandler(
-		p,
-		nextProm,
-		cb,
-		ctx,
-		cancel,
-		followOp,
-		endHandler,
-		endPromiseHandler,
-		endPromiseFollowCallbackHandler,
-	)
-	return nextProm
-}
-
-func (p *Promise[T]) Then(
-	cb func(ctx context.Context, res Result[T]) Result[T],
-) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	if errProm := p.validateState(); errProm != nil {
-		return errProm
-	}
-
-	nextProm := newPromAsync(p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
-	debug(p, startHandler, startPromiseHandler, startPromiseThenHandler)
-	go followHandler(
-		p,
-		nextProm,
-		followResNextResFunc[T, T](cb),
-		ctx,
-		cancel,
-		thenOp,
-		endHandler,
-		endPromiseHandler,
-		endPromiseThenHandler,
-	)
-	return nextProm
-}
-
-func (p *Promise[T]) Catch(
-	cb func(ctx context.Context, res Result[T]) Result[T],
-) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	if errProm := p.validateState(); errProm != nil {
-		return errProm
-	}
-
-	nextProm := newPromAsync(p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
-	debug(p, startHandler, startPromiseHandler, startPromiseCatchHandler)
-	go followHandler(
-		p,
-		nextProm,
-		followResNextResFunc[T, T](cb),
-		ctx,
-		cancel,
-		catchOp,
-		endHandler,
-		endPromiseHandler,
-		endPromiseCatchHandler,
-	)
-	return nextProm
-}
-
-func (p *Promise[T]) Recover(
-	cb func(ctx context.Context, res Result[T]) Result[T],
-) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	if errProm := p.validateState(); errProm != nil {
-		return errProm
-	}
-
-	nextProm := newPromAsync(p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
-	debug(p, startHandler, startPromiseHandler, startPromiseRecoverHandler)
-	go followHandler(
-		p,
-		nextProm,
-		followResNextResFunc[T, T](cb),
-		ctx,
-		cancel,
-		recoverOp,
-		endHandler,
-		endPromiseHandler,
-		endPromiseRecoverHandler,
-	)
-	return nextProm
-}
-
-func (p *Promise[T]) Finally(
-	cb func(ctx context.Context),
-) *Promise[T] {
-	if cb == nil {
-		panic(nilCallbackPanicMsg)
-	}
-
-	if errProm := p.validateState(); errProm != nil {
-		return errProm
-	}
-
-	nextProm := newPromAsync(p.group)
-	ctx, cancel := callbackCtx(p.group, nextProm.syncChan)
-	debug(p, startHandler, startPromiseHandler, startPromiseFinallyHandler)
-	go followHandler(
-		p,
-		nextProm,
-		ctxFunc[T, T](cb),
-		ctx,
-		cancel,
-		finallyOp,
-		endHandler,
-		endPromiseHandler,
-		endPromiseFinallyHandler,
-	)
-	return nextProm
-}
-
 func followHandler[NextT, PrevT any](
 	prevProm *Promise[PrevT],
 	nextProm *Promise[NextT],
-	cb Callback[NextT, PrevT],
+	cb callback[NextT, PrevT],
 	ctx context.Context,
 	cancel context.CancelFunc,
-	op followOperationLogic,
+	canHandle bool,
 	endDebugEvents ...debugEvent,
 ) {
 	defer prevProm.group.freeGoroutine()
 
-	s := prevProm.waitState()
-
-	// return and carry the current Result to the next Promise if it's not the target.
-	if !op.IsTargetState(s) {
-		if nextProm == nil {
-			// this should not happen, as operations that define a certain
-			// set of target states must create and pass a next promise.
-			panic("promise: internal: next promise is unexpectedly nil")
-		}
-
-		nextRes := getEffectiveNextRes[NextT](prevProm.res)
-		nextProm.resolveToRes(nextRes)
-		return
-	}
+	<-prevProm.WaitChan()
 
 	// start with the previous Result.
 	res := prevProm.res
 
 	// mark prev Handled and check whether we should resolve next or continue.
-	if op.CanHandle() {
+	if canHandle {
 		if nextProm == nil {
 			// this should not happen, as operations that can handle a target
 			// promise must create and pass a next promise.
@@ -536,8 +385,8 @@ func followHandler[NextT, PrevT any](
 		}
 
 		var valid bool
-		res, valid = handleFollow(prevProm, nextProm, op.ResolveOnInvalidHandle())
-		if !valid && op.ResolveOnInvalidHandle() {
+		res, valid = handleFollow(prevProm, nextProm, canHandle)
+		if !valid {
 			return
 		}
 	}

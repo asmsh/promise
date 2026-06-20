@@ -30,7 +30,10 @@ func main() {
 			/* do some work, asynchronously */
 			aFuncThatMayPanic()
 		}).
-		Recover(func(ctx context.Context, res promise.Result[any]) promise.Result[any] {
+		Follow(func(ctx context.Context, res promise.Result[any]) promise.Result[any] {
+			if res.State() != promise.Panic {
+				return res
+			}
 			return nil
 		})
 

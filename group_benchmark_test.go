@@ -137,12 +137,11 @@ func actualWorkPG_standardWorkerResult_callbackGroupResult(
 	var pg Group[workOutput]
 
 	for i := range inputs {
-		cb := CallbackFrom[workOutput, workOutput](func(ctx context.Context) workOutput {
+		pg.GoCtxRes(func(ctx context.Context) Result[workOutput] {
 			time.Sleep(100 * time.Microsecond) // simulates some work
 
-			return workOutput{Greeting: "Hello " + inputs[i].Name}
+			return ValRes(workOutput{Greeting: "Hello " + inputs[i].Name})
 		})
-		pg.GoCallback(cb)
 	}
 
 	return pg.JoinRes().Val(), nil

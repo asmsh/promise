@@ -201,7 +201,10 @@ func TestOnetimeHandling(t *testing.T) {
 
 		wantVal := "v"
 		p := g.GoValErr(func() (any, error) { return wantVal, nil })
-		p.Then(func(ctx context.Context, res promise.Result[any]) promise.Result[any] {
+		p.Follow(func(ctx context.Context, res promise.Result[any]) promise.Result[any] {
+			if res.State() != promise.Success {
+				return res
+			}
 			if want, got := promise.Success, res.State(); want != got {
 				t.Errorf("State = %v, want %v", got, want)
 			}

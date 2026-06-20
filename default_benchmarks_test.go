@@ -20,45 +20,6 @@ import (
 	"time"
 )
 
-func BenchmarkChan(b *testing.B) {
-	resChan := make(chan Result[any], 1)
-
-	b.Run("", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for range b.N {
-			p = Chan[any](resChan)
-		}
-		_ = p
-	})
-}
-
-func BenchmarkCtx(b *testing.B) {
-	b.Run("empty-ctx", func(b *testing.B) {
-		var p *Promise[any]
-		ctx := context.Background()
-		b.ReportAllocs()
-		b.ResetTimer()
-		for range b.N {
-			p = Ctx(ctx)
-		}
-		_ = p
-	})
-
-	b.Run("non-empty-ctx", func(b *testing.B) {
-		var p *Promise[any]
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		b.ReportAllocs()
-		b.ResetTimer()
-		for range b.N {
-			p = Ctx(ctx)
-		}
-		_ = p
-	})
-}
-
 func BenchmarkGo(b *testing.B) {
 	b.Run("Success", func(b *testing.B) {
 		var p *Promise[any]
@@ -83,24 +44,14 @@ func BenchmarkGo(b *testing.B) {
 	})
 }
 
-func BenchmarkGoErr(b *testing.B) {
-	b.Run("Success", func(b *testing.B) {
+func BenchmarkGoFunc(b *testing.B) {
+	b.Run("nil error", func(b *testing.B) {
 		var p *Promise[any]
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p = GoErr(func() error { return nil })
-		}
-		_ = p
-	})
-
-	b.Run("Error", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for range b.N {
-			p = GoErr(func() error {
-				return testStrError("test error")
+			p = GoFunc[any, any](func() error {
+				return nil
 			})
 		}
 		_ = p
@@ -111,72 +62,8 @@ func BenchmarkGoErr(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for range b.N {
-			p = GoErr(func() error {
+			p = GoFunc[any, any](func() {
 				panic("panic")
-			})
-		}
-		_ = p
-	})
-}
-
-func BenchmarkGoCtxRes(b *testing.B) {
-	b.Run("empty result", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for range b.N {
-			p = GoCtxRes(func(ctx context.Context) Result[any] {
-				return ZeroRes[any]()
-			})
-		}
-		_ = p
-	})
-
-	b.Run("value result", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for range b.N {
-			p = GoCtxRes(func(ctx context.Context) Result[any] {
-				return ValRes[any]("golang")
-			})
-		}
-		_ = p
-	})
-
-	b.Run("nil-error result", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for range b.N {
-			p = GoCtxRes(func(ctx context.Context) Result[any] {
-				return ValErrRes[any]("golang", nil)
-			})
-		}
-		_ = p
-	})
-
-	b.Run("non-nil-error result", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for range b.N {
-			p = GoCtxRes(func(ctx context.Context) Result[any] {
-				return ValErrRes[any]("golang", newTestStrError())
-			})
-		}
-		_ = p
-	})
-}
-
-func BenchmarkGoFunc(b *testing.B) {
-	b.Run("nil error", func(b *testing.B) {
-		var p *Promise[any]
-		b.ReportAllocs()
-		b.ResetTimer()
-		for range b.N {
-			p = GoFunc[any, any](func() error {
-				return nil
 			})
 		}
 		_ = p
@@ -201,6 +88,18 @@ func BenchmarkGoFunc(b *testing.B) {
 		for range b.N {
 			p = GoFunc[any, any](func() error {
 				return newTestPtrError()
+			})
+		}
+		_ = p
+	})
+
+	b.Run("value return", func(b *testing.B) {
+		var p *Promise[any]
+		b.ReportAllocs()
+		b.ResetTimer()
+		for range b.N {
+			p = GoFunc[any, any](func() any {
+				return "golang"
 			})
 		}
 		_ = p
@@ -245,6 +144,45 @@ func BenchmarkDelay(b *testing.B) {
 		b.ResetTimer()
 		for range b.N {
 			p = Delay(ErrRes[string](err), time.Microsecond, OnSuccess, OnError, OnPanic, OnAll)
+		}
+		_ = p
+	})
+}
+
+func BenchmarkChan(b *testing.B) {
+	resChan := make(chan Result[any], 1)
+
+	b.Run("", func(b *testing.B) {
+		var p *Promise[any]
+		b.ReportAllocs()
+		b.ResetTimer()
+		for range b.N {
+			p = Chan[any](resChan)
+		}
+		_ = p
+	})
+}
+
+func BenchmarkCtx(b *testing.B) {
+	b.Run("empty-ctx", func(b *testing.B) {
+		var p *Promise[any]
+		ctx := context.Background()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for range b.N {
+			p = Ctx(ctx)
+		}
+		_ = p
+	})
+
+	b.Run("non-empty-ctx", func(b *testing.B) {
+		var p *Promise[any]
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		b.ReportAllocs()
+		b.ResetTimer()
+		for range b.N {
+			p = Ctx(ctx)
 		}
 		_ = p
 	})
