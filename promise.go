@@ -128,11 +128,6 @@ func (p *Promise[T]) State() State {
 	return p.WaitRes().State()
 }
 
-// String will block until the promise is resolved.
-func (p *Promise[T]) String() string {
-	return fmt.Sprintf("%v", p.WaitRes())
-}
-
 // Wait blocks until the promise is resolved.
 func (p *Promise[T]) Wait() {
 	p.regChainWait()
