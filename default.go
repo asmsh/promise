@@ -29,8 +29,8 @@ import (
 // that wraps the panic value that occurred.
 // If the [Result.State] is [Success], [Result.Val] will return nil.
 //
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
+// If cb called runtime.Goexit, [Result.State] will be [Error] and [Result.Err]
+// will return [ErrPromiseGoexit].
 //
 // It will panic if cb is nil.
 func Go(cb func()) *Promise[any] {
@@ -53,8 +53,8 @@ func Go(cb func()) *Promise[any] {
 // If the [Result.State] is [Success], [Result.Val] will return whatever cb
 // returned as a value, if any.
 //
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
+// If cb called runtime.Goexit, [Result.State] will be [Error] and [Result.Err]
+// will return [ErrPromiseGoexit].
 //
 // It will panic if cb is nil.
 func GoFunc[
