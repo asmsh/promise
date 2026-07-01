@@ -138,8 +138,8 @@ func noopRegFunc() {
 // that wraps the panic value that occurred.
 // If the [Result.State] is [Success], [Result.Val] will return nil.
 //
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
+// If cb called runtime.Goexit, [Result.State] will be [Error] and [Result.Err]
+// will return [ErrPromiseGoexit].
 //
 // It will panic if cb is nil.
 func (g *Group[T]) Go(cb func()) *Promise[T] {
@@ -165,8 +165,8 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 // that wraps the error that cb returned.
 // If the [Result.State] is [Success], [Result.Val] will return nil.
 //
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
+// If cb called runtime.Goexit, [Result.State] will be [Error] and [Result.Err]
+// will return [ErrPromiseGoexit].
 //
 // It will panic if cb is nil.
 func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
@@ -192,8 +192,8 @@ func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
 // If the [Result.State] is [Success], [Result.Val] will return the value
 // that cb returned.
 //
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
+// If cb called runtime.Goexit, [Result.State] will be [Error] and [Result.Err]
+// will return [ErrPromiseGoexit].
 //
 // It will panic if cb is nil.
 func (g *Group[T]) GoValErr(cb func() (T, error)) *Promise[T] {
@@ -222,8 +222,8 @@ func (g *Group[T]) GoValErr(cb func() (T, error)) *Promise[T] {
 // that wraps the error that cb returned.
 // If the [Result.State] is [Success], [Result.Val] will return nil.
 //
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
+// If cb called runtime.Goexit, [Result.State] will be [Error] and [Result.Err]
+// will return [ErrPromiseGoexit].
 //
 // It will panic if cb is nil.
 func (g *Group[T]) GoCtxErr(cb func(ctx context.Context) error) *Promise[T] {
@@ -252,8 +252,8 @@ func (g *Group[T]) GoCtxErr(cb func(ctx context.Context) error) *Promise[T] {
 // If the [Result.State] is [Success], [Result.Val] will return the value
 // that cb returned.
 //
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
+// If cb called runtime.Goexit, [Result.State] will be [Error] and [Result.Err]
+// will return [ErrPromiseGoexit].
 //
 // It will panic if cb is nil.
 func (g *Group[T]) GoCtxValErr(cb func(ctx context.Context) (T, error)) *Promise[T] {
@@ -282,8 +282,8 @@ func (g *Group[T]) GoCtxValErr(cb func(ctx context.Context) (T, error)) *Promise
 // If the [Result.State] is [Success], [Result.Val] will return the value
 // that cb returned.
 //
-// If cb called runtime.Goexit, [Result.State] will be [Success] and [Result.Val]
-// will return nil.
+// If cb called runtime.Goexit, [Result.State] will be [Error] and [Result.Err]
+// will return [ErrPromiseGoexit].
 //
 // It will panic if cb is nil.
 func (g *Group[T]) GoCtxRes(cb func(ctx context.Context) Result[T]) *Promise[T] {
