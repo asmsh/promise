@@ -2734,3 +2734,110 @@ func TestGroupDoesNotRunNewFunctionsAfterPreviousError(t *testing.T) {
 		t.Errorf("Expected second func not to run, but it did")
 	}
 }
+
+// TestGroup_AllWaitRes_AllSuccessSlowPath is a regression test for a panic
+// ("unexpected Result state: <unknown>(0)") in AllWaitRes.
+//
+// When all of a [Group]'s promises resolve to [Success], allWaitOperation.initState
+// returns 'unknown' by design, deferring the state computation to the results
+// received on the resChan. But if every result was already recorded (and so
+// captured in the initial snapshot) while the slow path is still taken (i.e.
+// 'groupDone' wasn't observed closed yet at the select), the result loop exits
+// via 'groupDone' without ever calling nextState, leaving callResState as
+// 'unknown'. joinResSlow must fall back to calcGroupResState, mirroring the
+// fast path, instead of passing 'unknown' straight to newMultiRes (a panic).
+func TestGroup_AllWaitRes_AllSuccessSlowPath(t *testing.T) {
+	for i := range 50_000 {
+		g := NewGroup[string](SaveAllGroupResults())
+
+		g.Go(func() {})
+		g.Go(func() {})
+
+		res := g.AllWaitRes()
+		if got := res.State(); got != Success {
+			t.Fatalf("iteration %d: AllWaitRes().State() = %s, want %s", i, got, Success)
+		}
+	}
+}
+
+// TestGroup_AllWaitRes_NoLostResults is a regression test asserting that
+// AllWaitRes never drops (or duplicates) a promise's result.
+//
+// A promise sends its result on a call's resChan only if it observes the
+// groupCall registered on the callsQ; otherwise it just records the result in
+// the resQ/history. The bug: joinResSlow registered on the callsQ and snapshotted
+// the resQ under different locks (callsQMu vs resMu) than handleGroupCalls used
+// to scan the callsQ and insert to the resQ, so the interleaving
+// [scan callsQ] -> [register] -> [snapshot resQ] -> [insert] was legal: the
+// promise neither sent (scanned before registration) nor was captured (inserted
+// after the snapshot), and its result was lost. The fix pairs both operations
+// under resMu so a result is always either snapshotted or delivered, exactly once.
+func TestGroup_AllWaitRes_NoLostResults(t *testing.T) {
+	const wantN = 2
+	iters := 500_000
+	if testing.Short() {
+		iters = 5_000
+	}
+	for i := 0; i < iters; i++ {
+		g := NewGroup[int](SaveAllGroupResults())
+
+		g.GoValErr(func() (int, error) { return 1, nil })
+		g.GoValErr(func() (int, error) { return 2, nil })
+
+		vals := g.AllWaitRes().Val()
+		if len(vals) != wantN {
+			t.Fatalf("iteration %d: AllWaitRes() returned %d results, want %d: %v",
+				i, len(vals), wantN, vals)
+		}
+	}
+}
+
+// TestGroup_SelectRes_NoLostResult is a regression test for the Select path,
+// which had the same class of race as AllWaitRes: selectRes pre-snapshots the
+// resQ (under resMu), then selectResSlow registered the groupCall (under
+// callsQMu). A promise resolving in between is neither seen in the pre-snapshot
+// nor sent on the resChan, so selectResSlow fell through to the '<-groupDone'
+// case with callResState left unknown -> newSingleRes panics. It must instead
+// always return the resolved promise's result.
+func TestGroup_SelectRes_NoLostResult(t *testing.T) {
+	iters := 500_000
+	if testing.Short() {
+		iters = 5_000
+	}
+	for i := 0; i < iters; i++ {
+		g := NewGroup[int](SaveAllGroupResults())
+
+		g.GoValErr(func() (int, error) { return 1, nil })
+
+		res := g.SelectRes()
+		if got := res.State(); got != Success {
+			t.Fatalf("iteration %d: SelectRes().State() = %s, want %s", i, got, Success)
+		}
+		if got := res.Val().Val(); got != 1 {
+			t.Fatalf("iteration %d: SelectRes().Val() = %d, want 1", i, got)
+		}
+	}
+}
+
+// TestGroup_AllRes_TargetFoundInSnapshot exercises the early-return join path
+// (AllRes) where the target [State] is found in joinResSlow's initial snapshot.
+// In that case no groupCall is registered, so the cleanup at the end must not
+// try to remove a nil call from the callsQ.
+func TestGroup_AllRes_TargetFoundInSnapshot(t *testing.T) {
+	iters := 200_000
+	if testing.Short() {
+		iters = 5_000
+	}
+	for i := 0; i < iters; i++ {
+		g := NewGroup[int](SaveAllGroupResults())
+
+		// an Error is a target [State] for AllRes, so once this promise is
+		// recorded, AllRes can early-return from the snapshot.
+		g.GoValErr(func() (int, error) { return 0, errors.New("boom") })
+
+		res := g.AllRes()
+		if got := res.State(); got != Error {
+			t.Fatalf("iteration %d: AllRes().State() = %s, want %s", i, got, Error)
+		}
+	}
+}
