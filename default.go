@@ -20,7 +20,7 @@ import (
 )
 
 // Go runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
+// a [Promise] value that tracks the execution of cb.
 //
 // The [Result.State] will either be [Panic], or [Success], based on whether
 // cb caused a panic, or returned normally, respectively.
@@ -38,7 +38,7 @@ func Go(cb func()) *Promise[any] {
 }
 
 // GoFunc runs the provided callback function, cb, in a separate goroutine,
-// and returns a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
+// and returns a [Promise] value that tracks the execution of cb.
 //
 // The cb function must satisfy the [Func] constraint, which accepts
 // any of the supported callback function signatures.

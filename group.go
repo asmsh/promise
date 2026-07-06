@@ -127,7 +127,7 @@ func noopRegFunc() {
 }
 
 // Go runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
+// a [Promise] value that tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -151,7 +151,7 @@ func (g *Group[T]) Go(cb func()) *Promise[T] {
 }
 
 // GoErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
+// a [Promise] value that tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -178,7 +178,7 @@ func (g *Group[T]) GoErr(cb func() error) *Promise[T] {
 }
 
 // GoValErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
+// a [Promise] value that tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -205,7 +205,7 @@ func (g *Group[T]) GoValErr(cb func() (T, error)) *Promise[T] {
 }
 
 // GoCtxErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
+// a [Promise] value that tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -235,7 +235,7 @@ func (g *Group[T]) GoCtxErr(cb func(ctx context.Context) error) *Promise[T] {
 }
 
 // GoCtxValErr runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
+// a [Promise] value that tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
@@ -265,7 +265,7 @@ func (g *Group[T]) GoCtxValErr(cb func(ctx context.Context) (T, error)) *Promise
 }
 
 // GoCtxRes runs the provided function, cb, in a separate goroutine, and returns
-// a [Promise] value whose [Promise.WaitRes] tracks the execution of cb.
+// a [Promise] value that tracks the execution of cb.
 // The goroutine is drawn from this [Group]'s pool, if one is set, and the
 // returned [Promise] is tracked by this [Group]'s wait and join operations.
 //
