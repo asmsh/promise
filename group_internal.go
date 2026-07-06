@@ -14,6 +14,8 @@
 
 package promise
 
+import "container/list"
+
 // groupCall describes a Group call and how to communicate back to it.
 type groupCall[T any] struct {
 	// resChan is used to send the Result back to the groupCall's goroutine.
@@ -156,51 +158,71 @@ func (g *Group[T]) selectRes() Result[GroupRes[T]] {
 
 		return newSingleRes(callResState, callRes)
 	default:
-		var callResState State
-		var callRes GroupRes[T]
-		var targetFound bool
-
-		// if there was a previous [Result], return early with it.
+		// check for an existing [Result], and if there's none, register this
+		// 'groupCall' on the 'callsQ' -- both atomically under a single read-lock
+		// on 'resMu'.
+		//
+		// this pairs with 'handleGroupCalls', which records a promise's result
+		// and snapshots the 'callsQ' under a write-lock on the same 'resMu'. so a
+		// concurrently-resolving promise is serialized relative to this section:
+		// it is either already recorded and observed in the snapshot here (and
+		// returned early), or it observes this 'groupCall' and sends its result
+		// on 'resChan' (caught by 'selectResSlow'). it can never be missed, which
+		// would otherwise leave the call resolving with an unknown [State] (a
+		// panic in 'newSingleRes').
+		//
+		// note: the lock order is always 'resMu' -> 'callsQMu'.
 		g.resMu.RLock()
+
+		// if there was a previous [Result], return early with it, without
+		// allocating the channels or registering the 'groupCall'.
 		if res := g.getSingleCallResSnapshot(); res.Result != nil {
-			callResState = res.State()
-			callRes = res
-			targetFound = true
+			g.resMu.RUnlock()
+			return newSingleRes(res.State(), res)
 		}
+
+		// no [Result] yet: allocate the resChan to receive the [Result] value
+		// on, and the syncChan to unblock promises once it's received, then
+		// register the 'groupCall'.
+		resChan := make(chan GroupRes[T])
+		syncChan := make(chan struct{})
+		g.callsQMu.Lock()
+		call := g.callsQ.PushBack(groupCall[T]{
+			resChan:  resChan,
+			syncChan: syncChan,
+		})
+		g.callsQMu.Unlock()
+
 		g.resMu.RUnlock()
 
-		// we found our target, so return the expected [Result] values.
-		if targetFound {
-			return newSingleRes(callResState, callRes)
-		}
-
-		// target is not found, move forward to the async (slow) handling...
-
-		return g.selectResSlow(groupDone)
+		return g.selectResSlow(groupDone, resChan, syncChan, call)
 	}
 }
 
-func (g *Group[T]) selectResSlow(groupDone <-chan struct{}) Result[GroupRes[T]] {
-	// create the needed resChan to receive the [Result] value on it,
-	// and the syncChan to handle unblocking promises once the target
-	// value is received.
-	resChan := make(chan GroupRes[T])
-	syncChan := make(chan struct{})
-
-	// record this 'groupCall' in the 'callsQ' for this [Group], enforcing
-	// all promises that observe it to wait and send the result to it.
-	g.callsQMu.Lock()
-	call := g.callsQ.PushBack(groupCall[T]{
-		resChan:  resChan,
-		syncChan: syncChan,
-	})
-	g.callsQMu.Unlock()
-
+func (g *Group[T]) selectResSlow(
+	groupDone <-chan struct{},
+	resChan <-chan GroupRes[T],
+	syncChan chan struct{},
+	call *list.Element,
+) Result[GroupRes[T]] {
 	// wait for a [Result], or for the [Group] to be done.
 	var callResState State
 	var callRes GroupRes[T]
 	select {
 	case <-groupDone:
+		// the [Group] finished without sending a result to this call. with the
+		// atomic register+snapshot in selectRes this is unreachable while any
+		// promise resolves (it would observe this call and send), but fall back
+		// to the [Group]'s recorded [Result] -- or a zero-[Group] [Success] --
+		// rather than resolving to an unknown [State].
+		g.resMu.RLock()
+		if res := g.getSingleCallResSnapshot(); res.Result != nil {
+			callResState = res.State()
+			callRes = res
+		} else {
+			callResState = Success
+		}
+		g.resMu.RUnlock()
 	case res := <-resChan:
 		callResState = res.State()
 		callRes = res
@@ -328,92 +350,81 @@ func (g *Group[T]) joinResSlow(
 	groupDone <-chan struct{},
 	op joinOperationLogic,
 ) Result[[]GroupRes[T]] {
-	resChan := make(chan GroupRes[T])
-
-	// create the syncChan to handle unblocking promises once the target
-	// value is received, but only if we are expecting an early return.
+	var resChan chan GroupRes[T]
 	var syncChan chan struct{}
-	if op.returnOnTargetState() {
-		syncChan = make(chan struct{})
-	}
 
-	// record this 'groupCall' in the 'callsQ' for this [Group], enforcing
-	// all promises that observe it to wait and send the result to it.
-	g.callsQMu.Lock()
-	call := g.callsQ.PushBack(groupCall[T]{
-		resChan:  resChan,
-		syncChan: syncChan,
-	})
-	g.callsQMu.Unlock()
-
-	// init the result fields, and account for the [Group] state.
+	// register this 'groupCall' on the 'callsQ' and take the [Group]'s state
+	// and [Result] snapshot atomically, under a single read-lock on 'resMu'.
+	//
+	// this pairs with 'handleGroupCalls', which records a promise's result and
+	// snapshots the 'callsQ' under a write-lock on the same 'resMu'. so any
+	// concurrently-resolving promise is serialized relative to this section: it
+	// either registered-then-visible here first (in which case it observes this
+	// 'groupCall' and sends its result on 'resChan', caught by the 'resultLoop'
+	// below), or it recorded its result before this snapshot (in which case it
+	// is included in 'callRes'). it can never be both (a duplicate) nor neither
+	// (a lost result).
+	//
+	// note: the lock order is always 'resMu' -> 'callsQMu', so there's no
+	// deadlock, and the blocking 'resChan' sends happen outside of both locks.
+	var call *list.Element
 	var callResState State
 	var callRes []GroupRes[T]
 	var targetFound bool
-	if op.returnOnTargetState() {
-		// we want an early return, once the target [Result] is found.
-		g.resMu.RLock()
-		resStateHist := g.resHist.getStateHist()
-		callResState = op.initState(resStateHist)
-		if op.isTargetState(callResState) {
-			// we found our target, so return the expected [Result] values.
-			callRes = g.getMultiCallResSnapshot(op == joinOp, callResState, 0)
-			targetFound = true
-		} else {
-			// expect at least all active promises to be included.
-			extraResLen := g.core.sg.ActiveCount()
-			callRes = g.getMultiCallResSnapshot(op == joinOp, callResState, extraResLen)
-		}
-		g.resMu.RUnlock()
-	} else {
-		// we want to wait for all promises, active and pending, so
-		// init the result array with the expected results number.
-		//
-		// note: we account for all ongoing promises, active and pending,
-		// because at this point, we propagated this 'groupCall' to all
-		// ongoing promises, and since they block on either a sending
-		// to the 'resChan', or receiving from the 'syncChan', and as both
-		// operations will only unblock in the 'resultLoop' below, then
-		// all results will be seen by the 'resultLoop'.
-		//
-		// note: to return the results of all promises that ever ran on
-		// this [Group], done and ongoing, we start with a snapshot of
-		// the 'resQ', which at this point, will include all results
-		// that have been already sent on this [Group] and consumed by
-		// other 'groupCall's, except this one.
-		//
-		// this is guaranteed by how the 'handleGroupCalls' is implemented,
-		// which blocks on each 'groupCall', then inserts to the 'resQ'
-		// only after it's unblocked in the 'resultLoop'.
-		// (see the note above for details).
-		//
-		// given that the inserts to the 'resQ' are protected by a write
-		// lock (Lock) on the 'resMu'.
-		// and that the copy below is protected by a read lock (RLock).
-		// we know that once we RLock the 'resMu', the 'resQ' will have
-		// the up-to-date [Result] values, and any future inserts to the
-		// 'resQ' will also be sent to the 'resChan' and caught in the
-		// 'resultLoop' (as part of unblocking 'handleGroupCalls').
 
-		// get the [State] of this [Group], and a snapshot of its [Result],
-		// expecting at least all ongoing promises to be included.
-		g.resMu.RLock()
-		resStateHist := g.resHist.getStateHist()
-		callResState = op.initState(resStateHist)
+	g.resMu.RLock()
+
+	resStateHist := g.resHist.getStateHist()
+	callResState = op.initState(resStateHist)
+	if op.returnOnTargetState() && op.isTargetState(callResState) {
+		// we want an early return once the target [Result] is found, and it's
+		// already present in the [Group]'s recorded results.
+		callRes = g.getMultiCallResSnapshot(op == joinOp, callResState, 0)
+		targetFound = true
+	} else if op.returnOnTargetState() {
+		// early-return call, but the target isn't found yet: expect at least
+		// all active promises to be included.
+		extraResLen := g.core.sg.ActiveCount()
+		callRes = g.getMultiCallResSnapshot(op == joinOp, callResState, extraResLen)
+		// create the syncChan to handle unblocking promises once the target
+		// value is received, but only if we are expecting an early return.
+		syncChan = make(chan struct{})
+	} else {
+		// we want to wait for all promises, active and pending, so init the
+		// result array with the expected results number, accounting for all
+		// ongoing promises, active and pending.
+		//
+		// to return the results of all promises that ever ran on this [Group],
+		// done and ongoing, we start with a snapshot of the 'resQ', which
+		// includes all results already recorded on this [Group]. any promise
+		// not yet recorded is guaranteed (by the atomic registration below) to
+		// observe this 'groupCall' and send its result to the 'resultLoop'.
 		extraResLen := g.core.sg.ActiveCount() + g.core.sg.PendingCount()
 		callRes = g.getMultiCallResSnapshot(op == joinOp, callResState, extraResLen)
-		g.resMu.RUnlock()
 	}
+
+	// if the target isn't already found, register this 'groupCall' (while still
+	// holding 'resMu') so the 'resultLoop' can collect the remaining results.
+	if !targetFound {
+		resChan = make(chan GroupRes[T])
+		g.callsQMu.Lock()
+		call = g.callsQ.PushBack(groupCall[T]{
+			resChan:  resChan,
+			syncChan: syncChan,
+		})
+		g.callsQMu.Unlock()
+	}
+
+	g.resMu.RUnlock()
 
 	// loop over the 'resChan', if the target [State] is not found yet,
 	// recording each [Result], and updating the final [State].
 resultLoop:
 	for !targetFound {
-		// the 2 select cases below can't be ready at the same time.
-		// because the 'groupDone' channel is closed once all Promise goroutines
-		// exits, which happens after the 'handleGroupCall' method returns,
-		// and the 'handleGroupCall' method is responsible for sending on
-		// the 'resChan'.
+		// the 2 select cases below can't be ready at the same time, because the
+		// 'groupDone' channel is closed once all Promise goroutines exit, which
+		// happens after 'handleGroupCall' returns, and 'handleGroupCall' is
+		// responsible for sending on the 'resChan'.
 		select {
 		case res := <-resChan:
 			res.Result = getFinalRes(res.Result)
@@ -427,18 +438,34 @@ resultLoop:
 		}
 	}
 
-	// if we are expected to return early, make sure no promises will block
-	// on sending to the resChan.
-	// note: this has to be before the removal of the 'groupCall' from
-	// the 'callsQ', otherwise we will have a deadlock on 'callsQMu'.Lock().
-	if op.returnOnTargetState() {
-		close(syncChan)
+	// clean up the 'groupCall', but only if we actually registered it. when the
+	// target was already found in the initial snapshot, 'call' is nil and no
+	// promise ever learned about our 'resChan'/'syncChan', so there's nothing
+	// to unblock or remove.
+	if !targetFound {
+		// if we are expected to return early, make sure no promises will block
+		// on sending to the resChan.
+		if op.returnOnTargetState() {
+			close(syncChan)
+		}
+
+		// remove this 'groupCall' from the 'callsQ', now that it's no longer active.
+		g.callsQMu.Lock()
+		g.callsQ.Remove(call)
+		g.callsQMu.Unlock()
 	}
 
-	// remove this 'groupCall' from the 'callsQ', now that it's no longer active.
-	g.callsQMu.Lock()
-	g.callsQ.Remove(call)
-	g.callsQMu.Unlock()
+	// if the 'callResState' is still unknown, it means 'initState' deferred the
+	// state computation to the results, but all results were captured in the
+	// initial snapshot instead of arriving on the 'resChan' (so the loop above
+	// never ran 'nextState'). fall back to the [Group]'s state history, mirroring
+	// the fast path in 'joinRes'. this happens when promises finish quickly,
+	// before this call registers its 'groupCall' on the 'callsQ'.
+	if callResState == unknown {
+		g.resMu.RLock()
+		callResState = calcGroupResState(g.resHist.getStateHist())
+		g.resMu.RUnlock()
+	}
 
 	return newMultiRes(op, callResState, callRes)
 }

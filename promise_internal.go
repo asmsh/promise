@@ -336,33 +336,50 @@ func handleGroupCalls[T any](p *Promise[T]) (handled bool) {
 
 	debug(p, startHandleGroupCalls) // debug starts here, since no Group == no debug.
 
-	// get a snapshot of the group calls queue to be handled.
-	p.group.callsQMu.RLock()
-	for call := p.group.callsQ.Front(); call != nil; call = call.Next() {
-		handled = handleGroupCall(call.Value, p.res) || handled
-		debug(p, doneHandleGroupCall)
-	}
-	p.group.callsQMu.RUnlock()
-
-	// save the group state and result for calls added later.
-	p.group.resMu.Lock()
 	groupRes := GroupRes[T]{Result: p.res}
 
+	// record this result and, atomically, capture the set of group calls to
+	// notify. holding resMu across both the resQ/history insert and the callsQ
+	// snapshot pairs this with the group join/select calls, which register their
+	// groupCall and snapshot the resQ under the same resMu. that makes every
+	// result either visible in a call's snapshot or delivered on its resChan,
+	// but never neither (a lost result) nor both (a duplicated one).
+	//
+	// note: callsQMu is only ever acquired while already holding resMu, so the
+	// lock order is resMu -> callsQMu everywhere, avoiding any deadlock.
+	p.group.resMu.Lock()
 	p.group.resHist.insertRes(groupRes)
-
 	if p.group.core.options.IsSaveAllGroupResults() {
 		p.group.resQ.PushBack(groupRes)
 	}
 
+	// copy the currently registered calls so we can send on their (unbuffered)
+	// resChan after releasing the locks and never block while holding a lock.
+	// only allocate when there are calls to notify (the common case has none).
+	var calls []groupCall[T]
+	p.group.callsQMu.RLock()
+	if n := p.group.callsQ.Len(); n > 0 {
+		calls = make([]groupCall[T], 0, n)
+		for e := p.group.callsQ.Front(); e != nil; e = e.Next() {
+			calls = append(calls, e.Value.(groupCall[T]))
+		}
+	}
+	p.group.callsQMu.RUnlock()
+
 	debug(p, doneSaveGroupResult)
 	p.group.resMu.Unlock()
+
+	// notify the captured group calls, outside any locks.
+	for i := range calls {
+		handled = handleGroupCall(calls[i], p.res) || handled
+		debug(p, doneHandleGroupCall)
+	}
 
 	debug(p, endHandleGroupCalls)
 	return handled
 }
 
-func handleGroupCall[T any](callVal any, res Result[T]) bool {
-	call := callVal.(groupCall[T])
+func handleGroupCall[T any](call groupCall[T], res Result[T]) bool {
 	select {
 	case call.resChan <- GroupRes[T]{
 		Result: res,
